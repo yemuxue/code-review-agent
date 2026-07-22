@@ -257,17 +257,25 @@ curl -X POST http://localhost:8000/findings/search \
 
 ## 评估数据
 
-### Agent 真实检测能力
+### Agent 真实检测能力（10 bugs × 6 files）
 
-| 已知 Bug | 是否被 Agent 发现 |
-|---------|-----------------|
-| sandbox.py:34 — `except: pass` 裸异常 | ✅ 发现 |
-| sandbox.py:49 — 线程竞态条件 | ✅ 发现 |
-| sandbox.py:37 — `timeout=0` 被当作 falsy | ✅ 发现 |
-| sandbox.py:42 — `env or os.environ.copy()` 空 dict bug | ❌ 漏报 |
-| sandbox.py:28 — `os.chdir` 非线程安全 | ❌ 漏报 |
+| 文件 | 行 | Bug | 发现 |
+|------|-----|-----|------|
+| sandbox.py | 34 | `except: pass` 裸异常吞 KeyboardInterrupt | ✅ |
+| sandbox.py | 42 | `env or os.environ.copy()` 空 dict 当 falsy | ❌ |
+| sandbox.py | 49 | 线程竞态条件 | ✅ |
+| agent.py | 39 | `model.chat()` 无异常处理 | ✅ |
+| agent.py | 84 | `ToolCall(**tc)` 格式错误崩溃 | ✅ |
+| streaming.py | 72 | JSON 解析失败丢失部分数据 | ✅ |
+| telemetry.py | 132 | `TimedToolCall` 重复记录 start 事件 | ❌ |
+| config.py | 16 | 模块级 `for` 循环修改 `os.environ` | ❌ |
+| llm_client.py | 19 | `b[type]` 直接索引遇未知块崩溃 | ❌ |
+| git_tools.py | 7 | 源码硬编码代理地址 | ✅ |
 
-**3/5 = 60% recall（sandbox.py 单文件测试）**
+**Recall: 6/10 = 60% | Precision: 100%（无误报）**
+
+> Agent 强项：明显的代码缺陷（裸 except、竞态、缺少异常处理）  
+> Agent 弱项：语义层面的问题（逻辑陷阱、环境变量副作用），需要更强的模型
 
 ### Eval 数据集
 
