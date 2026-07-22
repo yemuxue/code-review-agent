@@ -202,6 +202,20 @@ with st.sidebar:
 
     st.divider()
 
+    # ── Sandbox Test ──
+    st.divider()
+    st.markdown('<div class="sidebar-section"><h4>🛡️ Sandbox Status / 沙箱状态</h4></div>', unsafe_allow_html=True)
+    if st.button("🧪 Test Sandbox / 测试沙箱", use_container_width=True):
+        sb = Sandbox()
+        result = sb.run(["echo", "sandbox_test_ok"])
+        if result.success:
+            st.success(f"Sandbox active ✅\n`{result.stdout.strip()}`")
+        else:
+            st.error(f"Sandbox FAILED ❌")
+        st.caption(f"Timeout={sb.timeout}s | Thread isolation | Command whitelist")
+    else:
+        st.caption("点击测试沙箱是否正常工作")
+
     # ── Logs ──
     st.divider()
     st.markdown('<div class="sidebar-section"><h4>🔍 Search Findings / 搜索发现</h4></div>', unsafe_allow_html=True)
@@ -381,7 +395,7 @@ if prompt:
 
         logger = AgentLogger(LOGS_DIR)
         log_path = logger.log_path
-        client = ModelRouter().route(target)  # Auto-select model
+        client = AnthropicClient()  # 统一用 deepseek-chat
         hitl_guard = HumanInTheLoop(auto_approve_safe=True)
 
         with st.status("🔄 Working...", expanded=True) as status:
@@ -406,9 +420,10 @@ if prompt:
             else:
                 # ─── Single Agent with Streaming ───
                 agent = AgentHarness(model=client, tools=TOOLS, system_prompt=SYSTEM_PROMPTS[mode],
-                                     max_turns=8, logger=logger)
+                                     max_turns=12, logger=logger)
                 agent.hitl = hitl_guard  # Wire HITL into tool execution
                 agent.sandbox = Sandbox()  # Wire Sandbox for run_command isolation
+                status.write(f"🛡️ Sandbox: ON | HITL: ON")
                 placeholder = st.empty()
                 buffer = [""]  # use list for mutable capture in closure
 
