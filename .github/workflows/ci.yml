@@ -30,6 +30,9 @@ jobs:
       - name: Test with coverage
         run: pytest tests/ -v --tb=short --cov=src --cov-report=term-missing
 
+      - name: Eval dataset
+        run: python -c "from tests.eval_dataset import EVAL_SAMPLES; print('Eval samples:', len(EVAL_SAMPLES), 'ready')"
+
       - name: Upload coverage
         uses: codecov/codecov-action@v4
         with:
