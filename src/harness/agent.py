@@ -107,7 +107,16 @@ class AgentHarness:
             if hasattr(self, 'hitl') and self.hitl and self.hitl.needs_approval(tc.name, tc.args):
                 if not self.hitl.request_approval(tc.name, tc.args):
                     return f"Tool '{tc.name}' blocked by Human-in-the-Loop guard."
-            result = str(tool.fn(**tc.args))
+            # Sandbox: run_command 类工具在沙箱中执行
+            if hasattr(self, 'sandbox') and self.sandbox and tc.name == 'run_command':
+                cmd = tc.args.get('command', '')
+                if isinstance(cmd, str):
+                    import shlex
+                    cmd = shlex.split(cmd)
+                sb_result = self.sandbox.run(cmd)
+                result = sb_result.summary()
+            else:
+                result = str(tool.fn(**tc.args))
             if self.logger:
                 self.logger.tool_call_end(self.turns_taken, tc.name, result, (time.time()-start)*1000)
             return result

@@ -20,6 +20,7 @@ from src.llm_client import AnthropicClient
 from src.harness.agent import AgentHarness, ToolDefinition
 from src.harness.telemetry import AgentLogger
 from src.harness.auth import HumanInTheLoop
+from src.harness.sandbox import Sandbox
 from src.model_router import ModelRouter
 from src.multi_agent.langgraph_orchestrator import LangGraphOrchestrator as Orchestrator
 from src.tools.git_tools import list_files, read_file, grep_pattern, run_command
@@ -407,6 +408,7 @@ if prompt:
                 agent = AgentHarness(model=client, tools=TOOLS, system_prompt=SYSTEM_PROMPTS[mode],
                                      max_turns=8, logger=logger)
                 agent.hitl = hitl_guard  # Wire HITL into tool execution
+                agent.sandbox = Sandbox()  # Wire Sandbox for run_command isolation
                 placeholder = st.empty()
                 buffer = [""]  # use list for mutable capture in closure
 
