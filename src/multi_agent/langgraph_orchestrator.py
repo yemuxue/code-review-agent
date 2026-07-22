@@ -89,21 +89,52 @@ class LangGraphOrchestrator:
         task_msg = state["messages"][-1].content
         result = agent.run(task_msg)
 
-        # 解析发现
+        # 解析发现（兼容 FINDING| 和 Markdown ### 格式）
+        import re as _re
         findings = []
         for line in result.split("\n"):
+            line = line.strip()
+            # Format 1: FINDING|file|line|CAT|SEV|EN:desc|CN:desc|fix
             if line.startswith("FINDING|"):
                 parts = line.split("|")
-                if len(parts) >= 7:
+                if len(parts) >= 6:
                     findings.append({
                         "id": len(findings) + 1,
                         "file": parts[1].strip(),
                         "line": parts[2].strip(),
                         "category": parts[3].strip(),
                         "severity": parts[4].strip(),
-                        "description_en": parts[5].strip(),
+                        "description_en": parts[5].strip() if len(parts) > 5 else "",
                         "description_cn": parts[6].strip() if len(parts) > 6 else "",
                         "suggestion": parts[7].strip() if len(parts) > 7 else "",
+                    })
+            # Format 2: ### FINDING X — `file.py:line`
+            else:
+                m = _re.match(r'#+\s*FINDING\s*\d*.*?`?([\w/.-]+\.py)`?\s*:?\s*(\d+)', line)
+                if m:
+                    findings.append({
+                        "id": len(findings) + 1,
+                        "file": m.group(1),
+                        "line": m.group(2),
+                        "category": "BUG",
+                        "severity": "Medium",
+                        "description_en": line,
+                        "description_cn": line,
+                        "suggestion": "",
+                    })
+            # Format 3: Any line with file.py:line pattern
+            if not findings:
+                m2 = _re.search(r'`?([\w/.-]+\.py):(\d+)`?', line)
+                if m2 and "FINDING" in line:
+                    findings.append({
+                        "id": len(findings) + 1,
+                        "file": m2.group(1),
+                        "line": m2.group(2),
+                        "category": "BUG",
+                        "severity": "Medium",
+                        "description_en": line,
+                        "description_cn": line,
+                        "suggestion": "",
                     })
 
         return {
