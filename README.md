@@ -1,6 +1,6 @@
 # Code Review Agent
 
-> **工业级多 Agent 代码分析系统** — 从零实现的 Agent Harness + LangGraph 编排
+> **多 Agent 代码分析系统** — 从零实现的 Agent Harness + LangGraph 编排，具备生产级基础设施
 >
 > Multi-Agent code analysis with hand-written runtime, LangGraph orchestration, and production infrastructure.
 

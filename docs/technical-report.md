@@ -6,7 +6,7 @@
 
 ## 一、项目概述
 
-**Code Review Agent** 是一个从零构建的工业级多 Agent 代码分析系统。核心亮点：
+**Code Review Agent** 是一个从零构建的生产级多 Agent 代码分析系统。核心亮点：
 
 - **Agent Harness 完全手写**，不依赖 LangChain/CrewAI 等任何 Agent 框架
 - **Multi-Agent 协作**，Planner → Executor → Reviewer 三阶段管线 + LangGraph 图编排
@@ -108,7 +108,7 @@ GET  /stats              系统统计
 
 ---
 
-## 四、技术亮点与工业界对比
+## 四、技术亮点与业界对比
 
 ### 4.1 Agent 架构
 
@@ -132,11 +132,11 @@ GET  /stats              系统统计
 | Human-in-loop | ✅ 工具级审批 | ✅ 节点级 | ✅ |
 | 中文支持 | ✅ 中英双语输出 | 依赖模型 | 依赖模型 |
 
-> **面试话术**："我实现了两种 Multi-Agent 方案：硬编码管线展示了底层原理，LangGraph 方案展示了工业级图编排能力。面试时可以讨论两者的取舍。"
+> **面试话术**："我实现了两种 Multi-Agent 方案：硬编码管线展示了底层原理，LangGraph 方案展示了生产级图编排能力。面试时可以讨论两者的取舍。"
 
 ### 4.3 基础设施
 
-| 维度 | 本项目 | 工业界标准 |
+| 维度 | 本项目 | 业界标准 |
 |------|--------|-----------|
 | 数据库 | SQLite WAL | PostgreSQL |
 | 搜索 | FTS5 全文索引 | Elasticsearch |
