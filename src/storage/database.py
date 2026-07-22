@@ -111,10 +111,31 @@ class Database:
         self._db_path = Path(db_path)
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_db()
+        self._run_migrations()
 
     def _init_db(self):
         with self._get_conn() as conn:
             conn.executescript(SCHEMA)
+
+    def _run_migrations(self):
+        """自动应用增量迁移，幂等执行"""
+        with self._get_conn() as conn:
+            # Mig 001: logs table
+            conn.execute("""CREATE TABLE IF NOT EXISTS logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id TEXT DEFAULT '',
+                event TEXT NOT NULL DEFAULT '',
+                turn INTEGER DEFAULT 0,
+                tool TEXT DEFAULT '',
+                error INTEGER DEFAULT 0,
+                message TEXT DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT (datetime('now')))""")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_logs_session ON logs(session_id)")
+            # Mig 002: metrics columns
+            try: conn.execute("ALTER TABLE sessions ADD COLUMN total_tokens INTEGER DEFAULT 0")
+            except: pass
+            try: conn.execute("ALTER TABLE sessions ADD COLUMN total_duration_ms INTEGER DEFAULT 0")
+            except: pass
 
     @contextmanager
     def _get_conn(self):
