@@ -44,9 +44,18 @@ class LLMResponse:
                 tcs.append({"id":b.get("id",""),"name":b.get("name",""),"args":b.get("input",{})})
         return cls(content=text or None, tool_calls=tcs, usage=raw.get("usage"))
 
+# Module-level cache shared across all clients
+try:
+    from src.harness.llm_cache import LLMCache
+    _llm_cache = LLMCache(max_size=200, ttl_seconds=300)
+except ImportError:
+    from harness.llm_cache import LLMCache
+    _llm_cache = LLMCache(max_size=200, ttl_seconds=300)
+
+
 class AnthropicClient:
     def __init__(self, api_key: str | None = None, base_url: str | None = None,
-                 model: str | None = None, temperature: float = 0.1):
+                 model: str | None = None, temperature: float = 0.1, use_cache: bool = True):
         try:
             from src.config import get_api_key, get_base_url, get_model
         except ImportError:
@@ -55,9 +64,15 @@ class AnthropicClient:
         self.base_url = (base_url or get_base_url()).rstrip("/")
         self.model = model or get_model()
         self.temperature = temperature
+        self.use_cache = use_cache
 
     def chat(self, messages: list[dict], tools: list[dict] | None = None) -> LLMResponse:
         import urllib.request, urllib.error
+        # Check cache
+        if self.use_cache and not tools:
+            cached = _llm_cache.get(messages, self.model)
+            if cached:
+                return LLMResponse(content=cached)
         sp, apimsg = self._convert(messages)
         ant = None
         if tools:
@@ -73,7 +88,12 @@ class AnthropicClient:
             method="POST")
         try:
             with urllib.request.urlopen(req, timeout=120) as resp:
-                return LLMResponse.from_anthropic(json.loads(resp.read().decode("utf-8")))
+                raw = json.loads(resp.read().decode("utf-8"))
+                result = LLMResponse.from_anthropic(raw)
+                # Save to cache
+                if self.use_cache and not tools and result.content:
+                    _llm_cache.set(messages, result.content, self.model)
+                return result
         except urllib.error.HTTPError as e:
             raise RuntimeError(f"API HTTP {e.code}: {e.read().decode('utf-8',errors='replace')}")
 

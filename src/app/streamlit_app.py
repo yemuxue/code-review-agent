@@ -19,7 +19,9 @@ import streamlit as st
 from src.llm_client import AnthropicClient
 from src.harness.agent import AgentHarness, ToolDefinition
 from src.harness.telemetry import AgentLogger
-from src.multi_agent.orchestrator import MultiAgentOrchestrator
+from src.harness.auth import HumanInTheLoop
+from src.model_router import ModelRouter
+from src.multi_agent.langgraph_orchestrator import LangGraphOrchestrator as Orchestrator
 from src.tools.git_tools import list_files, read_file, grep_pattern, run_command
 from src.storage.database import Database, Session as DBSession
 from src.memory.vector_store import VectorStore, FindingDocument
@@ -272,7 +274,7 @@ st.markdown("""<div style="display:flex;align-items:center;gap:10px;margin-botto
     <h2 style="margin:0;">Code Review Agent</h2>
     <span style="background:#1f6feb22;color:#58a6ff;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:600;">MULTI-AGENT</span>
 </div>""", unsafe_allow_html=True)
-st.caption("🧠 Multi-Agent: Planner → Executor → Reviewer" if is_multi else "🔍 Single Agent Analysis")
+st.caption("🧠 LangGraph: plan → execute → review" if is_multi else "🔍 Single Agent Analysis")
 
 # Chat history
 for msg in st.session_state.messages:
@@ -374,30 +376,27 @@ if prompt:
         st.markdown(f'<span style="color:#58a6ff;font-size:10px;font-weight:700;">AGENT</span>', unsafe_allow_html=True)
 
         logger = AgentLogger(LOGS_DIR)
-        log_path = logger.log_path  # 保存路径用于后续入库
-        client = AnthropicClient(temperature=0.1)
+        log_path = logger.log_path
+        client = ModelRouter().route(target)  # Auto-select model
+        hitl_guard = HumanInTheLoop(auto_approve_safe=True)
 
         target = full_query
         mode_label = "MultiAgent" if is_multi else "SingleAgent"
 
         with st.status("🔄 Working...", expanded=True) as status:
             if is_multi:
-                status.write("**Multi-Agent: Planner → Executor → Reviewer**")
+                status.write("**LangGraph: plan → execute → review**")
                 try:
-                    orch = MultiAgentOrchestrator(client, TOOLS, logger=logger)
-                    result = orch.run(task=target, project_path=st.session_state.current_project)
-                    result_text = result["final_report"]
-                    # 清理掉 Reviewer 可能的废话前缀
-                    if "# " in result_text:
-                        result_text = result_text[result_text.index("# "):]
-                    ms = result.get("stats", {})
-                    for nm, key in [("🧠 Planner", "planner"), ("🔍 Executor", "executor"), ("📝 Reviewer", "reviewer")]:
-                        s = ms.get(key, {})
-                        status.write(f"{nm}: {s.get('turns_taken','?')} turns, {s.get('tools_called','?')} tools")
-                    status.update(label="✅ Multi-Agent Complete", state="complete")
-                    stats = {"turns_taken": f"P:{ms.get('planner',{}).get('turns_taken','?')} E:{ms.get('executor',{}).get('turns_taken','?')} R:{ms.get('reviewer',{}).get('turns_taken','?')}",
-                             "tools_called": sum(s.get("tools_called", 0) for s in ms.values()),
-                             "messages_count": sum(s.get("messages_count", 0) for s in ms.values())}
+                    orch = Orchestrator(client, TOOLS)
+                    lang_result = orch.run(task=target, project_path=st.session_state.current_project)
+                    result_text = "\n".join(lang_result.get("messages", ["No findings"]))
+                    n_findings = len(lang_result.get("findings", []))
+                    if n_findings:
+                        result_text += f"\n\n**Findings**: {n_findings} issues found"
+                    status.write(f"🧠 LangGraph: plan -> execute -> review")
+                    status.write(f"📊 Findings: {n_findings} | Complete: {lang_result.get('complete', False)}")
+                    status.update(label="✅ LangGraph Complete", state="complete")
+                    stats = {"turns_taken": f"{n_findings} findings", "tools_called": 0, "messages_count": len(lang_result.get("messages", []))}
                 except Exception as ex:
                     import traceback
                     result_text = f"❌ Error:\n```\n{traceback.format_exc()}\n```"
