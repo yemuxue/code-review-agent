@@ -79,12 +79,20 @@ class AnthropicClient:
             ant = [{"name":t.get("function",t)["name"],"description":t.get("function",t).get("description",""),
                     "input_schema":t.get("function",t).get("parameters",{"type":"object","properties":{}})} for t in tools]
         payload = {"model":self.model,"max_tokens":16384,"messages":apimsg}
-        if sp: payload["system"]=sp
-        if ant: payload["tools"]=ant
+        if sp:
+            # Prompt caching: system prompt rarely changes, mark as cacheable
+            payload["system"] = [{"type":"text","text":sp,"cache_control":{"type":"ephemeral"}}]
+        if ant:
+            # Mark last tool definition as cache breakpoint
+            for i, t in enumerate(ant):
+                if i == len(ant) - 1:
+                    t["cache_control"] = {"type": "ephemeral"}
+            payload["tools"] = ant
         req = urllib.request.Request(
             url=f"{self.base_url}/v1/messages",
             data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type":"application/json","x-api-key":self.api_key,"anthropic-version":"2023-06-01"},
+            headers={"Content-Type":"application/json","x-api-key":self.api_key,
+                     "anthropic-version":"2023-06-01","anthropic-beta":"prompt-caching-2024-07-31"},
             method="POST")
         try:
             with urllib.request.urlopen(req, timeout=120) as resp:
@@ -105,13 +113,19 @@ class AnthropicClient:
             ant = [{"name":t.get("function",t)["name"],"description":t.get("function",t).get("description",""),
                     "input_schema":t.get("function",t).get("parameters",{"type":"object","properties":{}})} for t in tools]
         payload = {"model":self.model,"max_tokens":16384,"messages":apimsg,"stream":True}
-        if sp: payload["system"]=sp
-        if ant: payload["tools"]=ant
+        if sp:
+            payload["system"] = [{"type":"text","text":sp,"cache_control":{"type":"ephemeral"}}]
+        if ant:
+            for i, t in enumerate(ant):
+                if i == len(ant) - 1:
+                    t["cache_control"] = {"type": "ephemeral"}
+            payload["tools"] = ant
         def _sync():
             req = urllib.request.Request(
                 url=f"{self.base_url}/v1/messages",
                 data=json.dumps(payload).encode("utf-8"),
-                headers={"Content-Type":"application/json","x-api-key":self.api_key,"anthropic-version":"2023-06-01"},
+                headers={"Content-Type":"application/json","x-api-key":self.api_key,
+                         "anthropic-version":"2023-06-01","anthropic-beta":"prompt-caching-2024-07-31"},
                 method="POST")
             try:
                 with urllib.request.urlopen(req, timeout=300) as resp:
