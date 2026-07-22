@@ -6,7 +6,10 @@
 """
 
 from __future__ import annotations
-from llm_client import AnthropicClient, LLMResponse
+try:
+    from src.llm_client import AnthropicClient, LLMResponse
+except ImportError:
+    from llm_client import AnthropicClient, LLMResponse
 
 
 MODEL_REGISTRY = {
