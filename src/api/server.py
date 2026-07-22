@@ -170,8 +170,27 @@ async def analyze(req: AnalyzeRequest):
     )
 
 @app.get("/sessions")
-async def list_sessions(limit: int = 20):
-    return db.list_sessions(limit)
+async def list_sessions(limit: int = 20, offset: int = 0):
+    """会话列表，支持分页"""
+    all_sessions = db.list_sessions(limit + offset)
+    return all_sessions[offset:offset + limit]
+
+
+@app.get("/findings/page")
+async def list_findings_paginated(
+    offset: int = 0,
+    limit: int = 20,
+    category: Optional[str] = None,
+    severity: Optional[str] = None,
+):
+    """发现列表，支持分页 + 筛选"""
+    all_findings = db.get_findings(category=category, severity=severity, limit=limit + offset)
+    return {
+        "offset": offset,
+        "limit": limit,
+        "total": len(all_findings),
+        "items": all_findings[offset:offset + limit],
+    }
 
 @app.get("/sessions/{sid}")
 async def get_session(sid: str):
