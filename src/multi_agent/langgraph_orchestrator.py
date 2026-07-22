@@ -20,10 +20,12 @@ class AgentState(TypedDict):
 
 class LangGraphOrchestrator:
 
-    def __init__(self, llm_client, tools: list):
+    def __init__(self, llm_client, tools: list, sandbox=None, hitl=None, memory=None):
         self.client = llm_client
         self.tools = tools
-        # 所有依赖在 init 注入，节点不需要 import
+        self.sandbox = sandbox
+        self.hitl = hitl
+        self.memory = memory
         from src.harness.agent import AgentHarness
         from src.multi_agent.agents import PLANNER_SYSTEM_PROMPT, EXECUTOR_SYSTEM_PROMPT, REVIEWER_SYSTEM_PROMPT
         self.AgentHarness = AgentHarness
@@ -58,6 +60,9 @@ class LangGraphOrchestrator:
     def _plan_node(self, state: AgentState) -> dict:
         tools = [t for t in self.tools if t.name in ("list_files", "read_file", "grep_pattern")]
         agent = self.AgentHarness(model=self.client, tools=tools, system_prompt=self.PLANNER_PROMPT, max_turns=8)
+        if self.sandbox: agent.sandbox = self.sandbox
+        if self.hitl: agent.hitl = self.hitl
+        if self.memory: agent.memory = self.memory
         result = agent.run(state["messages"][-1].content)
         findings = []
         for line in result.split("\n"):
@@ -76,12 +81,18 @@ class LangGraphOrchestrator:
     def _execute_node(self, state: AgentState) -> dict:
         tools = [t for t in self.tools if t.name in ("grep_pattern", "read_file")]
         agent = self.AgentHarness(model=self.client, tools=tools, system_prompt=self.EXECUTOR_PROMPT, max_turns=8)
+        if self.sandbox: agent.sandbox = self.sandbox
+        if self.hitl: agent.hitl = self.hitl
+        if self.memory: agent.memory = self.memory
         result = agent.run("Verify:\n" + json.dumps(state["findings"], indent=2, ensure_ascii=False))
         return {"messages": [AIMessage(content=result)], "phase": "execute"}
 
     def _review_node(self, state: AgentState) -> dict:
         tools = [t for t in self.tools if t.name in ("read_file", "grep_pattern")]
         agent = self.AgentHarness(model=self.client, tools=tools, system_prompt=self.REVIEWER_PROMPT, max_turns=5)
+        if self.sandbox: agent.sandbox = self.sandbox
+        if self.hitl: agent.hitl = self.hitl
+        if self.memory: agent.memory = self.memory
         result = agent.run(f"Findings ({len(state['findings'])}):\n" + json.dumps(state["findings"], indent=2, ensure_ascii=False) + "\n\nProduce report.")
         return {"messages": [AIMessage(content=result)], "complete": True, "phase": "review"}
 
