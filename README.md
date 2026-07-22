@@ -81,11 +81,11 @@ curl -X POST http://localhost:8000/analyze \
 
 | Metric | Score |
 |--------|-------|
-| Precision | **100.0%** |
-| Recall | **83.3%** |
-| F1 Score | **0.91** |
-| Dataset | 33 samples (30 real bugs + 3 false positives) |
+| Dataset | 33 hand-annotated samples (30 real bugs + 3 false positives) |
 | Categories | BUG(22), SECURITY(5), PERF(5), STYLE(1) |
+| Severities | High(7), Medium(15), Low(11) |
+
+> Eval dataset ready at `tests/eval_dataset.py`. Quick test: 3/5 bugs found (60% recall on sandbox.py). Precision is high (few false positives), recall varies by bug type. Full eval pending.
 
 ---
 
