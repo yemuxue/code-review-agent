@@ -22,6 +22,7 @@ from typing import Optional
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from fastapi import FastAPI, HTTPException, Query, Request, Depends
+from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field
@@ -117,7 +118,7 @@ class SearchRequest(BaseModel):
 
 # ─── Dashboard ──────────────────────────────────
 
-@app.get("/dashboard", include_in_schema=False)
+@app.get("/dashboard", response_class=HTMLResponse, include_in_schema=False)
 async def dashboard():
     """实时监控仪表盘 / Live Dashboard"""
     import urllib.request
