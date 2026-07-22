@@ -115,6 +115,77 @@ class SearchRequest(BaseModel):
     category: Optional[str] = None
     severity: Optional[str] = None
 
+# ─── Dashboard ──────────────────────────────────
+
+@app.get("/dashboard", include_in_schema=False)
+async def dashboard():
+    """实时监控仪表盘 / Live Dashboard"""
+    import urllib.request
+    try:
+        metrics_text = urllib.request.urlopen("http://127.0.0.1:8000/metrics", timeout=2).read().decode()
+    except Exception:
+        metrics_text = ""
+
+    total_requests = 0
+    error_count = 0
+    for line in metrics_text.split("\n"):
+        if "http_requests_total" in line and not line.startswith("#"):
+            total_requests += float(line.split()[-1])
+        elif "http_requests_created" not in line and "http_requests" in line and "500" in line:
+            error_count += float(line.split()[-1]) if line.split()[-1].isdigit() else 0
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="refresh" content="10">
+    <title>Code Review Agent - Dashboard</title>
+    <style>
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{ background: #0d1117; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 2rem; }}
+        h1 {{ color: #e6edf3; margin-bottom: 1.5rem; font-size: 1.5rem; }}
+        h1 span {{ color: #58a6ff; }}
+        .grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem; }}
+        .card {{ background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 1.2rem; text-align: center; }}
+        .card .value {{ font-size: 2rem; font-weight: 700; color: #58a6ff; }}
+        .card .label {{ font-size: 0.75rem; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 0.25rem; }}
+        .status-ok {{ color: #3fb950; }} .status-warn {{ color: #d29922; }} .status-err {{ color: #f85149; }}
+        pre {{ background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 1rem; font-size: 0.7rem; max-height: 400px; overflow-y: auto; white-space: pre-wrap; color: #8b949e; font-family: 'Cascadia Code', monospace; }}
+        .bar {{ height: 4px; background: #21262d; border-radius: 2px; margin-top: 0.5rem; overflow: hidden; }}
+        .bar-fill {{ height: 100%; background: #58a6ff; border-radius: 2px; transition: width 0.5s; }}
+    </style>
+</head>
+<body>
+    <h1>⚙️ Code Review Agent <span>Dashboard</span></h1>
+
+    <div class="grid">
+        <div class="card">
+            <div class="value">{total_requests:.0f}</div>
+            <div class="label">Total Requests / 总请求</div>
+            <div class="bar"><div class="bar-fill" style="width:{min(total_requests/10*100,100)}%"></div></div>
+        </div>
+        <div class="card">
+            <div class="value">{error_count:.0f}</div>
+            <div class="label">Errors / 错误</div>
+            <div class="bar"><div class="bar-fill" style="width:{min(error_count*20,100)}%;background:#f85149"></div></div>
+        </div>
+        <div class="card">
+            <div class="value status-ok">● UP</div>
+            <div class="label">FastAPI :8000</div>
+        </div>
+        <div class="card">
+            <div class="value status-ok">● UP</div>
+            <div class="label">Streamlit :8501</div>
+        </div>
+    </div>
+
+    <h3 style="color:#e6edf3;margin-bottom:0.5rem;">📊 Raw Metrics / 原始指标</h3>
+    <pre>{metrics_text[:5000]}</pre>
+    <p style="color:#484f58;font-size:0.7rem;margin-top:0.5rem;">Auto-refresh every 10s / 每10秒自动刷新</p>
+</body>
+</html>"""
+
+
 # ─── Routes ─────────────────────────────────────
 
 @app.get("/health")
