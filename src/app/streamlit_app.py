@@ -406,6 +406,7 @@ if prompt:
                 # ─── Single Agent with Streaming ───
                 agent = AgentHarness(model=client, tools=TOOLS, system_prompt=SYSTEM_PROMPTS[mode],
                                      max_turns=8, logger=logger)
+                agent.hitl = hitl_guard  # Wire HITL into tool execution
                 placeholder = st.empty()
                 buffer = [""]  # use list for mutable capture in closure
 

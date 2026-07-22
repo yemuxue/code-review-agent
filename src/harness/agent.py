@@ -103,6 +103,10 @@ class AgentHarness:
                 if self.logger:
                     self.logger.tool_call_end(self.turns_taken, tc.name, result, (time.time()-start)*1000, error=True)
                 return result
+            # HITL check
+            if hasattr(self, 'hitl') and self.hitl and self.hitl.needs_approval(tc.name, tc.args):
+                if not self.hitl.request_approval(tc.name, tc.args):
+                    return f"Tool '{tc.name}' blocked by Human-in-the-Loop guard."
             result = str(tool.fn(**tc.args))
             if self.logger:
                 self.logger.tool_call_end(self.turns_taken, tc.name, result, (time.time()-start)*1000)
