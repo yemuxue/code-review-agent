@@ -21,6 +21,7 @@ from src.harness.agent import AgentHarness, ToolDefinition
 from src.harness.telemetry import AgentLogger
 from src.harness.auth import HumanInTheLoop
 from src.harness.sandbox import Sandbox
+from src.harness.memory import ContextMemory
 from src.model_router import ModelRouter
 from src.multi_agent.langgraph_orchestrator import LangGraphOrchestrator as Orchestrator
 from src.tools.git_tools import list_files, read_file, grep_pattern, run_command
@@ -423,7 +424,8 @@ if prompt:
                                      max_turns=12, logger=logger)
                 agent.hitl = hitl_guard  # Wire HITL into tool execution
                 agent.sandbox = Sandbox()  # Wire Sandbox for run_command isolation
-                status.write(f"🛡️ Sandbox: ON | HITL: ON")
+                agent.memory = ContextMemory(strategy="hybrid", window_size=10)  # Context compaction
+                status.write(f"🛡️ Sandbox: ON | HITL: ON | 🧠 Memory: hybrid")
                 placeholder = st.empty()
                 buffer = [""]  # use list for mutable capture in closure
 

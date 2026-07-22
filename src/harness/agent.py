@@ -34,6 +34,9 @@ class AgentHarness:
         self._reset(user_query)
         for turn in range(self.max_turns):
             self.turns_taken = turn + 1
+            # Context compaction check: compress if messages exceed threshold
+            if hasattr(self, 'memory') and self.memory and self.memory.should_compact(self.messages):
+                self.messages = self.memory.compact(self.messages)
             if self.logger:
                 self.logger.turn_start(turn + 1, len(self.messages))
             response = self.model.chat(messages=self.messages, tools=self._get_tool_schemas())
@@ -56,6 +59,9 @@ class AgentHarness:
         for turn in range(self.max_turns):
             parser = StreamingParser()
             self.turns_taken = turn + 1
+            # Context compaction
+            if hasattr(self, 'memory') and self.memory and self.memory.should_compact(self.messages):
+                self.messages = self.memory.compact(self.messages)
             turn_tool_calls = []
             async for chunk in self.model.stream(messages=self.messages, tools=self._get_tool_schemas()):
                 for event in parser.feed(chunk):
