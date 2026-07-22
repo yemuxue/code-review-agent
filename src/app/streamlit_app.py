@@ -403,7 +403,8 @@ if prompt:
             if is_multi:
                 status.write("**LangGraph: plan → execute → review**")
                 try:
-                    orch = Orchestrator(client, TOOLS)
+                    orch = Orchestrator(client, TOOLS, sandbox=Sandbox(), hitl=hitl_guard,
+                                        memory=ContextMemory(strategy="hybrid", window_size=10))
                     lang_result = orch.run(task=target, project_path=st.session_state.current_project)
                     result_text = "\n".join(lang_result.get("messages", ["No findings"]))
                     n_findings = len(lang_result.get("findings", []))

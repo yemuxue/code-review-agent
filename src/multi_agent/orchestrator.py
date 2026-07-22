@@ -67,14 +67,16 @@ class MultiAgentOrchestrator:
         report = orch.run("Analyze /path/to/project for bugs")
     """
 
-    def __init__(self, llm_client, all_tools: list[ToolDefinition], logger=None):
+    def __init__(self, llm_client, all_tools: list[ToolDefinition],
+                 logger=None, sandbox=None, hitl=None, memory=None):
         self.client = llm_client
         self.all_tools = all_tools
         self.logger = logger
+        self.sandbox = sandbox
+        self.hitl = hitl
+        self.memory = memory
 
-        # 三个子 Agent（共享同一个 LLM 客户端，但分别有独立上下文）
         from .agents import AGENT_DEFINITIONS
-
         self._defs = AGENT_DEFINITIONS
 
         # 按名称筛选工具
@@ -180,6 +182,9 @@ class MultiAgentOrchestrator:
             max_turns=8,
             logger=self.logger,
         )
+        if self.sandbox: self._planner_agent.sandbox = self.sandbox
+        if self.hitl: self._planner_agent.hitl = self.hitl
+        if self.memory: self._planner_agent.memory = self.memory
 
         # 把 Planner 的发现列出来
         findings_text = "## Planner's Findings to Verify\n\n"
@@ -226,6 +231,9 @@ class MultiAgentOrchestrator:
             max_turns=5,
             logger=self.logger,
         )
+        if self.sandbox: self._reviewer_agent.sandbox = self.sandbox
+        if self.hitl: self._reviewer_agent.hitl = self.hitl
+        if self.memory: self._reviewer_agent.memory = self.memory
 
         query = (
             f"Review the following findings and verdicts for project: {project_path}\n\n"
