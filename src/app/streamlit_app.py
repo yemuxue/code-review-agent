@@ -375,13 +375,13 @@ if prompt:
     with st.chat_message("assistant"):
         st.markdown(f'<span style="color:#58a6ff;font-size:10px;font-weight:700;">AGENT</span>', unsafe_allow_html=True)
 
+        target = full_query
+        mode_label = "MultiAgent" if is_multi else "SingleAgent"
+
         logger = AgentLogger(LOGS_DIR)
         log_path = logger.log_path
         client = ModelRouter().route(target)  # Auto-select model
         hitl_guard = HumanInTheLoop(auto_approve_safe=True)
-
-        target = full_query
-        mode_label = "MultiAgent" if is_multi else "SingleAgent"
 
         with st.status("🔄 Working...", expanded=True) as status:
             if is_multi:
