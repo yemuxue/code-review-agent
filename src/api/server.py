@@ -21,7 +21,7 @@ from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from fastapi import FastAPI, HTTPException, Query, Request, Depends
+from fastapi import FastAPI, HTTPException, Query, Request, Depends, Body
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -29,10 +29,15 @@ from pydantic import BaseModel, Field
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from jose import JWTError, ExpiredSignatureError
 
 from src.llm_client import AnthropicClient
 from src.harness.agent import AgentHarness, ToolDefinition
 from src.harness.telemetry import AgentLogger
+from src.harness.jwt_auth import (
+    JWTAuth, UserStore, TokenRevocationList, User,
+    get_auth, get_user_store, get_revocation_list,
+)
 from src.multi_agent.orchestrator import MultiAgentOrchestrator
 from src.tools.git_tools import list_files, read_file, grep_pattern, run_command
 from src.storage.database import Database, Finding
@@ -62,16 +67,51 @@ limiter = Limiter(key_func=get_remote_address, default_limits=["100/minute"])
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# API key auth
-import secrets
-API_KEYS = {os.getenv("API_KEY", "dev-key-change-me"): "admin"}
+# ─── JWT Auth 初始化 ──────────────────────────
+
+jwt_auth = get_auth()
+user_store = get_user_store()
+revocation_list = get_revocation_list()
 security = HTTPBearer(auto_error=False)
 
-def verify_api_key(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    if credentials and credentials.credentials in API_KEYS:
-        return credentials.credentials
-    # Allow localhost without auth
-    return "localhost"
+
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+) -> User:
+    """
+    JWT 认证依赖注入 —— 三层验证：
+    ① jose.jwt.decode 验证 HMAC-SHA256 签名（防篡改）
+    ② 检查 exp 过期时间（自动由 python-jose 处理）
+    ③ 检查 jti 是否在吊销列表中（支持服务端主动吊销）
+
+    面试话术："每个请求到达时，FastAPI 依赖注入系统自动调用
+    get_current_user → jwt.decode 验证签名+过期 → 吊销列表 O(1) 检查。
+    任何一步失败都返回 401，攻击面极小。"
+    """
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Missing authorization header")
+
+    token = credentials.credentials
+
+    try:
+        payload = jwt_auth.verify_token(token, token_type="access")
+    except ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except JWTError as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {e}")
+    except ValueError as e:
+        raise HTTPException(status_code=401, detail=str(e))
+
+    # 检查吊销列表
+    jti = payload.get("jti", "")
+    if jti and revocation_list.is_revoked(jti):
+        raise HTTPException(status_code=401, detail="Token has been revoked")
+
+    return User(
+        username=payload["sub"],
+        role=payload.get("role", "user"),
+        email=payload.get("email", ""),
+    )
 
 db = Database(str(Path(__file__).parent.parent.parent / "data" / "code_review.db"))
 vector_store = VectorStore(str(Path(__file__).parent.parent.parent / "data" / "search.db"))
@@ -115,6 +155,23 @@ class SearchRequest(BaseModel):
     n_results: int = 5
     category: Optional[str] = None
     severity: Optional[str] = None
+
+
+# ─── Auth Models ────────────────────────────────
+
+class LoginRequest(BaseModel):
+    username: str = Field(..., min_length=1, max_length=64, description="用户名")
+    password: str = Field(..., min_length=1, max_length=128, description="密码")
+
+class TokenResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    user: dict
+    expires_in: int = 900  # 15 min in seconds
+
+class RefreshRequest(BaseModel):
+    refresh_token: str = Field(..., description="Refresh token from /auth/login")
 
 # ─── Dashboard ──────────────────────────────────
 
@@ -198,8 +255,99 @@ async def health():
         "stats": db.get_stats(),
     }
 
+
+# ─── Auth Routes ────────────────────────────────
+
+@app.post("/auth/login", response_model=TokenResponse)
+@limiter.limit("10/minute")  # 登录接口严格限流：防止暴力破解
+async def login(req: LoginRequest, request: Request):
+    """
+    用户登录 → 返回 JWT access + refresh token 对。
+
+    面试话术："登录接口单独限流 10次/分钟——暴力破解攻击者
+    最多尝试 10 个密码就被封堵 1 分钟，同时配合 bcrypt 的
+    慢哈希（~100ms/次）让离线破解也不划算。"
+    """
+    user = user_store.verify_password(req.username, req.password)
+    if not user:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    tokens = jwt_auth.create_tokens(user)
+
+    return TokenResponse(
+        access_token=tokens["access_token"],
+        refresh_token=tokens["refresh_token"],
+        token_type=tokens["token_type"],
+        user=user.to_dict(),
+        expires_in=900,  # 15 min
+    )
+
+
+@app.post("/auth/refresh", response_model=TokenResponse)
+@limiter.limit("30/minute")
+async def refresh_token(req: RefreshRequest, request: Request):
+    """
+    用 refresh token 换取新的 access token（轮换机制）。
+
+    面试话术："refresh token 只能用于此端点——不能访问业务 API。
+    每次刷新都签发新 token 对（token rotation），旧的 refresh token
+    可选择性作废——如果检测到已作废 token 被重用，说明泄露，
+    立即吊销该用户所有 token。"
+    """
+    try:
+        tokens = jwt_auth.refresh_access_token(req.refresh_token)
+    except ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Refresh token expired, please re-login")
+    except (JWTError, ValueError) as e:
+        raise HTTPException(status_code=401, detail=f"Invalid refresh token: {e}")
+
+    return TokenResponse(
+        access_token=tokens["access_token"],
+        refresh_token=tokens["refresh_token"],
+        token_type=tokens["token_type"],
+        user={},  # refresh 时不返回 user 信息
+        expires_in=900,
+    )
+
+
+@app.get("/auth/me")
+async def get_me(current_user: User = Depends(get_current_user)):
+    """
+    获取当前登录用户信息（需 Bearer token）。
+
+    面试话术："前端 SPA 刷新页面后，用存储的 access token 调 /auth/me
+    恢复用户会话——不依赖 cookie/session，完全无状态。"
+    """
+    return {"user": current_user.to_dict()}
+
+
+@app.post("/auth/logout")
+async def logout(current_user: User = Depends(get_current_user),
+                 credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """
+    登出：将当前 access token 的 jti 加入吊销列表。
+
+    面试话术："JWT 本身是无状态的——签发的 token 在过期前无法'取消'。
+    解决方案：维护一个 Redis/内存吊销列表（基于 jti），
+    登出时将 token ID 加入黑名单，验证时 O(1) 查询。
+    生产环境用 Redis Set + TTL 对齐 token 过期时间。"
+    """
+    try:
+        payload = jwt_auth.verify_token(credentials.credentials, token_type="access")
+        jti = payload.get("jti", "")
+        if jti:
+            revocation_list.revoke(jti)
+        return {"status": "logged_out", "revoked_tokens": revocation_list.count()}
+    except Exception:
+        # Token already invalid — still count as logged out
+        return {"status": "logged_out", "revoked_tokens": revocation_list.count()}
+
 @app.post("/analyze", response_model=AnalyzeResponse)
-async def analyze(req: AnalyzeRequest):
+async def analyze(req: AnalyzeRequest, current_user: User = Depends(get_current_user)):
     """运行代码分析"""
     logger = AgentLogger("./logs")
     client = AnthropicClient(temperature=0.1)
@@ -242,7 +390,8 @@ async def analyze(req: AnalyzeRequest):
     )
 
 @app.get("/sessions")
-async def list_sessions(limit: int = 20, offset: int = 0):
+async def list_sessions(limit: int = 20, offset: int = 0,
+                         current_user: User = Depends(get_current_user)):
     """会话列表，支持分页"""
     all_sessions = db.list_sessions(limit + offset)
     return all_sessions[offset:offset + limit]
@@ -265,7 +414,7 @@ async def list_findings_paginated(
     }
 
 @app.get("/sessions/{sid}")
-async def get_session(sid: str):
+async def get_session(sid: str, current_user: User = Depends(get_current_user)):
     session = db.get_session(sid)
     if not session:
         raise HTTPException(404, "Session not found")
@@ -295,7 +444,7 @@ async def keyword_search(q: str, limit: int = 20):
     return db.search_findings(q, limit)
 
 @app.get("/stats")
-async def system_stats():
+async def system_stats(current_user: User = Depends(get_current_user)):
     return {
         "database": db.get_stats(),
         "vector_store": {"document_count": vector_store.count()},

@@ -22,6 +22,7 @@ from src.harness.telemetry import AgentLogger
 from src.harness.auth import HumanInTheLoop
 from src.harness.sandbox import Sandbox
 from src.harness.memory import ContextMemory
+from src.harness.jwt_auth import get_user_store, get_auth, User
 from src.model_router import ModelRouter
 from src.multi_agent.langgraph_orchestrator import LangGraphOrchestrator as Orchestrator
 from src.tools.git_tools import list_files, read_file, grep_pattern, run_command
@@ -65,6 +66,13 @@ st.markdown("""<style>
     .sidebar-section h4 { color:#e6edf3; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.5px; margin-bottom:4px; }
     .log-line { font-family:'Cascadia Code',monospace; font-size:10px; color:#8b949e; white-space:pre-wrap; word-break:break-all; border-bottom:1px solid #21262d; padding:2px 0; }
     .stChatMessage { background:transparent !important; }
+    .login-box { max-width:400px; margin:80px auto; background:#161b22; border:1px solid #30363d; border-radius:12px; padding:2rem; }
+    .login-box h2 { text-align:center; margin-bottom:1.5rem; }
+    .login-error { background:#f8514922; border:1px solid #f8514944; color:#f85149; padding:8px 12px; border-radius:6px; font-size:13px; text-align:center; margin-bottom:1rem; }
+    .user-badge { display:flex; align-items:center; gap:8px; padding:8px 12px; background:#1f6feb22; border:1px solid #1f6feb44; border-radius:8px; margin-bottom:12px; }
+    .user-badge .avatar { width:28px; height:28px; border-radius:50%; background:#58a6ff; color:#fff; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; }
+    .user-badge .name { color:#e6edf3; font-weight:600; font-size:13px; }
+    .user-badge .role { color:#8b949e; font-size:11px; }
 </style>""", unsafe_allow_html=True)
 
 # ═══════════════════════════════════════
@@ -75,6 +83,7 @@ st.markdown("""<style>
 for k, v in {
     "messages": [], "selected_files": [], "current_project": "X:/VScode/code-review-agent/src",
     "session_id": None, "sessions": {},  # session_id -> {name, messages, mode}
+    "authenticated": False, "current_user": None, "jwt_token": None, "login_error": "",
 }.items():
     if k not in st.session_state: st.session_state[k] = v
 
@@ -105,6 +114,53 @@ def _save_session(sid: str, data: dict):
 
 # Always refresh from DB on every render
 st.session_state.sessions = _load_sessions()
+
+# ═══════════════════════════════════════
+# JWT Authentication — Login Screen
+# ═══════════════════════════════════════
+
+user_store = get_user_store()
+jwt_auth = get_auth()
+
+if not st.session_state.authenticated:
+    st.markdown("""
+    <div class="login-box">
+        <h2>⚙️ Code Review Agent</h2>
+    </div>
+    """, unsafe_allow_html=True)
+
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        username = st.text_input("Username / 用户名", key="login_username",
+                                 placeholder="admin")
+        password = st.text_input("Password / 密码", type="password",
+                                 key="login_password",
+                                 placeholder="Enter password...")
+        if st.button("🔐 Login / 登录", use_container_width=True, type="primary"):
+            user = user_store.verify_password(username, password)
+            if user:
+                tokens = jwt_auth.create_tokens(user)
+                st.session_state.authenticated = True
+                st.session_state.current_user = user.to_dict()
+                st.session_state.jwt_token = tokens["access_token"]
+                st.session_state.login_error = ""
+                st.rerun()
+            else:
+                st.session_state.login_error = "❌ Invalid username or password / 用户名或密码错误"
+                st.rerun()
+
+        if st.session_state.login_error:
+            st.markdown(f'<div class="login-error">{st.session_state.login_error}</div>',
+                       unsafe_allow_html=True)
+
+        st.markdown("""
+        <p style="text-align:center;color:#484f58;font-size:11px;margin-top:16px;">
+        Default: <code>admin</code> / <code>admin123</code><br>
+        JWT HS256 · Access 15min · Refresh 7d · bcrypt
+        </p>
+        """, unsafe_allow_html=True)
+
+    st.stop()  # 未登录 → 不渲染后面的内容
 
 # ═══════════════════════════════════════
 # Tools
@@ -142,6 +198,23 @@ with st.sidebar:
         <div><div style="color:#e6edf3;font-weight:700;font-size:15px;">Code Review</div>
         <div style="color:#8b949e;font-size:10px;">Agent Analysis</div></div>
     </div>""", unsafe_allow_html=True)
+
+    # ── User badge + logout ──
+    user = st.session_state.get("current_user", {})
+    st.markdown(f"""<div class="user-badge">
+        <div class="avatar">{user.get('username','?')[0].upper()}</div>
+        <div>
+            <div class="name">{user.get('username','Unknown')}</div>
+            <div class="role">{user.get('role','user').upper()} · JWT</div>
+        </div>
+    </div>""", unsafe_allow_html=True)
+
+    if st.button("🚪 Logout / 登出", use_container_width=True, key="logout_btn"):
+        for key in ["authenticated", "current_user", "jwt_token", "login_error", "messages", "session_id"]:
+            st.session_state[key] = False if key == "authenticated" else ([] if key == "messages" else (None if key == "session_id" else ("" if key == "login_error" else None)))
+        st.rerun()
+
+    st.divider()
 
     # ── Mode (must be before New Chat to define `mode`) ──
     st.markdown('<div class="sidebar-section"><h4>Mode / 分析模式</h4></div>', unsafe_allow_html=True)
