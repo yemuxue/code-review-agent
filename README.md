@@ -31,9 +31,9 @@
 ```
 用户输入
   │
-  ├─ Web UI (Streamlit :8501)
+  ├─ Web UI (Streamlit :8501)  ← 🔐 JWT 登录页 → bcrypt 验密
   ├─ CLI  (python -m src.app.cli)
-  └─ API  (FastAPI :8000)
+  └─ API  (FastAPI :8000)      ← 🔐 JWT Bearer 三层验证
         │
         ▼
   ┌─────────────────────────────────────┐
@@ -47,7 +47,7 @@
   │  │    (无发现) → END           │   │
   │  └─────────────────────────────┘   │
   ├─────────────────────────────────────┤
-  │         Agent Harness               │  ← 六大组件
+  │         Agent Harness               │  ← 八大组件
   │  ┌──────────┐ ┌──────────┐         │
   │  │Execution │ │Streaming │         │
   │  │  Loop    │ │ Parser   │         │
@@ -55,6 +55,9 @@
   │  │ Sandbox  │ │Telemetry │         │
   │  ├──────────┤ ├──────────┤         │
   │  │LLM Cache │ │HITL Guard│         │
+  │  ├──────────┤ ├──────────┤         │
+  │  │  Context │ │  JWT     │         │
+  │  │  Memory  │ │  Auth    │         │
   │  └──────────┘ └──────────┘         │
   ├─────────────────────────────────────┤
   │        Tools (7 个工具)             │
@@ -85,6 +88,8 @@
 | **Telemetry** | JSON Lines 结构化日志 + 数据库同步 | [`harness/telemetry.py`](src/harness/telemetry.py) |
 | **LLM Cache** | LRU + TTL 内存缓存，相同查询秒返 | [`harness/llm_cache.py`](src/harness/llm_cache.py) |
 | **HITL Guard** | 工具调用分级：SAFE/MODERATE/DANGEROUS | [`harness/auth.py`](src/harness/auth.py) |
+| **Context Memory** | 滑动窗口 / LLM 摘要 / 混合压缩三种策略 | [`harness/memory.py`](src/harness/memory.py) |
+| **JWT Auth** | HS256 签名 + Access/Refresh 双 token + bcrypt | [`harness/jwt_auth.py`](src/harness/jwt_auth.py) |
 
 ### Multi-Agent System
 
@@ -96,11 +101,12 @@
 ### 基础设施
 
 - 📈 **Prometheus `/metrics`**——70+ HTTP 指标自动采集
-- 🔐 **JWT Auth + Rate Limit**——100 req/min，本地免认证
+- 🔐 **JWT 认证系统**——HS256 签名 + Access 15min + Refresh 7d 双 token + bcrypt 密码哈希 + jti 吊销列表
+- 🛡️ **Rate Limit**——全局 100 req/min，登录接口 10/min 防暴力破解
 - 🚀 **GitHub Actions CI**——lint → type-check → test → coverage
 - 🗄️ **SQLite WAL + FTS5**——崩溃安全 + 中英文全文搜索
 - 🔄 **自动迁移**——`Database()` 初始化时自动创建/升级表结构
-- 🎨 **Claude Code 风格 UI**——暗色主题 + 文件上传 + 会话历史
+- 🎨 **Claude Code 风格 UI**——暗色主题 + JWT 登录页 + 文件上传 + 会话历史
 - 📊 **Eval Dataset**——33 条手工标注样本，量化 Agent 准确率
 
 ---
@@ -162,13 +168,15 @@ docker compose up -d    # 一键启动全部服务
 ```
 code-review-agent/
 ├── src/
-│   ├── harness/              ← Agent 运行时（6 组件）
+│   ├── harness/              ← Agent 运行时（8 组件）
 │   │   ├── agent.py              Execution Loop（同步 + 异步流式）
 │   │   ├── streaming.py          Streaming Parser 状态机
 │   │   ├── sandbox.py            进程隔离沙箱
 │   │   ├── telemetry.py          JSON Lines 日志
 │   │   ├── llm_cache.py          LRU+TTL 缓存
-│   │   └── auth.py               HITL 审批
+│   │   ├── auth.py               HITL 审批（工具风险分级）
+│   │   ├── memory.py             Context Memory（3 种压缩策略）
+│   │   └── jwt_auth.py           JWT 认证（签发/验证/刷新/吊销）
 │   ├── multi_agent/          ← Multi-Agent 编排
 │   │   ├── agents.py             Planner/Executor/Reviewer Prompt
 │   │   ├── orchestrator.py       硬编码管线
@@ -212,6 +220,8 @@ code-review-agent/
 
 ```
 打开 http://localhost:8501
+├─ 🔐 登录页面 → 用户名/密码 → bcrypt 验证 → JWT 签发
+├─ 侧栏显示用户信息 + 🚪 Logout 按钮
 ├─ 侧栏选择 Single / Multi-Agent 模式
 ├─ 📄 上传本地文件 → chip 显示
 ├─ 输入分析任务 → 实时流式显示结果
@@ -219,6 +229,8 @@ code-review-agent/
 ├─ 侧栏 Search Findings 全文搜索分析结果
 └─ 侧栏 Logs 查看执行日志
 ```
+
+> 默认账号：`admin` / `admin123`（首次启动自动创建）
 
 ### CLI
 
@@ -233,22 +245,48 @@ python -m src.app.cli_multi analyze X:/path/to/project
 ### API
 
 ```bash
-# 健康检查
+# ─── 认证 ───
+# 登录获取 token
+curl -X POST http://localhost:8000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin123"}'
+
+# 返回: { "access_token": "eyJ...", "refresh_token": "eyJ...", "user": {...} }
+
+# 刷新 token
+curl -X POST http://localhost:8000/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{"refresh_token":"eyJ..."}'
+
+# 当前用户信息
+curl http://localhost:8000/auth/me \
+  -H "Authorization: Bearer $TOKEN"
+
+# 登出（吊销 token）
+curl -X POST http://localhost:8000/auth/logout \
+  -H "Authorization: Bearer $TOKEN"
+
+# ─── 业务 API ───
+# 健康检查（无需认证）
 curl http://localhost:8000/health
 
-# 运行分析
+# 运行分析（需认证）
 curl -X POST http://localhost:8000/analyze \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"query": "Find bugs in harness/", "mode": "single", "project_path": "./src/harness"}'
 
 # 查看所有会话
-curl http://localhost:8000/sessions
+curl http://localhost:8000/sessions \
+  -H "Authorization: Bearer $TOKEN"
 
 # 搜索发现
-curl "http://localhost:8000/findings/keyword?q=injection"
+curl "http://localhost:8000/findings/keyword?q=injection" \
+  -H "Authorization: Bearer $TOKEN"
 
 # 向量搜索
 curl -X POST http://localhost:8000/findings/search \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"query": "SQL injection", "n_results": 5}'
 ```
@@ -303,9 +341,9 @@ curl -X POST http://localhost:8000/findings/search \
 | 数据库 | SQLite WAL + FTS5 全文搜索 |
 | API | FastAPI + Swagger 文档 |
 | 监控 | Prometheus `/metrics` |
-| 认证 | JWT Bearer Token |
-| 限流 | slowapi 100 req/min |
-| 前端 | Streamlit（Claude Code 暗色主题） |
+| 认证 | python-jose HS256 JWT + bcrypt 密码哈希 + jti 吊销列表 |
+| 限流 | slowapi（全局 100/min，登录 10/min） |
+| 前端 | Streamlit（Claude Code 暗色主题 + JWT 登录页） |
 | CI | GitHub Actions（lint/type/test/coverage） |
 | 部署 | Docker Compose |
 
