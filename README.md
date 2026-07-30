@@ -296,33 +296,42 @@ curl -X POST http://localhost:8000/findings/search \
 
 ## 评估数据
 
-### Eval 数据集
+### Eval 数据集 — llm-agent-qa-system 项目评估（124 条标注样本）
 
-**本项目自评**（`tests/eval_dataset.py`）— 33 条手工标注样本：
+对第三方项目 [llm-agent-qa-system](https://github.com/yemuxue/llm-agent-qa-system) 进行完整代码审查，标注 124 条样本覆盖 23 个源文件：
 
-| 类别 | 数量 | 
-|------|------|
-| 🐛 BUG | 22 |
-| 🔒 SECURITY | 5 |
-| ⚡ PERFORMANCE | 5 |
-| 📝 STYLE | 1 |
+| 模块 | 文件 | 样本数 | 主要问题 |
+|------|------|--------|---------|
+| Agent 核心 | `react_agent.py` | 12 | 格式解析失败暴露原文、流式非真正流式、max_iterations 无异常处理 |
+| Prompt | `prompt.py` | 6 | XML 格式严苛容错差、死代码、字符串 += 拼接 |
+| 工具系统 | `tools/base.py` | 5 | 类级别可变默认参数共享、execute 无 schema 校验 |
+| | `tools/calculator.py` | 5 | eval() DoS 攻击面、安全正则未锚定、inf/NaN 未处理 |
+| | `tools/web_search.py` | 5 | 双重 import 失败无帮助、连接泄漏、LLM 无法控制结果数 |
+| | `tools/knowledge_base.py` | 4 | retrieve 空结果仍调 reranker、相似度分数尺度不一致 |
+| LLM 适配 | `llm/base.py` | 5 | chat 不支持 tools 参数、懒初始化非线程安全、流式未检查 delta |
+| | `llm/deepseek_adapter.py` | 3 | Mixin MRO 问题、provider_name 不含模型版本 |
+| | `llm/qwen_adapter.py` | 2 | 与 DeepSeek 相同 MRO 问题、provider_name 含中文 |
+| 记忆系统 | `memory/sliding_window.py` | 5 | **deque maxlen 假设 2 msg/turn 但 observation 挤占窗口** |
+| RAG 流水线 | `rag/vector_store.py` | 7 | **`hash()` 跨进程不稳定导致重复文档**、裸 except、距离公式局限 |
+| | `rag/retriever.py` | 4 | 空查询无感知、double processing |
+| | `rag/reranker.py` | 4 | 三次浮点转换浪费、max_length=512 静默截断 |
+| | `rag/embedding.py` | 4 | 首次加载阻塞无进度、batch_size 硬编码、空字符串无验证 |
+| | `rag/document_loader.py` | 6 | UTF-8 硬编码、声称支持 PDF 未实现、HTML 正则贪婪 |
+| | `rag/text_splitter.py` | 5 | 滑动窗口从字符切分非语义边界、中文分句遗漏顿号冒号 |
+| 配置 | `config/settings.py` | 5 | 模块级单例阻碍测试、int() 包裹环境变量非数字崩溃、load_dotenv 副作用 |
+| 前端 | `app/streamlit_app.py` | 7 | Agent 就绪消息重复显示、fallback 消息误追加、tools_rendered 无限增长 |
+| | `app/chat_ui.py` | 3 | 截断在 CJK 中间切断、死代码 |
+| | `app/sidebar.py` | 4 | 直接修改全局 settings 单例、相对路径依赖 CWD |
+| 工具 | `utils/helpers.py` | 5 | JSON 提取正则贪婪跨块、嵌套标签无处理、token 估算偏低 |
+| | `utils/logger.py` | 2 | 模块级 dict 非线程安全、FileHandler 静默失败 |
 
-实测：**Recall 60% | Precision 100% | 0 误报**
-
-**第三方项目评估**（`tests/eval_llm_agent_qa.py`）— 124 条标注样本：
-
-| 维度 | 数据 |
-|------|------|
-| 覆盖文件 | 23 个源文件（8 模块） |
-| 真实问题 | 108 条（BUG 75 / STYLE 20 / PERF 12 / SECURITY 1） |
-| 假问题 | 16 条（用于 FP 检测） |
-| 严重度 | High 6 / Medium 30+ / Low 70+ |
+**数据集构成**：108 真实问题（BUG 75 / STYLE 20 / PERF 12 / SECURITY 1）+ 16 假问题（FP 检测）
 
 运行评估：
 
 ```bash
-python tests/eval_dataset.py          # 本项目 33 条
-python tests/eval_llm_agent_qa.py     # 第三方项目 124 条
+python tests/eval_llm_agent_qa.py     # 124 条标注样本评估
+python tests/eval_dataset.py          # 本项目 33 条自评（备用）
 ```
 
 ---
