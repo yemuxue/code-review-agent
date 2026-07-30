@@ -541,35 +541,126 @@ def print_summary(results: dict):
     print()
 
 
+def run_eval_with_agent(target_dir: str = "/x/VScode/llm-agent-qa-system",
+                        samples: list = None, max_samples: int = None) -> dict:
+    """
+    用真实的 code-review-agent 对 llm-agent-qa-system 进行代码审查评估。
+
+    流程：
+    1. 初始化 AgentHarness + AnthropicClient
+    2. 对每个样本的源文件进行代码分析
+    3. 检查 Agent 输出中是否包含对应行号的问题描述
+    4. 计算 Precision/Recall/F1
+
+    Args:
+        target_dir: 目标项目路径
+        samples: 样本集（默认 EVAL_SAMPLES）
+        max_samples: 最多评测样本数（None=全部）
+
+    Returns:
+        评估结果 dict
+    """
+    import sys, re
+    from pathlib import Path as _Path
+    _PROJ = _Path(__file__).parent.parent
+    sys.path.insert(0, str(_PROJ))
+
+    from src.llm_client import AnthropicClient
+    from src.harness.agent import AgentHarness, ToolDefinition
+    from src.tools.git_tools import list_files, read_file, grep_pattern
+
+    samples = samples or EVAL_SAMPLES
+    if max_samples:
+        samples = samples[:max_samples]
+
+    client = AnthropicClient(temperature=0.1)
+    tools = [
+        ToolDefinition("list_files", "List files", {"properties":{"path":{"type":"string"}},"required":["path"]}, list_files),
+        ToolDefinition("read_file", "Read file", {"properties":{"file_path":{"type":"string"},"start_line":{"type":"integer"}},"required":["file_path"]}, read_file),
+        ToolDefinition("grep_pattern", "Search regex", {"properties":{"pattern":{"type":"string"},"path":{"type":"string"}},"required":["pattern","path"]}, grep_pattern),
+    ]
+
+    SYSTEM_PROMPT = f"""You are a code reviewer. Analyze the project at {target_dir} for bugs.
+For each bug found, output: BUG|file_path|line_number|severity|description
+Only report REAL bugs. Ignore style issues."""
+
+    agent = AgentHarness(model=client, tools=tools, system_prompt=SYSTEM_PROMPT, max_turns=6)
+
+    # 先让 Agent 扫描整个项目
+    print(f"Running Agent analysis on {target_dir}...")
+    result = agent.run(f"Analyze {target_dir} for bugs. List files first, then read key files, output BUG|file|line|severity|desc for each finding.")
+
+    # 解析 Agent 输出
+    agent_findings = set()
+    for line in result.split("\n"):
+        line = line.strip()
+        if line.startswith("BUG|"):
+            parts = line.split("|")
+            if len(parts) >= 3:
+                fname = parts[1].strip()
+                try:
+                    lnum = int(parts[2].strip())
+                    agent_findings.add((fname, lnum))
+                except ValueError:
+                    continue
+
+    print(f"Agent found {len(agent_findings)} potential bugs.")
+
+    # 和标注数据对比
+    tp = fp = fn = tn = 0
+    for file, line, cat, sev, en, cn, is_bug in samples:
+        # 用文件名后缀匹配
+        found = any(file.endswith(f) and line == l for f, l in agent_findings)
+        if is_bug and found:
+            tp += 1
+        elif is_bug and not found:
+            fn += 1
+        elif not is_bug and found:
+            fp += 1
+        else:
+            tn += 1
+
+    precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+    recall = tp / (tp + fn) if (tp + fn) > 0 else 0
+    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
+
+    return {
+        "total": len(samples), "true_positives": tp, "false_positives": fp,
+        "false_negatives": fn, "true_negatives": tn,
+        "precision": f"{precision:.1%}", "recall": f"{recall:.1%}",
+        "f1_score": f"{f1:.2f}",
+    }
+
+
 if __name__ == "__main__":
-    # 模拟 Agent 函数: 在真实评估中替换为实际 Agent 调用
-    # 这里用已知的真实检测能力模拟
+    import sys
     print("=" * 60)
-    print("  模拟评估 — llm-agent-qa-system (100 samples)")
-    print("  分析覆盖 20+ 源文件，85 真实问题 + 15 假问题")
+    print("  Eval Dataset — llm-agent-qa-system (124 samples)")
     print("=" * 60)
+    print(f"  真实问题: {sum(1 for s in EVAL_SAMPLES if s[6])}")
+    print(f"  假问题(FP测试): {sum(1 for s in EVAL_SAMPLES if not s[6])}")
     print()
 
-    # 模拟：假设 Agent 能发现 ~65% 的真实问题，误报率 ~10%
-    import random
-    random.seed(42)
-
-    def mock_agent(file, line):
-        for f, l, cat, sev, en, cn, is_bug in EVAL_SAMPLES:
-            if f == file and l == line:
-                if is_bug:
-                    # 65% 概率发现真实问题
-                    return random.random() < 0.65
-                else:
-                    # 10% 概率误报
-                    return random.random() < 0.10
-        return False
-
-    results = evaluate_agent(mock_agent)
-    print_summary(results)
-
-    print("  按文件分布（真实问题）:")
-    from collections import Counter
-    file_counts = Counter(s[0] for s in EVAL_SAMPLES if s[6])
-    for f, c in file_counts.most_common():
-        print(f"    {f}: {c} 条")
+    if "--real" in sys.argv:
+        print("  运行真实 Agent 评估...")
+        results = run_eval_with_agent()
+    else:
+        print("  数据集已就绪。使用 --real 参数运行真实 Agent 评估：")
+        print("    python tests/eval_llm_agent_qa.py --real")
+        print()
+        print("  样本分布:")
+        for fname, cat in sorted(set((s[0], s[3]) for s in EVAL_SAMPLES), key=lambda x: x[1]):
+            count = sum(1 for s in EVAL_SAMPLES if s[0] == fname and s[3] == cat)
+            if count > 1:
+                print(f"    {fname}: {count} samples")
+        print()
+        print("  严重度分布:")
+        from collections import Counter
+        sev_counts = Counter(s[4] for s in EVAL_SAMPLES if s[6])
+        for k, v in sev_counts.most_common():
+            print(f"    {k}: {v}")
+        print()
+        print("  类别分布:")
+        cat_counts = Counter(s[3] for s in EVAL_SAMPLES if s[6])
+        for k, v in cat_counts.most_common():
+            print(f"    {k}: {v}")

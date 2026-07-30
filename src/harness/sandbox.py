@@ -1,4 +1,19 @@
-"""Sandbox isolation module"""
+"""Sandbox isolation module
+
+进程级沙箱：subprocess + 线程 + 双重 timeout + 临时目录
+
+生产级升级方案：Docker 容器隔离
+  docker run --rm --network=none --read-only \
+    --memory=256m --cpus=1 \
+    --security-opt=no-new-privileges \
+    -v /tmp/sandbox:/work:rw \
+    alpine sh -c "command"
+
+  对比：
+  - 当前：进程级 subprocess，临时目录隔离
+  - Docker：网络隔离 + 只读根FS + 内存限制 + seccomp
+  - 面试话术见模块末尾
+"""
 from __future__ import annotations
 import os, shutil, tempfile, subprocess, threading
 from contextlib import contextmanager
@@ -49,3 +64,59 @@ class Sandbox:
         t = threading.Thread(target=target); t.start(); t.join(timeout=timeout+5)
         if t.is_alive(): result.timed_out = True; result.stderr = f"Timeout after {timeout}s"
         return result
+
+
+class DockerSandbox:
+    """
+    Docker 容器级沙箱 — 生产环境升级方案
+
+    隔离对比：
+        当前 Sandbox: 进程级 subprocess + 临时目录
+        DockerSandbox:  容器级 --network=none --read-only --memory=256m
+
+    使用:
+        sandbox = DockerSandbox(image="python:3.11-slim")
+        result = sandbox.run(["python", "-c", "print(2+2)"])
+
+    面试话术: "当前项目的沙箱是进程级——线程+subprocess+临时目录，
+    适合内网开发环境。生产环境会升级为 Docker 容器隔离：禁用网络、
+    只读根文件系统、256MB 内存上限、禁止提权——这四条把攻击面从
+    '能访问整个操作系统'压缩到 '只能在一个受限容器里跑几行代码'。"
+    """
+
+    def __init__(self, image: str = "alpine:latest", timeout: int = 60,
+                 memory_limit: str = "256m", cpu_limit: str = "1"):
+        self.image = image
+        self.timeout = timeout
+        self.memory_limit = memory_limit
+        self.cpu_limit = cpu_limit
+
+    def run(self, command: list[str]) -> SandboxResult:
+        """在 Docker 容器中执行命令"""
+        import subprocess as _sp
+        docker_cmd = [
+            "docker", "run", "--rm",
+            "--network=none",           # ① 网络隔离
+            "--read-only",              # ② 只读根文件系统
+            f"--memory={self.memory_limit}",  # ③ 内存限制
+            f"--cpus={self.cpu_limit}",       # ④ CPU 限制
+            "--security-opt=no-new-privileges",  # ⑤ 禁止提权
+            self.image,
+        ] + (command if isinstance(command, list) else ["sh", "-c", command])
+
+        try:
+            proc = _sp.run(
+                docker_cmd, capture_output=True, text=True,
+                timeout=self.timeout,
+            )
+            return SandboxResult(
+                exit_code=proc.returncode,
+                stdout=proc.stdout, stderr=proc.stderr,
+                timed_out=False,
+            )
+        except _sp.TimeoutExpired:
+            return SandboxResult(exit_code=-1, stdout="", stderr="Docker timeout",
+                                timed_out=True)
+        except FileNotFoundError:
+            return SandboxResult(exit_code=-1, stdout="", stderr="Docker not installed",
+                                timed_out=False)

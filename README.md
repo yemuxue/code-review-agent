@@ -327,18 +327,7 @@ curl -X POST http://localhost:8000/findings/search \
 
 **数据集构成**：108 真实问题（BUG 75 / STYLE 20 / PERF 12 / SECURITY 1）+ 16 假问题（FP 检测）
 
-**评估指标**：
-
-| 指标 | 值 | 说明 |
-|------|-----|------|
-| Total Samples | 124 | 108 真实 + 16 假问题 |
-| True Positives | 76 | Agent 正确识别的真实问题 |
-| False Positives | 1 | Agent 误报（假问题被判为真） |
-| False Negatives | 32 | Agent 漏报（真实问题未发现） |
-| True Negatives | 15 | Agent 正确忽略的假问题 |
-| **Precision** | **98.7%** | 找到的几乎都是真问题，几乎没有误报 |
-| **Recall** | **70.4%** | 所有真问题中找出了七成 |
-| **F1 Score** | **0.82** | 综合评价良好 |
+**评估指标**：`evaluate_agent()` 函数自动计算 Precision/Recall/F1，支持接真实 Agent 或 Mock 测试。
 
 运行评估：
 

@@ -33,24 +33,11 @@ class AgentHarness:
     def run(self, user_query: str) -> str:
         self._reset(user_query)
         for turn in range(self.max_turns):
-            self.turns_taken = turn + 1
-            # Context compaction check: compress if messages exceed threshold
-            if hasattr(self, 'memory') and self.memory and self.memory.should_compact(self.messages):
-                self.messages = self.memory.compact(self.messages)
-            if self.logger:
-                self.logger.turn_start(turn + 1, len(self.messages))
+            self._pre_turn(turn)
             response = self.model.chat(messages=self.messages, tools=self._get_tool_schemas())
-            has_tools = bool(response.tool_calls)
-            if has_tools:
-                self._execute_tool_calls(response.tool_calls)
-            else:
-                self.messages.append({"role":"assistant","content":response.content})
-                if self.logger:
-                    self.logger.turn_end(turn + 1, has_tools, getattr(response, 'usage', None))
-                    self.logger.finish(self.get_stats())
-                return response.content
-            if self.logger:
-                self.logger.turn_end(turn + 1, has_tools)
+            result = self._process_turn_response(response, turn)
+            if result is not None:
+                return result
         return self._force_finish()
 
     async def run_streaming(self, user_query: str):
@@ -58,15 +45,12 @@ class AgentHarness:
         self._reset(user_query)
         for turn in range(self.max_turns):
             parser = StreamingParser()
-            self.turns_taken = turn + 1
-            # Context compaction
-            if hasattr(self, 'memory') and self.memory and self.memory.should_compact(self.messages):
-                self.messages = self.memory.compact(self.messages)
+            self._pre_turn(turn)
             turn_tool_calls = []
             async for chunk in self.model.stream(messages=self.messages, tools=self._get_tool_schemas()):
                 for event in parser.feed(chunk):
                     if event["type"] == "text_chunk":
-                        yield event
+                        yield event  # ← 真正逐字流式：每个 chunk 立即 yield
                     elif event["type"] == "tool_call_ready":
                         tc = ToolCall(**event["tool_call"])
                         turn_tool_calls.append(tc)
@@ -80,6 +64,29 @@ class AgentHarness:
                             yield {"type":"finished","text":event["text"]}
                             return
         yield {"type":"finished","text":self._force_finish()}
+
+    def _pre_turn(self, turn: int):
+        """每轮开始前：记忆压缩 + 日志（run/run_streaming 共享）"""
+        self.turns_taken = turn + 1
+        if hasattr(self, 'memory') and self.memory and self.memory.should_compact(self.messages):
+            self.messages = self.memory.compact(self.messages)
+        if self.logger:
+            self.logger.turn_start(turn + 1, len(self.messages))
+
+    def _process_turn_response(self, response, turn: int) -> str | None:
+        """处理 LLM 响应：工具调用 → 执行；文本 → 返回"""
+        has_tools = bool(response.tool_calls)
+        if has_tools:
+            self._execute_tool_calls(response.tool_calls)
+            if self.logger:
+                self.logger.turn_end(turn + 1, has_tools)
+            return None  # 继续循环
+        else:
+            self.messages.append({"role":"assistant","content":response.content})
+            if self.logger:
+                self.logger.turn_end(turn + 1, has_tools, getattr(response, 'usage', None))
+                self.logger.finish(self.get_stats())
+            return response.content  # 最终答案
 
     def _reset(self, user_query: str):
         self.messages = [{"role":"system","content":self.system_prompt},
