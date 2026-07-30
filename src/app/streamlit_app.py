@@ -84,6 +84,7 @@ for k, v in {
     "messages": [], "selected_files": [], "current_project": "X:/VScode/code-review-agent/src",
     "session_id": None, "sessions": {},  # session_id -> {name, messages, mode}
     "authenticated": False, "current_user": None, "jwt_token": None, "login_error": "",
+    "hitl_pending": None, "hitl_decision": None, "hitl_count": 0,
 }.items():
     if k not in st.session_state: st.session_state[k] = v
 
