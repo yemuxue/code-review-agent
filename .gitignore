@@ -9,3 +9,4 @@ sessions/
 *.db
 /dist/
 *.egg-info/
+面试*.md

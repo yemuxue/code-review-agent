@@ -107,7 +107,7 @@
 - 🗄️ **SQLite WAL + FTS5**——崩溃安全 + 中英文全文搜索
 - 🔄 **自动迁移**——`Database()` 初始化时自动创建/升级表结构
 - 🎨 **Claude Code 风格 UI**——暗色主题 + JWT 登录页 + 文件上传 + 会话历史
-- 📊 **Eval Dataset**——33 条手工标注样本，量化 Agent 准确率
+- 📊 **Eval Dataset**——124 条手工标注样本（含自评估 + 第三方项目评估）
 
 ---
 
@@ -200,7 +200,8 @@ code-review-agent/
 ├── tests/                    ← 测试（12 项 + Eval）
 │   ├── test_database.py          7 项 DB 集成测试
 │   ├── test_vector_store.py      5 项 FTS5 测试
-│   └── eval_dataset.py           33 条标注样本
+│   ├── eval_dataset.py           33 条标注样本（本项目自评）
+│   └── eval_llm_agent_qa.py      124 条标注样本（第三方项目评估）
 ├── docs/                     ← 文档
 │   ├── architecture.md           架构图
 │   └── industrial-gaps.md        企业级差距分析
@@ -317,7 +318,7 @@ curl -X POST http://localhost:8000/findings/search \
 
 ### Eval 数据集
 
-`tests/eval_dataset.py` 包含 33 条手工标注样本：
+**本项目自评**（`tests/eval_dataset.py`）— 33 条手工标注样本：
 
 | 类别 | 数量 | 
 |------|------|
@@ -326,7 +327,21 @@ curl -X POST http://localhost:8000/findings/search \
 | ⚡ PERFORMANCE | 5 |
 | 📝 STYLE | 1 |
 
-运行完整评估：`python tests/eval_dataset.py`
+**第三方项目评估**（`tests/eval_llm_agent_qa.py`）— 124 条标注样本：
+
+| 维度 | 数据 |
+|------|------|
+| 覆盖文件 | 23 个源文件（8 模块） |
+| 真实问题 | 108 条（BUG 75 / STYLE 20 / PERF 12 / SECURITY 1） |
+| 假问题 | 16 条（用于 FP 检测测试） |
+| 严重度分布 | High 6 / Medium 30+ / Low 70+ |
+
+运行评估：
+
+```bash
+python tests/eval_dataset.py          # 本项目 33 条自评
+python tests/eval_llm_agent_qa.py     # 第三方项目 124 条评估
+```
 
 ---
 
