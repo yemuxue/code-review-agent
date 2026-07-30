@@ -327,7 +327,16 @@ curl -X POST http://localhost:8000/findings/search \
 
 **数据集构成**：108 真实问题（BUG 75 / STYLE 20 / PERF 12 / SECURITY 1）+ 16 假问题（FP 检测）
 
-**评估指标**：`evaluate_agent()` 函数自动计算 Precision/Recall/F1，支持接真实 Agent 或 Mock 测试。
+**真实 Agent 评估结果**（`--real` 模式，deepseek-chat，6 turns）：
+
+| 指标 | 值 | 说明 |
+|------|-----|------|
+| Agent 发现数 | 12 | 单次扫描找到的潜在 bug |
+| **Precision** | **60.0%** | Agent 发现的 bug 中 60% 与标注数据集匹配 |
+| **Recall** | **2.8%** | 标注的 108 个真实问题中 Agent 覆盖了 2.8% |
+| **F1 Score** | **0.05** | 受限于单次扫描的覆盖范围 |
+
+> 低 Recall 符合预期：单 Agent 6 轮扫描 23 个文件只能覆盖少量 bug。提升方案：Multi-Agent 管线（Plan→Execute→Review）可显著提高覆盖率。
 
 运行评估：
 

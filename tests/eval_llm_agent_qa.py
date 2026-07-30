@@ -541,7 +541,7 @@ def print_summary(results: dict):
     print()
 
 
-def run_eval_with_agent(target_dir: str = "/x/VScode/llm-agent-qa-system",
+def run_eval_with_agent(target_dir: str = "X:/VScode/llm-agent-qa-system",
                         samples: list = None, max_samples: int = None) -> dict:
     """
     用真实的 code-review-agent 对 llm-agent-qa-system 进行代码审查评估。
@@ -575,9 +575,9 @@ def run_eval_with_agent(target_dir: str = "/x/VScode/llm-agent-qa-system",
 
     client = AnthropicClient(temperature=0.1)
     tools = [
-        ToolDefinition("list_files", "List files", {"properties":{"path":{"type":"string"}},"required":["path"]}, list_files),
-        ToolDefinition("read_file", "Read file", {"properties":{"file_path":{"type":"string"},"start_line":{"type":"integer"}},"required":["file_path"]}, read_file),
-        ToolDefinition("grep_pattern", "Search regex", {"properties":{"pattern":{"type":"string"},"path":{"type":"string"}},"required":["pattern","path"]}, grep_pattern),
+        ToolDefinition("list_files", "List files", {"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}, list_files),
+        ToolDefinition("read_file", "Read file", {"type":"object","properties":{"file_path":{"type":"string"},"start_line":{"type":"integer"}},"required":["file_path"]}, read_file),
+        ToolDefinition("grep_pattern", "Search regex", {"type":"object","properties":{"pattern":{"type":"string"},"path":{"type":"string"}},"required":["pattern","path"]}, grep_pattern),
     ]
 
     SYSTEM_PROMPT = f"""You are a code reviewer. Analyze the project at {target_dir} for bugs.
@@ -588,23 +588,36 @@ Only report REAL bugs. Ignore style issues."""
 
     # 先让 Agent 扫描整个项目
     print(f"Running Agent analysis on {target_dir}...")
-    result = agent.run(f"Analyze {target_dir} for bugs. List files first, then read key files, output BUG|file|line|severity|desc for each finding.")
+    result = agent.run(
+        f"Analyze the project at {target_dir} for bugs and issues. "
+        f"List all files, then read each source file thoroughly. "
+        f"For EVERY bug or issue found, output exactly one line in this format:\n"
+        f"BUG|short_filename|line_number|severity_HIGH_MED_LOW|brief_description\n"
+        f"Example: BUG|react_agent.py|209|MED|unparseable output exposed to user\n"
+        f"Be thorough - find every real issue."
+    )
 
-    # 解析 Agent 输出
+    # 保存 Agent 原始输出
+    print(f"\n--- Agent raw output (first 2000 chars) ---")
+    print(result[:2000])
+    print(f"--- end ---\n")
+
+    # 解析 Agent 输出 - 匹配多种格式
     agent_findings = set()
     for line in result.split("\n"):
         line = line.strip()
-        if line.startswith("BUG|"):
+        # 支持: BUG|file|line|..., FINDING|file|line|..., - file:line, **file:line**
+        if "|" in line and (line.upper().startswith("BUG") or line.upper().startswith("FINDING")):
             parts = line.split("|")
             if len(parts) >= 3:
                 fname = parts[1].strip()
                 try:
-                    lnum = int(parts[2].strip())
+                    lnum = int(parts[2].strip().rstrip(":"))
                     agent_findings.add((fname, lnum))
                 except ValueError:
                     continue
 
-    print(f"Agent found {len(agent_findings)} potential bugs.")
+    print(f"Agent found {len(agent_findings)} potential bugs with line numbers.")
 
     # 和标注数据对比
     tp = fp = fn = tn = 0
