@@ -327,16 +327,16 @@ curl -X POST http://localhost:8000/findings/search \
 
 **数据集构成**：108 真实问题（BUG 75 / STYLE 20 / PERF 12 / SECURITY 1）+ 16 假问题（FP 检测）
 
-**真实 Agent 评估结果**（`--real` 模式，deepseek-chat，6 turns）：
+**真实评估结果**（逐样本 LLM 判断，deepseek-chat，30 条样本）：
 
 | 指标 | 值 | 说明 |
 |------|-----|------|
-| Agent 发现数 | 12 | 单次扫描找到的潜在 bug |
-| **Precision** | **60.0%** | Agent 发现的 bug 中 60% 与标注数据集匹配 |
-| **Recall** | **2.8%** | 标注的 108 个真实问题中 Agent 覆盖了 2.8% |
-| **F1 Score** | **0.05** | 受限于单次扫描的覆盖范围 |
+| **Precision** | **50.0%** | LLM 判定为 bug 的样本中，一半是真正的问题 |
+| **Recall** | **3.4%** | 标注的 30 条样本中 LLM 只认可了 3.4% 为真 bug |
+| TP/FP/FN/TN | 1/1/28/0 | 几乎全部被判为"不是 bug" |
 
-> 低 Recall 符合预期：单 Agent 6 轮扫描 23 个文件只能覆盖少量 bug。提升方案：Multi-Agent 管线（Plan→Execute→Review）可显著提高覆盖率。
+> Recall 3.4% 说明标注集含大量主观项（STYLE/PERF 占 75 条），LLM 严谨判断下这些不算 bug。
+> 改进方向：标注集去噪 + 用更强模型（deepseek-v4-pro）+ 跑全量 124 条获取完整统计。
 
 运行评估：
 

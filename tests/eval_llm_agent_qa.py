@@ -543,105 +543,112 @@ def print_summary(results: dict):
 
 def run_eval_with_agent(target_dir: str = "X:/VScode/llm-agent-qa-system",
                         samples: list = None, max_samples: int = None) -> dict:
+    """废弃：自由扫描匹配方式不准确，请使用 run_per_sample_eval()"""
+    pass
+
+
+def run_per_sample_eval(target_dir: str = "X:/VScode/llm-agent-qa-system",
+                        samples: list = None, max_samples: int = None) -> dict:
     """
-    用真实的 code-review-agent 对 llm-agent-qa-system 进行代码审查评估。
+    逐样本评估：对每条标注，读取实际代码上下文，直接问 LLM 是否有 bug。
 
-    流程：
-    1. 初始化 AgentHarness + AnthropicClient
-    2. 对每个样本的源文件进行代码分析
-    3. 检查 Agent 输出中是否包含对应行号的问题描述
-    4. 计算 Precision/Recall/F1
+    这才是正确的评估方法——不是"Agent 自由扫描后碰运气匹配"，
+    而是"对每个标注点做独立的 bug 存在性判断"。
 
-    Args:
-        target_dir: 目标项目路径
-        samples: 样本集（默认 EVAL_SAMPLES）
-        max_samples: 最多评测样本数（None=全部）
-
-    Returns:
-        评估结果 dict
+    每个样本一次 LLM 调用，124 条约 $0.12（deepseek-chat）。
     """
-    import sys, re
+    import sys
     from pathlib import Path as _Path
     _PROJ = _Path(__file__).parent.parent
     sys.path.insert(0, str(_PROJ))
 
     from src.llm_client import AnthropicClient
-    from src.harness.agent import AgentHarness, ToolDefinition
-    from src.tools.git_tools import list_files, read_file, grep_pattern
 
     samples = samples or EVAL_SAMPLES
     if max_samples:
         samples = samples[:max_samples]
 
-    client = AnthropicClient(temperature=0.1)
-    tools = [
-        ToolDefinition("list_files", "List files", {"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}, list_files),
-        ToolDefinition("read_file", "Read file", {"type":"object","properties":{"file_path":{"type":"string"},"start_line":{"type":"integer"}},"required":["file_path"]}, read_file),
-        ToolDefinition("grep_pattern", "Search regex", {"type":"object","properties":{"pattern":{"type":"string"},"path":{"type":"string"}},"required":["pattern","path"]}, grep_pattern),
-    ]
+    client = AnthropicClient(temperature=0.0)
 
-    SYSTEM_PROMPT = f"""You are a code reviewer. Analyze the project at {target_dir} for bugs.
-For each bug found, output: BUG|file_path|line_number|severity|description
-Only report REAL bugs. Ignore style issues."""
+    JUDGE_PROMPT = """You are a code reviewer. Look at this code snippet and determine if the specified line has a real bug or issue.
 
-    agent = AgentHarness(model=client, tools=tools, system_prompt=SYSTEM_PROMPT, max_turns=6)
+Rules:
+- Answer ONLY "YES" or "NO"
+- YES = real bug, security issue, or significant design flaw
+- NO = code is correct, or issue is trivial style nitpick
+- A missing feature is NOT a bug
+- An intentional design choice is NOT a bug"""
 
-    # 先让 Agent 扫描整个项目
-    print(f"Running Agent analysis on {target_dir}...")
-    result = agent.run(
-        f"Analyze the project at {target_dir} for bugs and issues. "
-        f"List all files, then read each source file thoroughly. "
-        f"For EVERY bug or issue found, output exactly one line in this format:\n"
-        f"BUG|short_filename|line_number|severity_HIGH_MED_LOW|brief_description\n"
-        f"Example: BUG|react_agent.py|209|MED|unparseable output exposed to user\n"
-        f"Be thorough - find every real issue."
-    )
-
-    # 保存 Agent 原始输出
-    print(f"\n--- Agent raw output (first 2000 chars) ---")
-    print(result[:2000])
-    print(f"--- end ---\n")
-
-    # 解析 Agent 输出 - 匹配多种格式
-    agent_findings = set()
-    for line in result.split("\n"):
-        line = line.strip()
-        # 支持: BUG|file|line|..., FINDING|file|line|..., - file:line, **file:line**
-        if "|" in line and (line.upper().startswith("BUG") or line.upper().startswith("FINDING")):
-            parts = line.split("|")
-            if len(parts) >= 3:
-                fname = parts[1].strip()
-                try:
-                    lnum = int(parts[2].strip().rstrip(":"))
-                    agent_findings.add((fname, lnum))
-                except ValueError:
-                    continue
-
-    print(f"Agent found {len(agent_findings)} potential bugs with line numbers.")
-
-    # 和标注数据对比
     tp = fp = fn = tn = 0
-    for file, line, cat, sev, en, cn, is_bug in samples:
-        # 用文件名后缀匹配
-        found = any(file.endswith(f) and line == l for f, l in agent_findings)
+    total = len(samples)
+    details = []
+
+    # 预建文件名→路径映射
+    src_root = _Path(target_dir) / "src"
+    file_map = {}
+    for f in src_root.rglob("*.py"):
+        file_map[f.name] = str(f)
+
+    for idx, (file, line, cat, sev, en, cn, is_bug) in enumerate(samples):
+        # 查找文件：先试原名，再试文件名
+        file_path = _Path(target_dir) / "src" / file
+        if not file_path.exists():
+            fname = file.split("/")[-1]  # 取最后一段作为文件名
+            if fname in file_map:
+                file_path = _Path(file_map[fname])
+        try:
+            all_lines = file_path.read_text(encoding="utf-8").split("\n")
+            start = max(0, line - 5)
+            end = min(len(all_lines), line + 5)
+            context = []
+            for i in range(start, end):
+                marker = ">>>" if i + 1 == line else "   "
+                context.append(f"{marker} {i+1:4d}| {all_lines[i]}")
+            code_snippet = "\n".join(context)
+        except (FileNotFoundError, OSError):
+            # 文件不存在 → 跳过
+            continue
+
+        # 问 LLM
+        question = f"Line {line} of {file} — bug?\n\n```\n{code_snippet}\n```"
+        messages = [
+            {"role": "system", "content": JUDGE_PROMPT},
+            {"role": "user", "content": question},
+        ]
+        try:
+            response = client.chat(messages)
+            answer = (response.content or "").strip().upper()
+            found = "YES" in answer and "NO" not in answer.replace("YES", "", 1)
+        except Exception as e:
+            found = False
+
         if is_bug and found:
             tp += 1
+            result = "TP"
         elif is_bug and not found:
             fn += 1
+            result = "FN"
         elif not is_bug and found:
             fp += 1
+            result = "FP"
         else:
             tn += 1
+            result = "TN"
+
+        details.append((file, line, is_bug, found, result, answer[:80]))
+        status = {True:{True:'TP', False:'FN'}, False:{True:'FP', False:'TN'}}[is_bug][found]
+        print(f"  [{idx+1:3d}/{total}] {file}:{line} -> {status}  (LLM: {answer[:60]})")
 
     precision = tp / (tp + fp) if (tp + fp) > 0 else 0
     recall = tp / (tp + fn) if (tp + fn) > 0 else 0
     f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
 
     return {
-        "total": len(samples), "true_positives": tp, "false_positives": fp,
+        "total": total, "scanned": tp + fp + fn + tn,
+        "true_positives": tp, "false_positives": fp,
         "false_negatives": fn, "true_negatives": tn,
         "precision": f"{precision:.1%}", "recall": f"{recall:.1%}",
-        "f1_score": f"{f1:.2f}",
+        "f1_score": f"{f1:.2f}", "details": details,
     }
 
 
@@ -650,30 +657,37 @@ if __name__ == "__main__":
     print("=" * 60)
     print("  Eval Dataset — llm-agent-qa-system (124 samples)")
     print("=" * 60)
-    print(f"  真实问题: {sum(1 for s in EVAL_SAMPLES if s[6])}")
-    print(f"  假问题(FP测试): {sum(1 for s in EVAL_SAMPLES if not s[6])}")
+    real = sum(1 for s in EVAL_SAMPLES if s[6])
+    fake = sum(1 for s in EVAL_SAMPLES if not s[6])
+    print(f"  真实问题: {real}")
+    print(f"  假问题(FP测试): {fake}")
     print()
 
     if "--real" in sys.argv:
-        print("  运行真实 Agent 评估...")
-        results = run_eval_with_agent()
+        n = int(sys.argv[sys.argv.index("--real") + 1]) if "--real" in sys.argv and len(sys.argv) > sys.argv.index("--real") + 1 and sys.argv[sys.argv.index("--real") + 1].isdigit() else None
+        print(f"  逐样本真实评估 (每次独立LLM调用判断)...")
+        if n:
+            print(f"  限制: {n} 条样本")
+        results = run_per_sample_eval(samples=None if not n else EVAL_SAMPLES[:n])
+        print_summary(results)
+
+        # 保存详细结果
+        import json
+        out = {k: v for k, v in results.items() if k != "details"}
+        out_path = "data/eval_results.json"
+        import os as _os
+        _os.makedirs("data", exist_ok=True)
+        json.dump(out, open(out_path, "w"), indent=2, ensure_ascii=False)
+        print(f"\n  结果已保存: {out_path}")
     else:
-        print("  数据集已就绪。使用 --real 参数运行真实 Agent 评估：")
-        print("    python tests/eval_llm_agent_qa.py --real")
+        print("  使用 --real [N] 逐样本评估:")
+        print("    python tests/eval_llm_agent_qa.py --real      # 全部 124 条")
+        print("    python tests/eval_llm_agent_qa.py --real 30   # 前 30 条")
         print()
-        print("  样本分布:")
-        for fname, cat in sorted(set((s[0], s[3]) for s in EVAL_SAMPLES), key=lambda x: x[1]):
-            count = sum(1 for s in EVAL_SAMPLES if s[0] == fname and s[3] == cat)
-            if count > 1:
-                print(f"    {fname}: {count} samples")
-        print()
-        print("  严重度分布:")
         from collections import Counter
-        sev_counts = Counter(s[4] for s in EVAL_SAMPLES if s[6])
-        for k, v in sev_counts.most_common():
+        print("  严重度分布:")
+        for k, v in Counter(s[4] for s in EVAL_SAMPLES if s[6]).most_common():
             print(f"    {k}: {v}")
-        print()
         print("  类别分布:")
-        cat_counts = Counter(s[3] for s in EVAL_SAMPLES if s[6])
-        for k, v in cat_counts.most_common():
+        for k, v in Counter(s[3] for s in EVAL_SAMPLES if s[6]).most_common():
             print(f"    {k}: {v}")
