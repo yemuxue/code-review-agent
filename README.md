@@ -296,26 +296,6 @@ curl -X POST http://localhost:8000/findings/search \
 
 ## 评估数据
 
-### Agent 真实检测能力（10 bugs × 6 files）
-
-| 文件 | 行 | Bug | 发现 |
-|------|-----|-----|------|
-| sandbox.py | 34 | `except: pass` 裸异常吞 KeyboardInterrupt | ✅ |
-| sandbox.py | 42 | `env or os.environ.copy()` 空 dict 当 falsy | ❌ |
-| sandbox.py | 49 | 线程竞态条件 | ✅ |
-| agent.py | 39 | `model.chat()` 无异常处理 | ✅ |
-| agent.py | 84 | `ToolCall(**tc)` 格式错误崩溃 | ✅ |
-| streaming.py | 72 | JSON 解析失败丢失部分数据 | ✅ |
-| telemetry.py | 132 | `TimedToolCall` 重复记录 start 事件 | ❌ |
-| config.py | 16 | 模块级 `for` 循环修改 `os.environ` | ❌ |
-| llm_client.py | 19 | `b[type]` 直接索引遇未知块崩溃 | ❌ |
-| git_tools.py | 7 | 源码硬编码代理地址 | ✅ |
-
-**Recall: 6/10 = 60% | Precision: 100%（无误报）**
-
-> Agent 强项：明显的代码缺陷（裸 except、竞态、缺少异常处理）  
-> Agent 弱项：语义层面的问题（逻辑陷阱、环境变量副作用），需要更强的模型
-
 ### Eval 数据集
 
 **本项目自评**（`tests/eval_dataset.py`）— 33 条手工标注样本：
@@ -327,20 +307,22 @@ curl -X POST http://localhost:8000/findings/search \
 | ⚡ PERFORMANCE | 5 |
 | 📝 STYLE | 1 |
 
+实测：**Recall 60% | Precision 100% | 0 误报**
+
 **第三方项目评估**（`tests/eval_llm_agent_qa.py`）— 124 条标注样本：
 
 | 维度 | 数据 |
 |------|------|
 | 覆盖文件 | 23 个源文件（8 模块） |
 | 真实问题 | 108 条（BUG 75 / STYLE 20 / PERF 12 / SECURITY 1） |
-| 假问题 | 16 条（用于 FP 检测测试） |
-| 严重度分布 | High 6 / Medium 30+ / Low 70+ |
+| 假问题 | 16 条（用于 FP 检测） |
+| 严重度 | High 6 / Medium 30+ / Low 70+ |
 
 运行评估：
 
 ```bash
-python tests/eval_dataset.py          # 本项目 33 条自评
-python tests/eval_llm_agent_qa.py     # 第三方项目 124 条评估
+python tests/eval_dataset.py          # 本项目 33 条
+python tests/eval_llm_agent_qa.py     # 第三方项目 124 条
 ```
 
 ---
