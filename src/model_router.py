@@ -13,7 +13,7 @@ except ImportError:
 
 
 MODEL_REGISTRY = {
-    "cheap": "deepseek-chat",        # 便宜：简单分析、格式转换
+    "cheap": "deepseek-v4-flash",    # 便宜：简单分析、格式转换
     "strong": "deepseek-v4-pro[1m]", # 强：多 Agent 分析、复杂推理
 }
 
@@ -38,7 +38,7 @@ class ModelRouter:
     用法:
         router = ModelRouter()
         router.route("Find bugs in sandbox.py")  → deepseek-v4-pro[1m]
-        router.route("List all files")           → deepseek-chat
+        router.route("List all files")           → deepseek-v4-flash
     """
 
     def __init__(self):
@@ -46,7 +46,7 @@ class ModelRouter:
 
     def _get_client(self, tier: str) -> AnthropicClient:
         if tier not in self._clients:
-            model = MODEL_REGISTRY.get(tier, "deepseek-chat")
+            model = MODEL_REGISTRY.get(tier, "deepseek-v4-flash")
             self._clients[tier] = AnthropicClient(model=model)
         return self._clients[tier]
 

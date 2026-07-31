@@ -21,4 +21,4 @@ def get_base_url(): return os.environ.get("ANTHROPIC_BASE_URL", "https://api.dee
 def get_model():
     # .env 文件优先于系统环境变量
     dotenv = _load_dotenv()
-    return dotenv.get("ANTHROPIC_MODEL") or os.environ.get("ANTHROPIC_MODEL", "deepseek-chat")
+    return dotenv.get("ANTHROPIC_MODEL") or os.environ.get("ANTHROPIC_MODEL", "deepseek-v4-flash")
