@@ -570,14 +570,22 @@ def run_per_sample_eval(target_dir: str = "X:/VScode/llm-agent-qa-system",
 
     client = AnthropicClient(temperature=0.0)
 
-    JUDGE_PROMPT = """You are a code reviewer. Look at this code snippet and determine if the specified line has a real bug or issue.
+    JUDGE_PROMPT = """You are an expert code reviewer performing a detailed code review.
 
-Rules:
-- Answer ONLY "YES" or "NO"
-- YES = real bug, security issue, or significant design flaw
-- NO = code is correct, or issue is trivial style nitpick
-- A missing feature is NOT a bug
-- An intentional design choice is NOT a bug"""
+Determine if the code around the marked line (>>>) has a bug or issue.
+
+Answer "YES" if ANY of these apply:
+- Functional bug (crash, wrong behavior, data loss, race condition)
+- Security vulnerability (injection, unsafe eval, secret exposure)
+- Performance problem (O(n²) loops, repeated work, unbounded growth)
+- Maintainability issue that will cause bugs later (shared mutable state, unstable IDs, missing validation)
+- Incorrect error handling (bare except, swallowed exceptions, missing timeout)
+
+Answer "NO" only if:
+- The code is fully correct AND the issue is a purely cosmetic style nitpick
+- The issue is a missing feature that was never promised
+
+Reply with exactly "YES" or "NO" followed by a one-sentence reason."""
 
     tp = fp = fn = tn = 0
     total = len(samples)
@@ -598,8 +606,8 @@ Rules:
                 file_path = _Path(file_map[fname])
         try:
             all_lines = file_path.read_text(encoding="utf-8").split("\n")
-            start = max(0, line - 5)
-            end = min(len(all_lines), line + 5)
+            start = max(0, line - 15)
+            end = min(len(all_lines), line + 15)
             context = []
             for i in range(start, end):
                 marker = ">>>" if i + 1 == line else "   "
@@ -618,7 +626,8 @@ Rules:
         try:
             response = client.chat(messages)
             answer = (response.content or "").strip().upper()
-            found = "YES" in answer and "NO" not in answer.replace("YES", "", 1)
+            # 判定逻辑修正：只看回答是否以 YES 开头（LLM 会说 "YES — reason..."）
+            found = answer.startswith("YES")
         except Exception as e:
             found = False
 
