@@ -153,6 +153,44 @@ def grep_pattern(pattern: str, path: str = ".", file_glob: str = "*.py",
     if not results: return f"No matches for: {pattern}"
     return "\n".join(results)
 
+def write_file(file_path: str = "", content: str = "", start_line: int = 1) -> str:
+    """写入/修改文件。修复 Agent 专用：替换指定行范围的内容。
+
+    Args:
+        file_path: 目标文件的绝对路径
+        content: 新内容（替换 start_line 起的部分）
+        start_line: 从哪一行开始替换（默认 1 = 覆盖整个文件）
+    """
+    if not file_path:
+        return ("ERROR: You MUST provide file_path. "
+                "Use write_file(file_path='/absolute/path/to/file.py', content='...').")
+    path = Path(file_path)
+    if path.suffix in {".exe", ".dll", ".so", ".bin", ".zip", ".gz", ".png", ".jpg"}:
+        return f"Cannot write binary: {file_path}"
+    try:
+        # 读取原文件
+        if path.exists():
+            with open(path, "r", encoding="utf-8", errors="replace") as f:
+                original = f.read()
+        else:
+            original = ""
+        # 替换：start_line 之后的内容用新 content 替换
+        if path.exists() and start_line > 1:
+            lines = original.split("\n")
+            keep = lines[: start_line - 1]
+            new_text = "\n".join(keep + content.split("\n"))
+        else:
+            new_text = content
+        # 原子写入（先写临时文件再替换，防止写一半崩溃）
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(new_text)
+        tmp.replace(path)
+        return f"OK: wrote {len(new_text)} chars to {file_path} (was {len(original)})"
+    except OSError as e:
+        return f"ERROR: write failed: {type(e).__name__}: {e}"
+
+
 def run_command(command: str) -> str:
     """Run a shell command and return its output (timeout: 60s). Use for pytest, mypy, etc."""
     import shlex

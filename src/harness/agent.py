@@ -35,6 +35,7 @@ class AgentHarness:
         for turn in range(self.max_turns):
             self._pre_turn(turn)
             response = self.model.chat(messages=self.messages, tools=self._get_tool_schemas())
+            self._accumulate_usage(response)  # ← 累计 token
             result = self._process_turn_response(response, turn)
             if result is not None:
                 return result
@@ -61,6 +62,10 @@ class AgentHarness:
                             yield {"type":"tools_executed","count":len(turn_tool_calls)}
                             break
                         else:
+                            # 流式结束：累计 usage（message_stop 事件携带）
+                            usage = getattr(chunk, 'usage', None)
+                            if usage:
+                                self._accumulate_usage(type('R', (), {'usage': usage})())
                             yield {"type":"finished","text":event["text"]}
                             return
         yield {"type":"finished","text":self._force_finish()}
@@ -72,6 +77,15 @@ class AgentHarness:
             self.messages = self.memory.compact(self.messages)
         if self.logger:
             self.logger.turn_start(turn + 1, len(self.messages))
+
+    def _accumulate_usage(self, response) -> None:
+        """从 LLM response 的 usage 字段累计 token 消耗"""
+        usage = getattr(response, 'usage', None)
+        if not usage:
+            return
+        input_tokens = usage.get('input_tokens', 0) if isinstance(usage, dict) else 0
+        output_tokens = usage.get('output_tokens', 0) if isinstance(usage, dict) else 0
+        self.total_tokens_used += int(input_tokens) + int(output_tokens)
 
     def _process_turn_response(self, response, turn: int) -> str | None:
         """处理 LLM 响应：工具调用 → 执行；文本 → 返回"""

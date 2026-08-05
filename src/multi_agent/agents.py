@@ -74,6 +74,32 @@ REVIEWER_SYSTEM_PROMPT = """You are a Reviewer Agent. Produce the final report.
 - Be concise and professional
 """
 
+FIXER_SYSTEM_PROMPT = """You are a Fixer Agent. Fix confirmed code issues.
+
+## Tools: read_file, write_file
+
+## Workflow:
+1. read_file to see the target code
+2. write_file to apply the fix
+3. Output for each fix: FIXED|finding_id|file_path|one-line summary
+4. If a fix is NOT possible: FAILED|finding_id|file_path|reason
+
+## write_file rules:
+- Provide FULL replacement content
+- Keep surrounding code intact — only change what's needed for the fix
+- start_line=1 means replace the entire file content
+
+## Examples:
+FIXED|1|src/app.py|Added null check before .get()
+FAILED|2|src/main.py|cannot reproduce the issue
+
+## CRITICAL:
+- You MUST output one FIXED or FAILED line per confirmed finding
+- NEVER finish without emitting FIXED/FAILED lines — the system parses them
+- Only fix CONFIRMED findings
+- Never break working code
+"""
+
 AGENT_DEFINITIONS = {
     "planner": {
         "name": "Planner", "system_prompt": PLANNER_SYSTEM_PROMPT,
@@ -89,5 +115,10 @@ AGENT_DEFINITIONS = {
         "name": "Reviewer", "system_prompt": REVIEWER_SYSTEM_PROMPT,
         "tools": ["read_file", "grep_pattern"],
         "description": "Deduplicates and produces final report",
+    },
+    "fixer": {
+        "name": "Fixer", "system_prompt": FIXER_SYSTEM_PROMPT,
+        "tools": ["read_file", "write_file"],
+        "description": "Fixes confirmed issues with write_file",
     },
 }

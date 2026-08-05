@@ -475,19 +475,26 @@ if prompt:
 
         with st.status("🔄 Working...", expanded=True) as status:
             if is_multi:
-                status.write("**LangGraph: plan → execute → review**")
+                status.write("**LangGraph: plan → execute(并行) → review → fix**")
                 try:
                     orch = Orchestrator(client, TOOLS, sandbox=Sandbox(), hitl=hitl_guard,
                                         memory=ContextMemory(strategy="hybrid", window_size=10))
                     lang_result = orch.run(task=target, project_path=st.session_state.current_project)
                     result_text = "\n".join(lang_result.get("messages", ["No findings"]))
                     n_findings = len(lang_result.get("findings", []))
+                    n_verdicts = len(lang_result.get("verdicts", []))
+                    n_fixes = len(lang_result.get("fixes", []))
                     if n_findings:
                         result_text += f"\n\n**Findings**: {n_findings} issues found"
-                    status.write(f"🧠 LangGraph: plan -> execute -> review")
-                    status.write(f"📊 Findings: {n_findings} | Complete: {lang_result.get('complete', False)}")
+                    # 节点级统计展示（可观测性）
+                    node_stats = lang_result.get("node_stats", {})
+                    status.write(f"🧠 LangGraph: plan -> execute -> review -> fix")
+                    status.write(f"📊 Findings: {n_findings} | Verified: {n_verdicts} | Fixed: {n_fixes}")
+                    if node_stats:
+                        for node, s in node_stats.items():
+                            status.write(f"  · {node}: {s.get('turns',0)} turns | {s.get('elapsed_ms',0)}ms | {s.get('tokens',0)} tok")
                     status.update(label="✅ LangGraph Complete", state="complete")
-                    stats = {"turns_taken": f"{n_findings} findings", "tools_called": 0, "messages_count": len(lang_result.get("messages", []))}
+                    stats = {"turns_taken": f"{n_findings} findings", "tools_called": n_verdicts, "messages_count": len(lang_result.get("messages", []))}
                 except Exception as ex:
                     import traceback
                     result_text = f"❌ Error:\n```\n{traceback.format_exc()}\n```"
