@@ -104,13 +104,13 @@ FIXER_SYSTEM_PROMPT = """You are a Fixer Agent. Fix confirmed code issues.
 **中文**: 用 ast.literal_eval 替换 eval()
 **Fix**: `ast.literal_eval(expression)`
 
-## Status Lines (must come AFTER the report, one per finding):
-FIXED|finding_id|file_path|one-line summary
-FAILED|finding_id|file_path|reason
+## Status Lines (must come AFTER the report, one per finding, bilingual):
+FIXED|finding_id|file_path|EN one-line summary|中文一行摘要
+FAILED|finding_id|file_path|EN reason|中文原因
 
 ## Examples:
-FIXED|1|src/app.py|Added null check before .get()
-FAILED|2|src/main.py|cannot reproduce the issue
+FIXED|1|src/app.py|Added null check before .get()|添加了空值检查
+FAILED|2|src/main.py|cannot reproduce the issue|无法复现该问题
 
 ## write_file rules:
 - Provide FULL replacement content

@@ -314,7 +314,8 @@ class LangGraphOrchestrator:
         return verdicts
 
     def _parse_fixes(self, text: str) -> list[dict]:
-        """解析 fix 输出。容错：支持 markdown 代码块内、'FIXED:' 冒号、'- ' 列表前缀"""
+        """解析 fix 输出。容错：支持 markdown 代码块内、'FIXED:' 冒号、'- ' 列表前缀
+        格式: FIXED|id|path|EN summary|CN summary（中英文双语）"""
         fixes = []
         for raw_line in text.split("\n"):
             line = raw_line.strip()
@@ -340,6 +341,7 @@ class LangGraphOrchestrator:
                         "finding_id": int(parts[1].strip()) if parts[1].strip().isdigit() else 0,
                         "file_path": parts[2].strip(),
                         "summary": parts[3].strip(),
+                        "summary_cn": parts[4].strip() if len(parts) > 4 else "",
                         "status": status,
                     })
         return fixes
