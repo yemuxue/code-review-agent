@@ -25,7 +25,7 @@ from src.harness.memory import ContextMemory
 from src.harness.jwt_auth import get_user_store, get_auth, User
 from src.model_router import ModelRouter
 from src.multi_agent.langgraph_orchestrator import LangGraphOrchestrator as Orchestrator
-from src.tools.git_tools import list_files, read_file, grep_pattern, run_command
+from src.tools.git_tools import list_files, read_file, grep_pattern, run_command, write_file
 from src.storage.database import Database, Session as DBSession
 from src.memory.vector_store import VectorStore, FindingDocument
 
@@ -176,6 +176,8 @@ TOOLS = [
         {"type":"object","properties":{"pattern":{"type":"string","description":"Regex"},"path":{"type":"string"},"file_glob":{"type":"string"}},"required":["pattern","path"]}, grep_pattern),
     ToolDefinition("run_command","Run shell command / 运行命令",
         {"type":"object","properties":{"command":{"type":"string"}},"required":["command"]}, run_command),
+    ToolDefinition("write_file","Write/repair file / 写入或修复文件（写前自动备份 .bak）",
+        {"type":"object","properties":{"file_path":{"type":"string","description":"Absolute path"},"content":{"type":"string","description":"New content"},"start_line":{"type":"integer","description":"Replace from this line (default 1 = whole file)"}},"required":["file_path","content"]}, write_file),
 ]
 
 SYSTEM_PROMPTS = {
