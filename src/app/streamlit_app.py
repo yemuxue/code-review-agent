@@ -485,9 +485,18 @@ if prompt:
                     result_text = "\n".join(lang_result.get("messages", ["No findings"]))
                     n_findings = len(lang_result.get("findings", []))
                     n_verdicts = len(lang_result.get("verdicts", []))
-                    n_fixes = len(lang_result.get("fixes", []))
+                    fixes = lang_result.get("fixes", [])
+                    n_fixes = len(fixes)
                     if n_findings:
                         result_text += f"\n\n**Findings**: {n_findings} issues found"
+                    # 修复结果展示（统一格式）
+                    if fixes:
+                        fixed = [f for f in fixes if f.get("status") == "FIXED"]
+                        failed = [f for f in fixes if f.get("status") == "FAILED"]
+                        result_text += f"\n\n## Fix Results ({len(fixed)} fixed, {len(failed)} failed)"
+                        for i, fx in enumerate(fixes, 1):
+                            status_txt = "✅" if fx.get("status") == "FIXED" else "❌"
+                            result_text += f"\n{status_txt} {i}. {fx.get('summary', '')}"
                     # 节点级统计展示（可观测性）
                     node_stats = lang_result.get("node_stats", {})
                     status.write(f"🧠 LangGraph: plan -> execute(并行) -> review -> fix -> verify")
