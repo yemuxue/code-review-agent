@@ -489,7 +489,7 @@ if prompt:
                     n_fixes = len(fixes)
                     if n_findings:
                         result_text += f"\n\n**Findings**: {n_findings} issues found"
-                    # 修复结果展示（统一格式，中英双语）
+                    # 修复结果展示（统一格式，中英双语，markdown 列表换行）
                     if fixes:
                         fixed = [f for f in fixes if f.get("status") == "FIXED"]
                         failed = [f for f in fixes if f.get("status") == "FAILED"]
@@ -499,9 +499,9 @@ if prompt:
                             en_summary = fx.get('summary', '')
                             cn_summary = fx.get('summary_cn', '')
                             if cn_summary:
-                                result_text += f"\n{status_txt} {i}. {en_summary} | {cn_summary}"
+                                result_text += f"\n- {status_txt} **#{fx.get('finding_id','?')}** {en_summary}\n  {cn_summary}"
                             else:
-                                result_text += f"\n{status_txt} {i}. {en_summary}"
+                                result_text += f"\n- {status_txt} **#{fx.get('finding_id','?')}** {en_summary}"
                     # 节点级统计展示（可观测性）
                     node_stats = lang_result.get("node_stats", {})
                     status.write(f"🧠 LangGraph: plan -> execute(并行) -> review -> fix -> verify")

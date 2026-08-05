@@ -215,15 +215,14 @@ class LangGraphOrchestrator:
         file_path = state.get("file_path", "unknown")
 
         agent = self._make_agent(["read_file", "write_file"],
-                                 self.FIXER_PROMPT, max_turns=6)
+                                 self.FIXER_PROMPT, max_turns=10)
         result = agent.run(
             "Fix ALL " + str(len(group)) + " findings in " + file_path + ":\n" +
             json.dumps(group, indent=2, ensure_ascii=False) +
-            "\n\nFor EACH finding: read the file, apply the fix with write_file, then output:\n" +
-            "FIXED|finding_id|file_path|summary\n" +
-            "If a fix is not possible: FAILED|finding_id|file_path|reason\n" +
-            "IMPORTANT: This is the ONLY agent editing this file. Apply fixes one at a time, "
-            "re-reading the file before each write_file to avoid clobbering previous fixes."
+            "\n\nEFFICIENCY: read the ENTIRE file ONCE, then write_file ONCE with the complete fixed content.\n" +
+            "Then output status lines: FIXED|finding_id|file_path|EN summary|中文摘要\n" +
+            "If a fix is not possible: FAILED|finding_id|file_path|EN reason|中文原因\n" +
+            "IMPORTANT: This is the ONLY agent editing this file. One read + one write is enough for all fixes."
         )
         fixes = self._parse_fixes(result)
         return {
