@@ -156,6 +156,8 @@ def grep_pattern(pattern: str, path: str = ".", file_glob: str = "*.py",
 def write_file(file_path: str = "", content: str = "", start_line: int = 1) -> str:
     """写入/修改文件。修复 Agent 专用：替换指定行范围的内容。
 
+    ⚠️ 写前自动备份：修改前先复制一份 <file>.bak，防止修复破坏代码后无法回滚。
+
     Args:
         file_path: 目标文件的绝对路径
         content: 新内容（替换 start_line 起的部分）
@@ -174,6 +176,11 @@ def write_file(file_path: str = "", content: str = "", start_line: int = 1) -> s
                 original = f.read()
         else:
             original = ""
+        # ── 写前备份（只在首次修改时备份）──
+        bak_path = path.with_suffix(path.suffix + ".bak")
+        if path.exists() and not bak_path.exists():
+            import shutil
+            shutil.copy2(path, bak_path)
         # 替换：start_line 之后的内容用新 content 替换
         if path.exists() and start_line > 1:
             lines = original.split("\n")
@@ -186,7 +193,8 @@ def write_file(file_path: str = "", content: str = "", start_line: int = 1) -> s
         with open(tmp, "w", encoding="utf-8") as f:
             f.write(new_text)
         tmp.replace(path)
-        return f"OK: wrote {len(new_text)} chars to {file_path} (was {len(original)})"
+        bak_info = f" (backup: {bak_path.name})" if bak_path.exists() else ""
+        return f"OK: wrote {len(new_text)} chars to {file_path} (was {len(original)}){bak_info}"
     except OSError as e:
         return f"ERROR: write failed: {type(e).__name__}: {e}"
 

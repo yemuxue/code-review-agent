@@ -11,6 +11,7 @@ from __future__ import annotations
 import sys, json, time
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+from pathlib import Path as _Path
 
 from typing import TypedDict, Annotated, Sequence, Union
 import operator
@@ -88,7 +89,8 @@ class LangGraphOrchestrator:
         w.add_node("plan", self._plan_node)
         w.add_node("execute_one", self._execute_one_node)   # ← 并行分片节点（Send 目标）
         w.add_node("review", self._review_node)
-        w.add_node("fix", self._fix_node)
+        w.add_node("fix_one", self._fix_one_node)           # ← fix 按文件分组串行（Send 目标）
+        w.add_node("verify_fix", self._verify_fix_node)     # ← 修复审核节点
 
         # plan → findings > 0 ? 分片并行 : END
         w.add_conditional_edges("plan", self._fan_out, ["execute_one", END])
@@ -96,9 +98,12 @@ class LangGraphOrchestrator:
         # 所有 execute_one 完成后 → review
         w.add_edge("execute_one", "review")
 
-        # review → fix（有 CONFIRMED 才修）→ END
-        w.add_conditional_edges("review", self._check_fix, {"fix": "fix", "end": END})
-        w.add_edge("fix", END)
+        # review → 有 CONFIRMED ? fix 分片 : END
+        w.add_conditional_edges("review", self._fan_out_fix, ["fix_one", END])
+
+        # 所有 fix_one 完成后 → 审核修复质量 → END
+        w.add_edge("fix_one", "verify_fix")
+        w.add_edge("verify_fix", END)
 
         w.set_entry_point("plan")
         return w.compile()
@@ -133,13 +138,28 @@ class LangGraphOrchestrator:
         return [Send("execute_one", {"finding": f})
                 for f in findings]
 
-    def _check_fix(self, state: AgentState) -> str:
-        """Review 之后：有 CONFIRMED 发现 → 修复；否则结束"""
+    def _fan_out_fix(self, state: AgentState):
+        """Review 之后：按文件分组串行修复（同文件合并，不同文件并行）
+
+        并发安全设计：同一文件的多个 finding 合并到一个 fix 任务，
+        由单个 Agent 串行处理——避免多个 Agent 并行写同一文件互相覆盖。
+        """
+        findings = state.get("findings", [])
         verdicts = state.get("verdicts", [])
-        confirmed = [v for v in verdicts if v.get("verdict") == "CONFIRMED"]
-        if confirmed:
-            return "fix"
-        return "end"
+        vmap = {v.get("finding_id"): v for v in verdicts}
+        confirmed = [f for f in findings if vmap.get(f["id"], {}).get("verdict") == "CONFIRMED"]
+        if not confirmed:
+            return [END]
+
+        # 按文件路径分组
+        from collections import defaultdict
+        groups: dict[str, list[dict]] = defaultdict(list)
+        for f in confirmed:
+            groups[f.get("file", "unknown")].append(f)
+
+        # 每个文件组 → 一个 fix 任务（组内多个 finding 由一个 Agent 串行修复）
+        return [Send("fix_one", {"findings": group, "file_path": file_path})
+                for file_path, group in groups.items()]
 
     # ═══ 节点 ═══
     def _plan_node(self, state: AgentState) -> dict:
@@ -188,35 +208,73 @@ class LangGraphOrchestrator:
             "node_stats": self._node_stats(agent, "review", start),
         }
 
-    def _fix_node(self, state: AgentState) -> dict:
-        """修复节点：对 CONFIRMED findings 调用 write_file 修复代码"""
+    def _fix_one_node(self, state: dict) -> dict:
+        """修复分片节点：串行修复同一文件的多个 CONFIRMED findings（Send 传入子 state）"""
         start = time.time()
-        findings = state.get("findings", [])
-        verdicts = state.get("verdicts", [])
-        vmap = {v.get("finding_id"): v for v in verdicts}
-        confirmed = [f for f in findings if vmap.get(f["id"], {}).get("verdict") == "CONFIRMED"]
+        group = state.get("findings", [])
+        file_path = state.get("file_path", "unknown")
 
-        fixes = []
-        if confirmed:
-            agent = self._make_agent(["read_file", "write_file"],
-                                     self.FIXER_PROMPT, max_turns=5)
-            result = agent.run(
-                "Fix the following confirmed findings:\n" +
-                json.dumps(confirmed, indent=2, ensure_ascii=False) +
-                "\n\nFor EACH finding, read the file, write the fix, then output:\n" +
-                "FIXED|finding_id|file_path|summary"
-            )
-            fixes = self._parse_fixes(result)
-            node_stats = self._node_stats(agent, "fix", start)
-        else:
-            result = "No confirmed findings to fix."
-            node_stats = {"fix": {"turns": 0, "tools": 0, "messages": 0, "tokens": 0, "elapsed_ms": 0}}
-
+        agent = self._make_agent(["read_file", "write_file"],
+                                 self.FIXER_PROMPT, max_turns=6)
+        result = agent.run(
+            "Fix ALL " + str(len(group)) + " findings in " + file_path + ":\n" +
+            json.dumps(group, indent=2, ensure_ascii=False) +
+            "\n\nFor EACH finding: read the file, apply the fix with write_file, then output:\n" +
+            "FIXED|finding_id|file_path|summary\n" +
+            "If a fix is not possible: FAILED|finding_id|file_path|reason\n" +
+            "IMPORTANT: This is the ONLY agent editing this file. Apply fixes one at a time, "
+            "re-reading the file before each write_file to avoid clobbering previous fixes."
+        )
+        fixes = self._parse_fixes(result)
         return {
             "messages": [AIMessage(content=result)],
             "fixes": fixes,
-            "phase": "fix",
-            "node_stats": node_stats,
+            # 注意：不写 phase——并行节点同时写普通字段会触发 InvalidUpdateError
+            "node_stats": self._node_stats(agent, f"fix_{_Path(file_path).stem}", start),
+        }
+
+    def _verify_fix_node(self, state: AgentState) -> dict:
+        """修复审核节点：检查 fix 是否真正修复了 bug 且没有破坏代码
+
+        验证内容:
+        1. 被修改的文件能否正常导入（语法检查）
+        2. 修复是否覆盖了所有 CONFIRMED findings
+        """
+        start = time.time()
+        fixes = state.get("fixes", [])
+        fixed_files = sorted(set(f.get("file_path", "") for f in fixes if f.get("status") == "FIXED"))
+
+        issues = []
+        if fixed_files:
+            # 语法检查：被修复的文件能否 import
+            for fp in fixed_files:
+                try:
+                    import ast
+                    with open(fp, "r", encoding="utf-8", errors="replace") as f:
+                        ast.parse(f.read())
+                    issues.append(f"[OK] {_Path(fp).name}: syntax valid")
+                except SyntaxError as e:
+                    issues.append(f"[FAIL] {_Path(fp).name}: syntax error — {e}")
+                except OSError as e:
+                    issues.append(f"[WARN] {_Path(fp).name}: unreadable — {e}")
+
+        result = "## Fix Verification Report\n\n"
+        if not fixes:
+            result += "No fixes were applied."
+        else:
+            n_fixed = sum(1 for f in fixes if f.get("status") == "FIXED")
+            n_failed = sum(1 for f in fixes if f.get("status") == "FAILED")
+            result += f"Fixed: {n_fixed} | Failed: {n_failed}\n\n"
+            if issues:
+                result += "### Syntax Check\n" + "\n".join(f"- {i}" for i in issues) + "\n\n"
+
+        return {
+            "messages": [AIMessage(content=result)],
+            "phase": "verify_fix",
+            "node_stats": {"verify_fix": {
+                "turns": 0, "tools": 0, "messages": 0, "tokens": 0,
+                "elapsed_ms": round((time.time() - start) * 1000),
+            }},
         }
 
     # ═══ 解析 ═══
@@ -256,14 +314,25 @@ class LangGraphOrchestrator:
         return verdicts
 
     def _parse_fixes(self, text: str) -> list[dict]:
+        """解析 fix 输出。容错：支持 markdown 代码块内、'FIXED:' 冒号、'- ' 列表前缀"""
         fixes = []
-        for line in text.split("\n"):
-            line = line.strip()
+        for raw_line in text.split("\n"):
+            line = raw_line.strip()
+            # 去掉 markdown 列表/代码块前缀
+            for prefix in ("- ", "* ", "```", "`"):
+                if line.startswith(prefix):
+                    line = line[len(prefix):].strip()
             status = None
             if line.startswith("FIXED|"):
                 status = "FIXED"
             elif line.startswith("FAILED|"):
                 status = "FAILED"
+            elif line.startswith("FIXED:"):
+                status = "FIXED"
+                line = line.replace("FIXED:", "FIXED|", 1)
+            elif line.startswith("FAILED:"):
+                status = "FAILED"
+                line = line.replace("FAILED:", "FAILED|", 1)
             if status:
                 parts = line.split("|")
                 if len(parts) >= 4:

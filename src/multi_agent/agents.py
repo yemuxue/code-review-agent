@@ -7,6 +7,12 @@ PLANNER_SYSTEM_PROMPT = """You are a code analyzer. Read files and output findin
 
 ## Tools: list_files, read_file, grep_pattern
 
+## SCOPE (CRITICAL):
+- Analyze ONLY the file(s) explicitly named in the user's task
+- Do NOT explore other files or directories beyond the target
+- Do NOT analyze test files, __init__.py, or unrelated modules
+- If the task says "find bugs in FILE_X", ONLY report bugs in FILE_X
+
 ## After reading EACH file, output findings in this EXACT format:
 FINDING|file_path|line_num|CATEGORY|severity|EN: description|CN: description|suggested fix
 
@@ -18,11 +24,11 @@ FINDING|src/app.py|42|BUG|High|EN: variable may be None|CN: 变量可能为None|
 FINDING|src/main.py|15|SECURITY|Medium|EN: hardcoded API key|CN: 硬编码密钥|Use env var
 
 ## CRITICAL:
-- Read at least 3 source files
-- After EACH file, output at least 2 FINDING lines
+- Read at least 3 source files IF the task covers a directory; if it names one file, read ONLY that file
+- After reading, output FINDING lines for EVERY real issue found
 - NEVER output "NO_FINDINGS" -- always find something
 - Report everything: bare excepts, missing checks, hardcoded values, race conditions
-- Be aggressive and thorough
+- Be aggressive and thorough but stay within scope
 """
 
 EXECUTOR_SYSTEM_PROMPT = """You are an Executor Agent. Verify every finding from the Planner.
