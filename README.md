@@ -43,7 +43,8 @@
   │     Multi-Agent Orchestrator        │
   │  ┌─────────────────────────────┐   │
   │  │ LangGraph:  plan → execute  │   │
-  │  │              → review → END │   │
+  │  │   (并行 Send) → review →   │   │
+  │  │   fix (分组串行) → verify   │   │
   │  │    (无发现) → END           │   │
   │  └─────────────────────────────┘   │
   ├─────────────────────────────────────┤
@@ -94,9 +95,11 @@
 ### Multi-Agent System
 
 - 🧠 **Planner** / 规划——读取代码，识别所有潜在问题
-- 🔍 **Executor** / 执行——逐条验证，标 CONFIRMED/FALSE_POSITIVE
+- 🔍 **Executor** / 执行——Send API 并行逐条验证，标 CONFIRMED/FALSE_POSITIVE
 - 📝 **Reviewer** / 审核——去重合并，输出中英双语报告
-- 🕸️ **LangGraph**——图编排替代硬编码，支持条件路由和循环
+- 🔧 **Fixer** / 修复——按文件分组串行，write_file 自动修复（写前备份 .bak）
+- ✅ **Verify** / 审核——修复后语法检查，防止 Agent 修坏代码
+- 🕸️ **LangGraph**——图编排替代硬编码，支持条件路由、Send 并行和循环
 
 ### 基础设施
 

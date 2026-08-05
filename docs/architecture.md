@@ -11,7 +11,7 @@ graph TD
     end
 
     subgraph Orchestrator["Orchestration Layer"]
-        LG["LangGraph<br/>plan → execute → review"]
+        LG["LangGraph<br/>plan → execute(并行) → review → fix → verify"]
         HC["Hardcoded Pipeline<br/>Planner → Executor → Reviewer"]
     end
 
@@ -84,12 +84,41 @@ User Input → Router (select model)
            → Stream Response to UI
 ```
 
+## Multi-Agent Pipeline (LangGraph)
+
+```
+plan (Planner: list/read/grep)
+  │
+  ├── findings = 0 → END
+  │
+  └── findings > 0 → Send fan-out（每条 finding 一个并行节点）
+        │
+        ├── execute_1  ─┐
+        ├── execute_2  ─┤  并行验证，verdicts 自动累加
+        ├── ...        ─┤  (operator.add reducer)
+        └── execute_N  ─┘
+        │
+        ▼
+review (去重合并，生成报告)
+  │
+  ├── 无 CONFIRMED → END
+  │
+  └── 有 CONFIRMED → Send fan-out（按文件分组）
+        │
+        └── fix_文件A ─┐
+        └── fix_文件B ─┤  同文件合并串行修复（防互相覆盖）
+        └── ...       ─┤  写前自动备份 .bak
+        │
+        ▼
+verify_fix (语法检查 + 修复统计) → END
+```
+
 ## Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
 | Agent Runtime | Python 3.9+, hand-written Execution Loop |
-| Multi-Agent | LangGraph StateGraph + Hardcoded Pipeline |
+| Multi-Agent | LangGraph StateGraph (plan → execute并行 → review → fix → verify) + Hardcoded Pipeline |
 | LLM | DeepSeek (Anthropic-compatible API) |
 | Database | SQLite WAL + FTS5 Full-Text Search |
 | API | FastAPI + Swagger + Prometheus + JWT + Rate Limit |

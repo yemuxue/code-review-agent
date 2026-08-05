@@ -9,7 +9,7 @@
 **Code Review Agent** 是一个从零构建的生产级多 Agent 代码分析系统。核心亮点：
 
 - **Agent Harness 完全手写**，不依赖 LangChain/CrewAI 等任何 Agent 框架
-- **Multi-Agent 协作**，Planner → Executor → Reviewer 三阶段管线 + LangGraph 图编排
+- **Multi-Agent 协作**，plan → execute(并行) → review → fix → verify 五阶段管线 + LangGraph 图编排
 - **12 项工业基础设施**，覆盖监控、认证、CI、缓存、测试、部署
 
 ---
@@ -39,25 +39,36 @@
 
 2. **Streaming 怎么处理 tool call？** LLM 流式返回时，tool call 的 JSON 参数是分片到达的（`{"ci` → `ty":` → `"北京"}`）。用状态机累积 → `content_block_stop` 时一次性 `json.loads()`。
 
-3. **多 Agent 怎么协作？** 共享 LLM 客户端，通过 State 传递发现列表。Planner 输出 FINDING 行 → Executor 逐条验证 → Reviewer 去重合并。
+3. **多 Agent 怎么协作？** 共享 LLM 客户端，通过 State 传递发现列表。Planner 输出 FINDING 行 → Executor 并行验证 → Reviewer 去重合并 → Fixer 修复 → Verify 审核。
 
 ### 2.2 LangGraph 编排
 
 ```python
 workflow = StateGraph(AgentState)
-workflow.add_node("plan", plan_node)          # Planner Agent
-workflow.add_node("execute", execute_node)     # Executor Agent
-workflow.add_node("review", review_node)       # Reviewer Agent
-workflow.add_conditional_edges("plan", should_continue,
-    {"execute": "execute", "end": END})        # 有发现→验证，无→结束
-workflow.add_edge("execute", "review")
-workflow.add_edge("review", END)
+workflow.add_node("plan", plan_node)          # Planner: 发现所有潜在问题
+workflow.add_node("execute_one", exec_node)    # Executor: 每条 finding 一个并行节点
+workflow.add_node("review", review_node)       # Reviewer: 去重合并
+workflow.add_node("fix_one", fix_node)         # Fixer: 按文件分组串行修复
+workflow.add_node("verify_fix", verify_node)   # Verify: 语法检查+修复统计
+
+# plan → findings > 0 ? Send 分片并行 : END
+workflow.add_conditional_edges("plan", fan_out, ["execute_one", END])
+# 并行验证完成 → review
+workflow.add_edge("execute_one", "review")
+# review → 有 CONFIRMED ? fix 分片 : END
+workflow.add_conditional_edges("review", fan_out_fix, ["fix_one", END])
+# fix 完成 → 审核 → END
+workflow.add_edge("fix_one", "verify_fix")
+workflow.add_edge("verify_fix", END)
 ```
 
 **对比硬编码管线的优势**：
 - 宣言式定义，图结构一目了然
 - 条件路由内置（无发现直接结束，省 Token）
-- 天然支持 checkpoint（暂停/恢复）
+- **Send API 并行**：每条 finding 独立验证节点，大幅缩短总耗时
+- **按文件分组串行修复**：同文件 findings 合并一个 Fixer，防止并发写同一文件互相覆盖
+- **写前自动备份**：write_file 首次修改自动生成 .bak，修复破坏可回滚
+- **verify_fix 审核节点**：修复后语法检查，防止 Agent 修坏代码
 
 ### 2.3 数据库设计
 
@@ -127,12 +138,15 @@ GET  /stats              系统统计
 | 维度 | 本项目 | LangGraph | Microsoft AutoGen |
 |------|--------|-----------|-------------------|
 | 编排方式 | 硬编码 + LangGraph 双方案 | 图编排 | 对话式 |
-| Agent 数量 | 3 (Planner/Executor/Reviewer) | 可配置 | 可配置 |
+| Agent 数量 | 5 (Plan/Execute/Review/Fix/Verify) | 可配置 | 可配置 |
+| 并行执行 | ✅ Send API 按 finding 分片 | ✅ | ✅ |
+| 自动修复 | ✅ Fixer + write_file（备份+分组串行） | 依赖自定义 | 依赖自定义 |
+| 修复审核 | ✅ verify_fix 语法检查 | ❌ | ❌ |
 | 条件路由 | ✅ | ✅ | ✅ |
 | Human-in-loop | ✅ 工具级审批 | ✅ 节点级 | ✅ |
 | 中文支持 | ✅ 中英双语输出 | 依赖模型 | 依赖模型 |
 
-> **面试话术**："我实现了两种 Multi-Agent 方案：硬编码管线展示了底层原理，LangGraph 方案展示了生产级图编排能力。面试时可以讨论两者的取舍。"
+> **面试话术**："我实现了两种 Multi-Agent 方案：硬编码管线展示了底层原理，LangGraph 方案展示了生产级图编排能力——Send API 并行验证、按文件分组串行修复、写前备份、修复后审核。面试时可以讨论两者的取舍。"
 
 ### 4.3 基础设施
 
@@ -187,7 +201,7 @@ GET  /stats              系统统计
 
 ### Q5: 多 Agent 之间怎么协作？
 
-**答**：通过共享 State 传递数据，非直接通信。Planner 产出 FINDING 列表 → State 传递给 Executor → Executor 产出 VERDICT → Reviewer 去重合并。这避免了 Agent 间耦合。
+**答**：通过共享 State 传递数据，非直接通信。Planner 产出 FINDING 列表 → Send 分片并行传递给 Executor（verdicts 用 operator.add 自动累加）→ Reviewer 去重合并 → Fixer 按文件分组修复 → Verify 审核语法。这避免了 Agent 间耦合。
 
 ### Q6: 为什么用 SQLite 而不是 PostgreSQL？
 

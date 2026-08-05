@@ -222,7 +222,7 @@ with st.sidebar:
     mode = st.selectbox("mode", list(SYSTEM_PROMPTS.keys()), label_visibility="collapsed")
     is_multi = "Multi-Agent" in mode
     if is_multi:
-        st.caption("🧠 Planner → Executor → Reviewer")
+        st.caption("🧠 plan → execute(并行) → review → fix → verify")
     else:
         st.caption("🔍 快速代码分析")
 
@@ -364,7 +364,7 @@ st.markdown("""<div style="display:flex;align-items:center;gap:10px;margin-botto
     <h2 style="margin:0;">Code Review Agent</h2>
     <span style="background:#1f6feb22;color:#58a6ff;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:600;">MULTI-AGENT</span>
 </div>""", unsafe_allow_html=True)
-st.caption("🧠 LangGraph: plan → execute → review" if is_multi else "🔍 Single Agent Analysis")
+st.caption("🧠 LangGraph: plan → execute(并行) → review → fix → verify" if is_multi else "🔍 Single Agent Analysis")
 
 # Chat history
 for msg in st.session_state.messages:
@@ -488,7 +488,7 @@ if prompt:
                         result_text += f"\n\n**Findings**: {n_findings} issues found"
                     # 节点级统计展示（可观测性）
                     node_stats = lang_result.get("node_stats", {})
-                    status.write(f"🧠 LangGraph: plan -> execute -> review -> fix")
+                    status.write(f"🧠 LangGraph: plan -> execute(并行) -> review -> fix -> verify")
                     status.write(f"📊 Findings: {n_findings} | Verified: {n_verdicts} | Fixed: {n_fixes}")
                     if node_stats:
                         for node, s in node_stats.items():
