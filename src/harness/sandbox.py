@@ -21,6 +21,7 @@
 from __future__ import annotations
 import os, signal, shlex, shutil, tempfile, subprocess, threading
 from contextlib import contextmanager
+from pathlib import Path
 
 class SandboxResult:
     def __init__(self, exit_code: int, stdout: str, stderr: str, timed_out: bool):
@@ -39,11 +40,26 @@ class Sandbox:
 
     注意：这不是安全隔离（见模块 docstring）。用于开发环境/内网工具链，
     防止命令意外污染宿主目录，而不是防御恶意代码。
+
+    ⚠️ base_dir 必须远离用户主目录：
+    - 若临时目录位于主目录树下（如 %TEMP%），git 等工具会向上遍历找到
+      主目录的 .git，穿透隔离泄露敏感文件（.ssh/.aws 等）。
+    - 默认改为项目内 .sandbox/（Git 已忽略该目录），git 向上找不到
+      宿主仓库，且不影响主目录。
     """
 
     def __init__(self, base_dir: str | None = None, timeout: int = 60,
                  allowed_commands: set[str] | None = None):
-        self.base_dir = base_dir or tempfile.gettempdir()
+        # 默认隔离目录：项目根 .sandbox/（不在用户主目录树下）
+        if base_dir is None:
+            try:
+                _proj = Path(__file__).resolve().parent.parent.parent
+                _sb = _proj / ".sandbox"
+                _sb.mkdir(parents=True, exist_ok=True)
+                base_dir = str(_sb)
+            except Exception:
+                base_dir = tempfile.gettempdir()
+        self.base_dir = base_dir
         self.timeout = timeout
         # Per-thread isolation context; never chdir the parent process.
         self._local = threading.local()
