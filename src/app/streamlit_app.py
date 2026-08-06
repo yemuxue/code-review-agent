@@ -508,6 +508,36 @@ if prompt:
                     summary_line = f"**📊 摘要**: Findings {n_findings} | Verified {n_verdicts} | Fixed {n_fixed} | Failed {n_failed}"
                     result_text = summary_line + "\n\n" + result_text
 
+                    # ── 修复文件展示 + 下载（去重，检查文件是否存在）──
+                    fixed_paths = sorted(set(f.get("file_path", "") for f in fixes
+                                             if f.get("status") == "FIXED" and f.get("file_path")))
+                    if fixed_paths:
+                        result_text += "\n\n## 📁 Fixed Files / 修复文件\n"
+                        for fp in fixed_paths:
+                            from pathlib import Path as _P
+                            p = _P(fp)
+                            if p.exists():
+                                # 尝试读取内容供下载（二进制安全）
+                                try:
+                                    data = p.read_bytes()
+                                    result_text += f"- 📄 `{fp}`"
+                                    with st.chat_message("assistant"):
+                                        st.download_button(
+                                            label=f"⬇️ 下载修复后文件: {p.name}",
+                                            data=data,
+                                            file_name=f"fixed_{p.name}",
+                                            mime="text/plain",
+                                            key=f"dl_{p.name}",
+                                        )
+                                except OSError:
+                                    result_text += f"- 📄 `{fp}`（不可读）"
+                            else:
+                                result_text += f"- ❓ `{fp}`（文件不存在）"
+                        # 显示备份文件位置
+                        bak = _P(fixed_paths[0]).with_suffix(_P(fixed_paths[0]).suffix + ".bak")
+                        if bak.exists():
+                            result_text += f"\n\n> 💾 原始文件备份: `{bak}`（写前自动生成，可回滚）"
+
                     # 节点级统计展示（可观测性）
                     node_stats = lang_result.get("node_stats", {})
                     status.write(f"🧠 LangGraph: plan -> execute(并行) -> review -> fix -> verify")
