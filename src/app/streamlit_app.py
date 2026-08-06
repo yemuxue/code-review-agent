@@ -498,15 +498,34 @@ if prompt:
                                 or "## Fix Results" in content
                                 or "Fix Verification" in content
                                 or content.startswith("#")):
-                            report_parts.append(content)
+                            # 剥离机器状态行（FIXED|/FAILED| 前缀），只留人类可读报告
+                            clean_lines = [
+                                line for line in content.split("\n")
+                                if not line.strip().startswith(("FIXED|", "FAILED|"))
+                                and line.strip() != "## Status Lines"
+                            ]
+                            report_parts.append("\n".join(clean_lines).strip())
                     if report_parts:
                         result_text = "\n\n---\n\n".join(report_parts)
                     else:
                         result_text = "\n".join(messages) if messages else "No findings"
 
-                    # ── 顶部摘要行 ──
+                    # ── 顶部摘要行 + 中文报告总览 ──
                     summary_line = f"**📊 摘要**: Findings {n_findings} | Verified {n_verdicts} | Fixed {n_fixed} | Failed {n_failed}"
-                    result_text = summary_line + "\n\n" + result_text
+                    from collections import Counter
+                    _cats = Counter(f.get("category", "?") for f in lang_result.get("findings", []))
+                    _sevs = Counter(str(f.get("severity", "?")).lower() for f in lang_result.get("findings", []))
+                    _cat_txt = "、".join(f"{c} {_cats[c]} 个" for c in ("BUG", "SECURITY", "PERF", "STYLE") if _cats.get(c))
+                    _sev_txt = "、".join(f"{s} {_sevs[s]} 个" for s in ("high", "medium", "low") if _sevs.get(s))
+                    _fix_txt = f"{n_fixed} 个问题已自动修复" if n_fixed else "未执行修复"
+                    if n_failed:
+                        _fix_txt += f"，{n_failed} 个修复失败"
+                    overview = (
+                        f"**📝 报告总览**：本次分析共发现 **{n_findings}** 个问题，"
+                        f"{n_verdicts} 个经过验证，{_fix_txt}。"
+                        f"按类别：{_cat_txt}；按严重度：{_sev_txt}。"
+                    )
+                    result_text = summary_line + "\n\n" + overview + "\n\n" + result_text
 
                     # ── 修复文件展示 + 下载（去重，检查文件是否存在）──
                     fixed_paths = sorted(set(f.get("file_path", "") for f in fixes
