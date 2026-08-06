@@ -482,35 +482,41 @@ if prompt:
                     orch = Orchestrator(client, TOOLS, sandbox=Sandbox(), hitl=hitl_guard,
                                         memory=ContextMemory(strategy="hybrid", window_size=10))
                     lang_result = orch.run(task=target, project_path=st.session_state.current_project)
-                    result_text = "\n".join(lang_result.get("messages", ["No findings"]))
                     n_findings = len(lang_result.get("findings", []))
                     n_verdicts = len(lang_result.get("verdicts", []))
                     fixes = lang_result.get("fixes", [])
-                    n_fixes = len(fixes)
-                    if n_findings:
-                        result_text += f"\n\n**Findings**: {n_findings} issues found"
-                    # 修复结果展示（统一格式，中英双语，markdown 列表换行）
-                    if fixes:
-                        fixed = [f for f in fixes if f.get("status") == "FIXED"]
-                        failed = [f for f in fixes if f.get("status") == "FAILED"]
-                        result_text += f"\n\n## Fix Results ({len(fixed)} fixed, {len(failed)} failed)"
-                        for i, fx in enumerate(fixes, 1):
-                            status_txt = "✅" if fx.get("status") == "FIXED" else "❌"
-                            en_summary = fx.get('summary', '')
-                            cn_summary = fx.get('summary_cn', '')
-                            if cn_summary:
-                                result_text += f"\n- {status_txt} **#{fx.get('finding_id','?')}** {en_summary}\n  {cn_summary}"
-                            else:
-                                result_text += f"\n- {status_txt} **#{fx.get('finding_id','?')}** {en_summary}"
+                    n_fixed = sum(1 for f in fixes if f.get("status") == "FIXED")
+                    n_failed = sum(1 for f in fixes if f.get("status") == "FAILED")
+
+                    # ── 聊天区：只保留三段核心报告（跳过 plan/execute 中间产物）──
+                    messages = lang_result.get("messages", [])
+                    report_parts = []
+                    for m in messages:
+                        content = m if isinstance(m, str) else str(m)
+                        # Reviewer 报告 / Fixer 报告 / Verify 报告的特征标题
+                        if ("# Code Analysis Report" in content
+                                or "## Fix Results" in content
+                                or "Fix Verification" in content
+                                or content.startswith("#")):
+                            report_parts.append(content)
+                    if report_parts:
+                        result_text = "\n\n---\n\n".join(report_parts)
+                    else:
+                        result_text = "\n".join(messages) if messages else "No findings"
+
+                    # ── 顶部摘要行 ──
+                    summary_line = f"**📊 摘要**: Findings {n_findings} | Verified {n_verdicts} | Fixed {n_fixed} | Failed {n_failed}"
+                    result_text = summary_line + "\n\n" + result_text
+
                     # 节点级统计展示（可观测性）
                     node_stats = lang_result.get("node_stats", {})
                     status.write(f"🧠 LangGraph: plan -> execute(并行) -> review -> fix -> verify")
-                    status.write(f"📊 Findings: {n_findings} | Verified: {n_verdicts} | Fixed: {n_fixes}")
+                    status.write(f"📊 Findings: {n_findings} | Verified: {n_verdicts} | Fixed: {n_fixed}")
                     if node_stats:
                         for node, s in node_stats.items():
                             status.write(f"  · {node}: {s.get('turns',0)} turns | {s.get('elapsed_ms',0)}ms | {s.get('tokens',0)} tok")
                     status.update(label="✅ LangGraph Complete", state="complete")
-                    stats = {"turns_taken": f"{n_findings} findings", "tools_called": n_verdicts, "messages_count": len(lang_result.get("messages", []))}
+                    stats = {"turns_taken": f"{n_findings} findings", "tools_called": n_verdicts, "messages_count": len(messages)}
                 except Exception as ex:
                     import traceback
                     result_text = f"❌ Error:\n```\n{traceback.format_exc()}\n```"
