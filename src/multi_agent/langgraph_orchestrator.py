@@ -250,8 +250,14 @@ class LangGraphOrchestrator:
         # 覆盖所有修复目标文件（FIXED 和 FAILED 的 file_path 都检查）
         check_files = sorted({f.get("file_path", "") for f in fixes if f.get("file_path")})
 
+        # 假成功校正：write_file 首次成功必然生成 .bak。
+        # 声称 FIXED 但文件从未被写入过（无 .bak）→ 修复未落盘，降级 NOT_APPLIED。
+        written_files = {fp for fp in check_files
+                         if _Path(fp).with_suffix(_Path(fp).suffix + ".bak").exists()}
+
         lines = []
         rollback_entries = []  # 追加到 fixes（operator.add 拼接，不改原条目）
+        not_applied_entries = []
         for fp in check_files:
             issues = verify_file_integrity(fp)
             if not issues:
@@ -268,6 +274,17 @@ class LangGraphOrchestrator:
                     "status": "ROLLED_BACK",
                 })
 
+        for f in fixes:
+            if f.get("status") == "FIXED" and f.get("file_path") not in written_files:
+                not_applied_entries.append({
+                    "finding_id": f.get("finding_id", 0),
+                    "file_path": f.get("file_path", ""),
+                    "summary": "Claimed FIXED but write_file never persisted "
+                               "(no backup created) — fix not applied",
+                    "summary_cn": "声称 FIXED 但 write_file 从未成功落盘（无备份）— 修复未应用",
+                    "status": "NOT_APPLIED",
+                })
+
         result = "## Fix Verification Report\n\n"
         if not fixes:
             result += "No fixes were applied."
@@ -275,12 +292,23 @@ class LangGraphOrchestrator:
             n_fixed = sum(1 for f in fixes if f.get("status") == "FIXED")
             n_failed = sum(1 for f in fixes if f.get("status") == "FAILED")
             n_rolled = len(rollback_entries)
-            result += f"Fixed: {n_fixed} | Failed: {n_failed} | Rolled back: {n_rolled}\n\n"
-            result += "### Integrity & Syntax Check\n" + "\n".join(f"- {l}" for l in lines) + "\n\n"
+            n_na = len(not_applied_entries)
+            result += (f"Fixed: {n_fixed} | Failed: {n_failed}"
+                       + (f" | Not applied: {n_na}" if n_na else "")
+                       + (f" | Rolled back: {n_rolled}" if n_rolled else "") + "\n\n")
+            if lines:
+                result += "### Integrity & Syntax Check\n" + "\n".join(f"- {l}" for l in lines) + "\n\n"
+            if not_applied_entries:
+                _na_files = sorted({e["file_path"] for e in not_applied_entries})
+                result += ("### Fix Claim Check\n"
+                           + "\n".join(f"- [NOT_APPLIED] {fp}: claimed FIXED but no write "
+                                       f"was persisted (write_file blocked/errored, no .bak created)"
+                                       for fp in _na_files)
+                           + "\n\n")
 
         return {
             "messages": [AIMessage(content=result)],
-            "fixes": rollback_entries,  # ROLLED_BACK 条目经 operator.add 追加到 state.fixes
+            "fixes": rollback_entries + not_applied_entries,  # 经 operator.add 追加到 state.fixes
             "phase": "verify_fix",
             "node_stats": {"verify_fix": {
                 "turns": 0, "tools": 0, "messages": 0, "tokens": 0,

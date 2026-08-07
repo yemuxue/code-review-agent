@@ -512,7 +512,10 @@ if prompt:
 
                     # ── 顶部摘要行 + 中文报告总览 ──
                     n_rolled = sum(1 for f in fixes if f.get("status") == "ROLLED_BACK")
+                    n_na = sum(1 for f in fixes if f.get("status") == "NOT_APPLIED")
                     summary_line = f"**📊 摘要**: Findings {n_findings} | Verified {n_verdicts} | Fixed {n_fixed} | Failed {n_failed}"
+                    if n_na:
+                        summary_line += f" | Not applied {n_na}"
                     if n_rolled:
                         summary_line += f" | Rolled back {n_rolled}"
                     from collections import Counter
@@ -523,6 +526,8 @@ if prompt:
                     _fix_txt = f"{n_fixed} 个问题已自动修复" if n_fixed else "未执行修复"
                     if n_failed:
                         _fix_txt += f"，{n_failed} 个修复失败"
+                    if n_na:
+                        _fix_txt += f"，{n_na} 个声称修复但未落盘（已校正为未应用）"
                     if n_rolled:
                         _fix_txt += f"，{n_rolled} 个修复已回滚（文件损坏，自动从备份恢复）"
                     overview = (
@@ -532,16 +537,17 @@ if prompt:
                     )
                     result_text = summary_line + "\n\n" + overview + "\n\n" + result_text
 
-                    # ── 修复文件展示 + 下载（去重，检查文件是否存在；回滚文件不提供下载）──
-                    _rolled_paths = {f.get("file_path") for f in fixes
-                                     if f.get("status") == "ROLLED_BACK" and f.get("file_path")}
+                    # ── 修复文件展示 + 下载（去重，检查文件是否存在；回滚/未落盘文件不提供下载）──
+                    _excluded_paths = {f.get("file_path") for f in fixes
+                                       if f.get("status") in ("ROLLED_BACK", "NOT_APPLIED")
+                                       and f.get("file_path")}
                     fixed_paths = sorted(set(f.get("file_path", "") for f in fixes
                                              if f.get("status") == "FIXED" and f.get("file_path"))
-                                         - _rolled_paths)
-                    if _rolled_paths:
-                        result_text += ("\n\n↩️ **已自动回滚文件**: "
-                                        + "、".join(f"`{p}`" for p in sorted(_rolled_paths))
-                                        + "（修复损坏文件，已从 .bak 备份恢复，未应用修复）")
+                                         - _excluded_paths)
+                    if _excluded_paths:
+                        result_text += ("\n\n↩️ **未落盘/已回滚文件**: "
+                                        + "、".join(f"`{p}`" for p in sorted(_excluded_paths))
+                                        + "（修复未实际写入或已从备份恢复，未提供下载）")
                     if fixed_paths:
                         result_text += "\n\n## 📁 Fixed Files / 修复文件\n"
                         for fp in fixed_paths:

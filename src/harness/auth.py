@@ -52,26 +52,31 @@ class HumanInTheLoop:
         self.stats = {"approved": 0, "rejected": 0, "auto_approved": 0}
 
     def assess_risk(self, tool_name: str, args: dict) -> RiskLevel:
-        """评估工具调用的风险等级"""
-        args_str = str(args).lower()
+        """评估工具调用的风险等级
 
-        # 检查危险参数
-        for pattern, level in RISK_RULES.items():
-            if pattern in args_str and level == RiskLevel.DANGEROUS:
-                return RiskLevel.DANGEROUS
-
-        # 检查工具名
-        for pattern, level in RISK_RULES.items():
-            if pattern in tool_name.lower():
-                return level
-
-        # 命令行特殊检测
+        ⚠️ 危险参数子串扫描只对命令类工具（run_command）生效：
+        不能把 DANGEROUS 子串（"rm"/"delete"/"format"/"shutdown"）用于
+        write_file 的 content 参数——代码内容里出现这些词是常态，会把
+        合法写入误判为 DANGEROUS 全数拦截（曾导致全部 fix 无法落盘）。
+        """
+        # 命令类工具：参数是 shell 命令，扫描危险子串 + 危险命令词
         if tool_name == "run_command":
+            args_str = str(args).lower()
+            for pattern, level in RISK_RULES.items():
+                if pattern in args_str and level == RiskLevel.DANGEROUS:
+                    return RiskLevel.DANGEROUS
+            # 特殊危险命令（mkfs/dd if 等不在 RISK_RULES 里，必须在此检查——
+            # 放在工具名循环后面会被 run_command→MODERATE 短路，成为死代码）
             cmd = args.get("command", "")
             if any(w in cmd for w in ["rm -rf", "format", "shutdown", "mkfs", "dd if"]):
                 return RiskLevel.DANGEROUS
             if any(w in cmd for w in ["git push", "pip install", "npm install"]):
                 return RiskLevel.MODERATE
+
+        # 检查工具名（write_file/run_command → MODERATE；read_file 等 → SAFE）
+        for pattern, level in RISK_RULES.items():
+            if pattern in tool_name.lower():
+                return level
 
         return RiskLevel.SAFE
 

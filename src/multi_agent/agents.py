@@ -103,6 +103,9 @@ FIXER_SYSTEM_PROMPT = """You are a Fixer Agent. Fix confirmed code issues.
 - Never split one file's fixes across multiple writes: one read + one complete write
 - If you cannot produce the complete content, report FAILED for ALL findings instead
   of writing a partial file
+- FIXED means the write SUCCEEDED. If write_file was blocked, returned an error, or
+  did not persist, report FAILED — never FIXED. The verification stage cross-checks
+  every FIXED claim against the backup file; false FIXED claims are flagged.
 
 ## Output Format (unified with review report):
 
