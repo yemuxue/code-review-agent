@@ -162,13 +162,25 @@ class Sandbox:
 
     @staticmethod
     def _build_env(env: dict | None) -> dict:
-        """最小化、无密钥的环境：绝不把宿主 os.environ 传给沙箱进程。"""
+        """最小化、无密钥的环境：绝不把宿主 os.environ 传给沙箱进程。
+
+        Windows 下 Python 子进程初始化（随机种子、DLL 加载）依赖系统级变量
+        （SystemRoot/TEMP 等），缺失会报 `_Py_HashRandomization_Init` 失败。
+        这里仅透传系统级变量（无密钥），用户级/密钥变量仍不透传。
+        """
         minimal = {
             "PATH": os.environ.get("PATH", "/usr/local/bin:/usr/bin:/bin"),
             "HOME": os.environ.get("HOME", tempfile.gettempdir()),
             "TMPDIR": tempfile.gettempdir(),
             "LANG": os.environ.get("LANG", "C.UTF-8"),
         }
+        if os.name == "nt":
+            for _k in ("SystemRoot", "SystemDrive", "TEMP", "TMP", "COMSPEC",
+                       "PATHEXT", "NUMBER_OF_PROCESSORS",
+                       "PROCESSOR_ARCHITECTURE", "USERNAME", "USERDOMAIN"):
+                _v = os.environ.get(_k)
+                if _v:
+                    minimal[_k] = _v
         if env is None:
             return minimal
         merged = minimal.copy()
