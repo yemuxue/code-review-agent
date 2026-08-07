@@ -235,27 +235,38 @@ class LangGraphOrchestrator:
     def _verify_fix_node(self, state: AgentState) -> dict:
         """修复审核节点：检查 fix 是否真正修复了 bug 且没有破坏代码
 
-        验证内容:
-        1. 被修改的文件能否正常导入（语法检查）
-        2. 修复是否覆盖了所有 CONFIRMED findings
+        验证内容（管线加固 v2）:
+        1. 完整性检查覆盖**所有**被 fixer 触碰的文件（含报告 FAILED 的——
+           截断事故就发生在 FAILED 文件上：jwt_auth.py 被截断后仍报 4 个 FAILED）
+        2. 语法检查 + 与备份对比（尺寸比例 + 关键符号），拦截"截断后语法
+           仍合法"的假成功
+        3. 检测到损坏 → **自动从 .bak 回滚**，追加 ROLLED_BACK 状态条目，
+           保证修复失败不会破坏代码库
         """
         start = time.time()
         fixes = state.get("fixes", [])
-        fixed_files = sorted(set(f.get("file_path", "") for f in fixes if f.get("status") == "FIXED"))
+        from src.tools.git_tools import verify_file_integrity, restore_from_backup
 
-        issues = []
-        if fixed_files:
-            # 语法检查：被修复的文件能否 import
-            for fp in fixed_files:
-                try:
-                    import ast
-                    with open(fp, "r", encoding="utf-8", errors="replace") as f:
-                        ast.parse(f.read())
-                    issues.append(f"[OK] {_Path(fp).name}: syntax valid")
-                except SyntaxError as e:
-                    issues.append(f"[FAIL] {_Path(fp).name}: syntax error — {e}")
-                except OSError as e:
-                    issues.append(f"[WARN] {_Path(fp).name}: unreadable — {e}")
+        # 覆盖所有修复目标文件（FIXED 和 FAILED 的 file_path 都检查）
+        check_files = sorted({f.get("file_path", "") for f in fixes if f.get("file_path")})
+
+        lines = []
+        rollback_entries = []  # 追加到 fixes（operator.add 拼接，不改原条目）
+        for fp in check_files:
+            issues = verify_file_integrity(fp)
+            if not issues:
+                lines.append(f"- [OK] {_Path(fp).name}: syntax valid, integrity intact")
+            else:
+                lines.append(f"- [FAIL] {_Path(fp).name}: "
+                             + "; ".join(issues) + " → restoring from backup")
+                restore_from_backup(fp)
+                rollback_entries.append({
+                    "finding_id": 0,
+                    "file_path": fp,
+                    "summary": f"Rolled back to backup — fix damaged the file ({issues[0]})",
+                    "summary_cn": f"已从备份回滚 — 修复过程损坏了文件（{issues[0]}）",
+                    "status": "ROLLED_BACK",
+                })
 
         result = "## Fix Verification Report\n\n"
         if not fixes:
@@ -263,12 +274,13 @@ class LangGraphOrchestrator:
         else:
             n_fixed = sum(1 for f in fixes if f.get("status") == "FIXED")
             n_failed = sum(1 for f in fixes if f.get("status") == "FAILED")
-            result += f"Fixed: {n_fixed} | Failed: {n_failed}\n\n"
-            if issues:
-                result += "### Syntax Check\n" + "\n".join(f"- {i}" for i in issues) + "\n\n"
+            n_rolled = len(rollback_entries)
+            result += f"Fixed: {n_fixed} | Failed: {n_failed} | Rolled back: {n_rolled}\n\n"
+            result += "### Integrity & Syntax Check\n" + "\n".join(f"- {l}" for l in lines) + "\n\n"
 
         return {
             "messages": [AIMessage(content=result)],
+            "fixes": rollback_entries,  # ROLLED_BACK 条目经 operator.add 追加到 state.fixes
             "phase": "verify_fix",
             "node_stats": {"verify_fix": {
                 "turns": 0, "tools": 0, "messages": 0, "tokens": 0,

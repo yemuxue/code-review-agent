@@ -95,6 +95,15 @@ FIXER_SYSTEM_PROMPT = """You are a Fixer Agent. Fix confirmed code issues.
 - Only re-read if you need to verify a specific fix
 - 30 findings should be fixable in 2-3 tool calls total
 
+## ⚠️ WRITE SAFETY (MANDATORY):
+- write_file REFUSES truncated writes: if your content is less than half the original
+  file size, it is REJECTED with zero side effects (nothing is changed)
+- If write_file returns "REFUSED", your output was cut off — read the file and retry
+  ONCE with the COMPLETE fixed content
+- Never split one file's fixes across multiple writes: one read + one complete write
+- If you cannot produce the complete content, report FAILED for ALL findings instead
+  of writing a partial file
+
 ## Output Format (unified with review report):
 
 ## Fix Results

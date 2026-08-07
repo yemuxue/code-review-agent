@@ -158,6 +158,10 @@ def write_file(file_path: str = "", content: str = "", start_line: int = 1) -> s
 
     ⚠️ 写前自动备份：修改前先复制一份 <file>.bak，防止修复破坏代码后无法回滚。
 
+    🛡️ 截断守卫（全部或全不）：写入结果（部分编辑为拼接后）不足原文件一半大小时，
+    判定为 LLM 输出被截断，直接 REFUSED——零副作用（不备份、不写 tmp、不改文件），
+    Agent 必须重试完整写入。
+
     Args:
         file_path: 目标文件的绝对路径
         content: 新内容（替换 start_line 起的部分）
@@ -176,18 +180,26 @@ def write_file(file_path: str = "", content: str = "", start_line: int = 1) -> s
                 original = f.read()
         else:
             original = ""
-        # ── 写前备份（只在首次修改时备份）──
-        bak_path = path.with_suffix(path.suffix + ".bak")
-        if path.exists() and not bak_path.exists():
-            import shutil
-            shutil.copy2(path, bak_path)
-        # 替换：start_line 之后的内容用新 content 替换
+        # 计算最终文本（start_line > 1 时与原文前部拼接）
         if path.exists() and start_line > 1:
             lines = original.split("\n")
             keep = lines[: start_line - 1]
             new_text = "\n".join(keep + content.split("\n"))
         else:
             new_text = content
+        # ── 完整性守卫：所有写入（含部分编辑）合并后 < 原文件一半 → 拒绝（零副作用）──
+        # start_line>1 的部分编辑语义是"替换到文件末尾"，小内容同样可能截断文件，
+        # 因此守卫对全文件覆盖和部分编辑统一生效。
+        if path.exists() and original and len(new_text) * 2 < len(original):
+            return (f"ERROR: REFUSED — resulting content ({len(new_text)} chars) is less than half "
+                    f"of the original ({len(original)} chars). This looks like a TRUNCATED write "
+                    f"(LLM output cut off). Nothing was changed. Read the ENTIRE file first, "
+                    f"then retry write_file ONCE with the COMPLETE fixed content (start_line=1).")
+        # ── 写前备份（只在首次修改时备份）──
+        bak_path = path.with_suffix(path.suffix + ".bak")
+        if path.exists() and not bak_path.exists():
+            import shutil
+            shutil.copy2(path, bak_path)
         # 原子写入（先写临时文件再替换，防止写一半崩溃）
         tmp = path.with_suffix(path.suffix + ".tmp")
         with open(tmp, "w", encoding="utf-8") as f:
@@ -197,6 +209,74 @@ def write_file(file_path: str = "", content: str = "", start_line: int = 1) -> s
         return f"OK: wrote {len(new_text)} chars to {file_path} (was {len(original)}){bak_info}"
     except OSError as e:
         return f"ERROR: write failed: {type(e).__name__}: {e}"
+
+
+def restore_from_backup(file_path: str) -> str:
+    """从写前自动备份 <file>.bak 恢复文件（修复损坏时回滚用）。"""
+    path = Path(file_path)
+    bak = path.with_suffix(path.suffix + ".bak")
+    if not bak.exists():
+        return f"ERROR: no backup found for {file_path} (expected {bak.name})"
+    try:
+        import shutil
+        shutil.copy2(bak, path)
+        return f"OK: restored {path.name} from {bak.name}"
+    except OSError as e:
+        return f"ERROR: restore failed: {type(e).__name__}: {e}"
+
+
+def verify_file_integrity(file_path: str) -> list[str]:
+    """修复后完整性检查：语法 + 与备份对比（尺寸比例 + 关键符号）。
+
+    Returns: [] = 文件完整；非空 = 问题列表（调用方应回滚修复）。
+
+    三种损坏检测：
+      1. 语法错误（ast.parse）— 拦住 llm_client.py 式的截断
+      2. 尺寸骤减（< 备份一半 → 截断写入）— 拦住 jwt_auth.py 式截断
+         （截断后语法碰巧合法，光查语法查不出来）
+      3. 顶层 def/class 符号缺失 > 30% — 语义截断的最后防线
+    """
+    issues = []
+    path = Path(file_path)
+    if not path.exists():
+        return [f"{path.name}: file missing"]
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError as e:
+        return [f"{path.name}: unreadable — {e}"]
+
+    if path.suffix in {".py", ".pyi"}:
+        try:
+            import ast
+            ast.parse(text)
+        except SyntaxError as e:
+            issues.append(f"{path.name}: syntax error — {e}")
+
+    bak = path.with_suffix(path.suffix + ".bak")
+    if bak.exists():
+        try:
+            bak_text = bak.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            bak_text = ""
+        if bak_text:
+            if len(text) * 2 < len(bak_text):
+                issues.append(f"{path.name}: size {len(text)} chars vs backup {len(bak_text)} "
+                              f"— likely truncated")
+            elif path.suffix in {".py", ".pyi"}:
+                try:
+                    import ast
+                    def _symbols(src: str) -> set[str]:
+                        return {n.name for n in ast.walk(ast.parse(src))
+                                if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))}
+                    bak_names = _symbols(bak_text)
+                    missing = bak_names - _symbols(text)
+                    # 整数比较避免阈值边界偏差：missing/全部 >= 30% 即判定损坏
+                    if missing and len(missing) * 10 >= len(bak_names) * 3:
+                        issues.append(f"{path.name}: {len(missing)}/{len(bak_names)} symbols "
+                                      f"missing vs backup (e.g. {', '.join(sorted(missing)[:4])})")
+                except SyntaxError:
+                    pass  # 语法问题已在上面报告
+    return issues
 
 
 def run_command(command: str) -> str:
