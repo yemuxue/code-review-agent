@@ -18,11 +18,12 @@ from __future__ import annotations
 import sys, os, json, uuid, datetime
 from pathlib import Path
 from typing import Optional
+from contextlib import asynccontextmanager
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from fastapi import FastAPI, HTTPException, Query, Request, Depends, Body
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field
@@ -30,6 +31,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from jose import JWTError, ExpiredSignatureError
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 
 from src.llm_client import AnthropicClient
 from src.harness.agent import AgentHarness, ToolDefinition
@@ -43,24 +45,56 @@ from src.tools.git_tools import list_files, read_file, grep_pattern, run_command
 from src.storage.database import Database, Finding
 from src.memory.vector_store import VectorStore, FindingDocument
 
+# ─── 数据目录 / 延迟初始化 ─────────────────
+
+DATA_DIR = Path(__file__).parent.parent.parent / "data"
+
+# db / vector_store 改为在应用启动（lifespan）时初始化，
+# 避免模块导入时产生数据库/文件副作用（可测试性、可移植性）。
+db: Optional[Database] = None
+vector_store: Optional[VectorStore] = None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """应用生命周期：启动时初始化数据库与向量库，关闭时可清理资源。"""
+    global db, vector_store
+    db = Database(str(DATA_DIR / "code_review.db"))
+    vector_store = VectorStore(str(DATA_DIR / "search.db"))
+    yield
+
+
 # ─── Init ───────────────────────────────────────
 
 app = FastAPI(
     title="Code Review Agent API",
     description="Multi-Agent Code Analysis System / 多 Agent 代码分析系统",
     version="2.0.0",
+    lifespan=lifespan,
 )
+
+# CORS：仅允许可信来源（通过环境变量 CORS_ALLOWED_ORIGINS 配置），
+# 不再使用通配符 "*" —— 否则任何网站都能用窃取的令牌调用接口。
+_ALLOWED_ORIGINS = [
+    o.strip()
+    for o in os.environ.get(
+        "CORS_ALLOWED_ORIGINS",
+        "http://localhost:3000,http://localhost:8501",
+    ).split(",")
+    if o.strip()
+]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_ALLOWED_ORIGINS,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Prometheus metrics
+# Prometheus metrics（不自动暴露 /metrics，改为受 JWT 保护的端点）
 from prometheus_fastapi_instrumentator import Instrumentator
-Instrumentator().instrument(app).expose(app)
+instrumentator = Instrumentator().instrument(app)
 
 # Rate limiting
 limiter = Limiter(key_func=get_remote_address, default_limits=["100/minute"])
@@ -107,14 +141,40 @@ async def get_current_user(
     if jti and revocation_list.is_revoked(jti):
         raise HTTPException(status_code=401, detail="Token has been revoked")
 
+    # 签名有效但缺少 sub 声明时返回 401，而不是 500（KeyError）
+    sub = payload.get("sub")
+    if not sub:
+        raise HTTPException(status_code=401, detail="Token missing 'sub' claim")
+
     return User(
-        username=payload["sub"],
+        username=sub,
         role=payload.get("role", "user"),
         email=payload.get("email", ""),
     )
 
-db = Database(str(Path(__file__).parent.parent.parent / "data" / "code_review.db"))
-vector_store = VectorStore(str(Path(__file__).parent.parent.parent / "data" / "search.db"))
+
+# 受保护的 /metrics 端点：防止公开泄露请求量与错误率
+@app.get("/metrics", include_in_schema=False)
+async def metrics(current_user: User = Depends(get_current_user)):
+    """Prometheus 指标（需登录）"""
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+
+def _metrics_text() -> str:
+    """生成本地 Prometheus 指标文本（供仪表盘解析，无需内部 HTTP 调用）"""
+    try:
+        return generate_latest().decode("utf-8")
+    except Exception:
+        return ""
+
+
+def _parse_metric_value(line: str) -> float:
+    """解析 Prometheus 指标行末的数值（支持整数与浮点），失败返回 0.0"""
+    try:
+        return float(line.split()[-1])
+    except (ValueError, IndexError):
+        return 0.0
+
 
 TOOLS = [
     ToolDefinition("list_files","List files recursively",{"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}, list_files),
@@ -125,9 +185,18 @@ TOOLS = [
 
 # ─── Models ─────────────────────────────────────
 
+
+def _default_project_path() -> str:
+    """默认项目路径：优先取环境变量，否则基于当前仓库位置（可移植）"""
+    return os.environ.get(
+        "CODE_REVIEW_PROJECT_PATH",
+        str(Path(__file__).parent.parent.parent / "src"),
+    )
+
+
 class AnalyzeRequest(BaseModel):
     query: str = Field(..., description="分析任务描述 / Analysis task description")
-    project_path: str = Field("X:/VScode/code-review-agent/src", description="项目路径")
+    project_path: str = Field(default_factory=_default_project_path, description="项目路径")
     mode: str = Field("single", description="single 或 multi")
     max_turns: int = Field(8, ge=1, le=30)
     file_paths: list[str] = Field(default_factory=list, description="要分析的文件路径")
@@ -176,21 +245,17 @@ class RefreshRequest(BaseModel):
 # ─── Dashboard ──────────────────────────────────
 
 @app.get("/dashboard", response_class=HTMLResponse, include_in_schema=False)
-async def dashboard():
-    """实时监控仪表盘 / Live Dashboard"""
-    import urllib.request
-    try:
-        metrics_text = urllib.request.urlopen("http://127.0.0.1:8000/metrics", timeout=2).read().decode()
-    except Exception:
-        metrics_text = ""
+async def dashboard(current_user: User = Depends(get_current_user)):
+    """实时监控仪表盘 / Live Dashboard（需登录）"""
+    metrics_text = _metrics_text()
 
     total_requests = 0
     error_count = 0
     for line in metrics_text.split("\n"):
         if "http_requests_total" in line and not line.startswith("#"):
-            total_requests += float(line.split()[-1])
+            total_requests += _parse_metric_value(line)
         elif "http_requests_created" not in line and "http_requests" in line and "500" in line:
-            error_count += float(line.split()[-1]) if line.split()[-1].isdigit() else 0
+            error_count += _parse_metric_value(line)
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -459,16 +524,36 @@ def _index_findings(sid: str, text: str):
         line = line.strip()
         if line.startswith("FINDING|"):
             parts = line.split("|")
-            if len(parts) >= 7:
+            # description 字段可能包含字面量 "|"，不能简单按固定下标取值。
+            # 结构化字段固定在前 5 个（FINDING, file, line, category, severity），
+            # 剩余自由文本从右侧解析，多余 "|" 并入 description_en，避免错位/数据损坏。
+            if len(parts) >= 6:
                 try:
+                    file_path = parts[1].strip()
+                    line_no = int(parts[2].strip()) if parts[2].strip().isdigit() else 0
+                    category = parts[3].strip()
+                    severity = parts[4].strip()
+                    rest = parts[5:]
+                    if len(rest) >= 3:
+                        description_en = "|".join(rest[:-2]).strip()
+                        description_cn = rest[-2].strip()
+                        suggestion = rest[-1].strip()
+                    elif len(rest) == 2:
+                        description_en = rest[0].strip()
+                        description_cn = rest[1].strip()
+                        suggestion = ""
+                    else:
+                        description_en = rest[0].strip()
+                        description_cn = ""
+                        suggestion = ""
                     doc = FindingDocument(
-                        file_path=parts[1].strip(),
-                        line=int(parts[2].strip()) if parts[2].strip().isdigit() else 0,
-                        category=parts[3].strip(),
-                        severity=parts[4].strip(),
-                        description_en=parts[5].strip(),
-                        description_cn=parts[6].strip() if len(parts) > 6 else "",
-                        suggestion=parts[7].strip() if len(parts) > 7 else "",
+                        file_path=file_path,
+                        line=line_no,
+                        category=category,
+                        severity=severity,
+                        description_en=description_en,
+                        description_cn=description_cn,
+                        suggestion=suggestion,
                         session_id=sid,
                         verified=False,
                     )

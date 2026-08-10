@@ -1,3 +1,4 @@
+import logging
 import os
 from pathlib import Path
 
@@ -9,6 +10,8 @@ try:
     _DOTENV_AVAILABLE = True
 except ImportError:
     _DOTENV_AVAILABLE = False
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class ConfigError(Exception):
@@ -27,9 +30,28 @@ def _parse_dotenv(env_file):
             line = raw.strip()
             if not line or line.startswith("#") or "=" not in line:
                 continue
-            # Strip inline comments only when the line is not quoted.
-            if '"' not in line and "'" not in line:
-                line = line.split("#", 1)[0].rstrip()
+            # Strip inline comments that appear outside of quoted values, so a
+            # `# comment` after a closing quote is removed while a `#` inside
+            # a quoted value is preserved.
+            in_quote = None
+            comment_pos = -1
+            i = 0
+            while i < len(line):
+                ch = line[i]
+                if in_quote:
+                    if ch == "\\":
+                        i += 2
+                        continue
+                    if ch == in_quote:
+                        in_quote = None
+                elif ch in ('"', "'"):
+                    in_quote = ch
+                elif ch == "#":
+                    comment_pos = i
+                    break
+                i += 1
+            if comment_pos != -1:
+                line = line[:comment_pos].rstrip()
             k, _, v = line.partition("=")
             k = k.strip()
             v = v.strip()
@@ -62,11 +84,14 @@ for _k, _v in _DOTENV.items():
 
 
 def get_api_key():
-    key = os.environ.get("ANTHROPIC_AUTH_TOKEN")
+    # Accept both the primary ANTHROPIC_AUTH_TOKEN and the common
+    # ANTHROPIC_API_KEY env var names; the former takes precedence.
+    key = os.environ.get("ANTHROPIC_AUTH_TOKEN") or os.environ.get("ANTHROPIC_API_KEY")
     if not key:
         raise ConfigError(
-            "API key is missing. Set ANTHROPIC_AUTH_TOKEN in your environment "
-            "or in the .env file (e.g. ANTHROPIC_AUTH_TOKEN=sk-...)."
+            "API key is missing. Set ANTHROPIC_AUTH_TOKEN (or ANTHROPIC_API_KEY) "
+            "in your environment or in the .env file (e.g. "
+            "ANTHROPIC_AUTH_TOKEN=sk-...)."
         )
     return key
 
@@ -96,9 +121,9 @@ def init_config():
     # an Anthropic-only key to DeepSeek would leak it, so warn loudly when the
     # pairing looks inconsistent.
     if "deepseek" in base_url.lower():
-        print(
-            "WARNING: ANTHROPIC_AUTH_TOKEN is being sent to a DeepSeek endpoint "
-            f"({base_url}). Ensure the configured key is a DeepSeek key, not an "
-            "Anthropic-only key."
+        _LOGGER.warning(
+            "ANTHROPIC_AUTH_TOKEN is being sent to a DeepSeek endpoint (%s). "
+            "Ensure the configured key is a DeepSeek key, not an Anthropic-only key.",
+            base_url,
         )
     return api_key

@@ -32,12 +32,12 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 15      # 短期 access token
 REFRESH_TOKEN_EXPIRE_DAYS = 7         # 长期 refresh token
 ALGORITHM = "HS256"
 
-# 默认 secret，生产环境必须通过环境变量覆盖
+# 仅用于检测开发者显式传入的"默认值"——生产环境禁止使用
 _DEFAULT_SECRET = "code-review-agent-secret-change-in-production"
 
 
 def _get_secret_key() -> str:
-    """从环境变量或文件读取 JWT 签名密钥"""
+    """从环境变量或文件读取 JWT 签名密钥；缺失时立即抛错（fail fast）"""
     key = os.getenv("JWT_SECRET_KEY", "")
     if key:
         return key
@@ -45,8 +45,12 @@ def _get_secret_key() -> str:
     key_file = os.getenv("JWT_SECRET_FILE", "")
     if key_file and Path(key_file).exists():
         return Path(key_file).read_text().strip()
-    # 开发环境默认值（生产环境警告）
-    return _DEFAULT_SECRET
+    # 不再回退到可预测的默认密钥：密钥缺失时应立即失败而不是带病运行
+    raise RuntimeError(
+        "JWT_SECRET_KEY (or JWT_SECRET_FILE) is not set. "
+        "Refusing to sign tokens with a predictable default secret. "
+        "Set a strong random secret via the JWT_SECRET_KEY environment variable."
+    )
 
 
 # ─── 用户模型 ──────────────────────────────────
@@ -180,13 +184,16 @@ class JWTAuth:
     """
 
     def __init__(self, secret_key: str | None = None):
-        self.secret_key = secret_key or _get_secret_key()
-        if self.secret_key == _DEFAULT_SECRET:
-            import warnings
-            warnings.warn(
-                "Using default JWT secret key! Set JWT_SECRET_KEY env var in production.",
-                UserWarning,
+        if secret_key is None:
+            secret_key = _get_secret_key()
+        # fail fast：拒绝使用可预测的默认密钥，而不是仅仅告警
+        if secret_key == _DEFAULT_SECRET:
+            raise RuntimeError(
+                "Refusing to use the default JWT secret key "
+                "'code-review-agent-secret-change-in-production'. "
+                "Set JWT_SECRET_KEY to a strong random value before starting."
             )
+        self.secret_key = secret_key
 
     def create_access_token(self, user: User,
                             expires_delta: timedelta | None = None) -> str:
@@ -210,16 +217,17 @@ class JWTAuth:
 
     def verify_token(self, token: str, token_type: str = "access") -> dict:
         """
-        验证 JWT 签名 + 过期时间 + token_type。
+        验证 JWT 签名 + 过期时间 + token_type + 吊销状态。
 
         Raises:
             ExpiredSignatureError: token 已过期
-            JWTError: 签名无效 / 篡改
+            JWTError: 签名无效 / 篡改 / 已被吊销
             ValueError: token_type 不匹配
 
-        面试话术："验证分三层：① jose.jwt.decode 验证 HMAC-SHA256 签名
+        面试话术："验证分四层：① jose.jwt.decode 验证 HMAC-SHA256 签名
         ——任何篡改都会导致签名不匹配被拒绝；② 检查 exp 字段是否过期；
-        ③ 检查 token_type 防止 refresh token 被当 access token 用。"
+        ③ 检查 token_type 防止 refresh token 被当 access token 用；
+        ④ 检查 jti 是否在吊销列表中——已吊销的 refresh token 立即被拒绝。"
         """
         try:
             payload = jwt.decode(
@@ -239,17 +247,25 @@ class JWTAuth:
                 f"Wrong token type: expected '{token_type}', got '{payload.get('type')}'"
             )
 
+        # 检查吊销列表：已吊销的 token（含 refresh token）直接拒绝
+        jti = payload.get("jti")
+        if jti and get_revocation_list().is_revoked(jti):
+            raise JWTError(f"Token has been revoked (jti={jti})")
+
         return payload
 
     def refresh_access_token(self, refresh_token: str) -> dict:
         """
-        用 refresh token 换取新的 access token。
+        用 refresh token 换取新的 access token，并轮换 refresh token
+        （旧 refresh token 立即吊销，防止被盗后无限次复用）。
 
         面试话术："refresh token 只能换新 access token，不能访问业务 API。
-        如果 refresh token 被盗，攻击者可以持续刷新——所以生产环境会
-        配合 token family 机制：每次刷新都作废旧 token，检测到重用立即吊销整个 family。"
+        每次刷新都会吊销旧 refresh token 并签发新 refresh token（token rotation）。
+        如果攻击者重放旧 refresh token，吊销列表会让验证失败，从而发现泄露。"
         """
         payload = self.verify_token(refresh_token, token_type="refresh")
+        # 轮换：立即吊销本次使用的 refresh token
+        get_revocation_list().revoke_token(payload)
         user = User(
             username=payload["sub"],
             role=payload.get("role", "user"),
@@ -280,30 +296,74 @@ def _generate_jti() -> str:
     return secrets.token_hex(16)
 
 
-# ─── Token 吊销列表（内存）────────────────────
+# ─── Token 吊销列表（过期感知）────────────────
 
 class TokenRevocationList:
     """
-    简单内存吊销列表。生产环境用 Redis。
+    过期感知的内存吊销列表（TTL 对齐 token 过期时间，到期自动清理）。
 
-    面试话术："吊销列表用 Redis Set 实现，key 是 jti，
-    TTL 对齐 token 过期时间——token 过期后自动清理，不占内存。
-    验证时 O(1) 检查 jti 是否在集合中。"
+    面试话术："吊销列表用带 TTL 的存储实现，key 是 jti，
+    TTL 对齐 token 过期时间——token 过期后自动清理，不占内存、不拖慢查询。
+    验证时 O(1) 检查 jti 是否在集合中。生产环境可平滑替换为 Redis。"
     """
 
-    def __init__(self):
-        self._revoked: set[str] = set()
+    # 距上次清理超过该秒数，或条目数超过阈值时触发清理
+    _PURGE_INTERVAL_SECONDS = 60
+    _PURGE_TRIGGER_SIZE = 1000
 
-    def revoke(self, jti: str):
-        """吊销指定 token"""
-        self._revoked.add(jti)
+    def __init__(self):
+        self._revoked: dict[str, float] = {}  # jti -> 过期时间戳(epoch)
+        self._last_purge = time.time()
+
+    def revoke(self, jti: str, ttl_seconds: float | None = None):
+        """吊销指定 token；ttl 默认对齐 refresh token 生命周期，到期自动清理"""
+        self._maybe_purge()
+        if ttl_seconds is None:
+            ttl_seconds = REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600
+        self._revoked[jti] = time.time() + max(0.0, ttl_seconds)
+
+    def revoke_token(self, payload: dict) -> bool:
+        """按 token payload 吊销，TTL 对齐该 token 剩余有效期"""
+        jti = payload.get("jti")
+        if not jti:
+            return False
+        exp = payload.get("exp")
+        if isinstance(exp, (int, float)):
+            ttl = float(exp) - time.time()
+        elif isinstance(exp, datetime):
+            ttl = (exp - datetime.now(timezone.utc)).total_seconds()
+        else:
+            ttl = REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600
+        self.revoke(jti, ttl_seconds=ttl)
+        return True
 
     def is_revoked(self, jti: str) -> bool:
-        """检查 token 是否已被吊销"""
-        return jti in self._revoked
+        """检查 token 是否已被吊销（同时惰性清理过期条目）"""
+        self._maybe_purge()
+        exp = self._revoked.get(jti)
+        return exp is not None and exp > time.time()
 
     def count(self) -> int:
+        self._maybe_purge()
         return len(self._revoked)
+
+    def purge_expired(self) -> int:
+        """主动清理所有过期条目，返回清理数量"""
+        before = len(self._revoked)
+        self._last_purge = 0.0  # 强制触发清理
+        self._maybe_purge()
+        return before - len(self._revoked)
+
+    def _maybe_purge(self):
+        """按时间/规模触发清理，防止被吊销条目无界累积（内存泄漏）"""
+        now = time.time()
+        if (now - self._last_purge < self._PURGE_INTERVAL_SECONDS
+                and len(self._revoked) < self._PURGE_TRIGGER_SIZE):
+            return
+        stale = [jti for jti, exp in self._revoked.items() if exp <= now]
+        for jti in stale:
+            del self._revoked[jti]
+        self._last_purge = now
 
 
 # ─── 全局单例 ──────────────────────────────────

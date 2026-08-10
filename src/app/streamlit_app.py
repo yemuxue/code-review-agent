@@ -16,6 +16,8 @@ os.makedirs(REPORTS_DIR, exist_ok=True)
 os.makedirs(SESSIONS_DIR, exist_ok=True)
 
 import streamlit as st
+import src.config  # noqa: F401  ← 必须先加载 .env 进 os.environ（JWT_SECRET_KEY 依赖它），
+#                     否则下方 get_auth() 会因 fail-fast 报"JWT_SECRET_KEY not set"
 from src.llm_client import AnthropicClient
 from src.harness.agent import AgentHarness, ToolDefinition
 from src.harness.telemetry import AgentLogger
@@ -147,6 +149,9 @@ if not st.session_state.authenticated:
                 st.session_state.login_error = ""
                 st.rerun()
             else:
+                # 登录失败审计日志（不含密码本身，只记用户名 + 密码长度，用于排查）
+                print(f"[AUTH][{datetime.datetime.now():%Y-%m-%d %H:%M:%S}] "
+                      f"login FAILED: username='{username}' pw_len={len(password)}")
                 st.session_state.login_error = "❌ Invalid username or password / 用户名或密码错误"
                 st.rerun()
 
