@@ -1,5 +1,6 @@
 import importlib
 import sys
+import types
 from pathlib import Path
 
 
@@ -19,12 +20,19 @@ def test_api_tools_exclude_host_command_execution(monkeypatch, tmp_path):
 
 
 def test_server_loads_dotenv_before_auth(monkeypatch, tmp_path):
-    import dotenv
-
-    monkeypatch.setattr(dotenv, "dotenv_values", lambda _: {
+    dotenv = types.ModuleType("dotenv")
+    dotenv.dotenv_values = lambda _: {
         "JWT_SECRET_KEY": "dotenv-only-secret-that-is-long-enough",
         "ADMIN_PASSWORD": "dotenv-only-admin-password",
-    })
+    }
+    original_exists = Path.exists
+
+    monkeypatch.setitem(sys.modules, "dotenv", dotenv)
+    monkeypatch.setattr(
+        Path,
+        "exists",
+        lambda path: path.name == ".env" or original_exists(path),
+    )
     monkeypatch.delenv("JWT_SECRET_KEY", raising=False)
     monkeypatch.delenv("ADMIN_PASSWORD", raising=False)
     monkeypatch.chdir(tmp_path)
