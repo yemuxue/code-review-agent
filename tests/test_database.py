@@ -1,4 +1,5 @@
 """Database integration tests"""
+import sqlite3
 import sys, os, shutil
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
@@ -80,6 +81,39 @@ class TestDatabase:
             row["owner_username"] == "alice"
             for row in self.db.list_sessions(20, owner_username="alice")
         )
+
+    def test_migrates_legacy_database_before_owner_indexes(self, tmp_path):
+        db_path = tmp_path / "legacy.db"
+        with sqlite3.connect(db_path) as conn:
+            conn.executescript("""
+                CREATE TABLE sessions (
+                    id TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT 'New Chat',
+                    mode TEXT NOT NULL DEFAULT 'Single', project_path TEXT DEFAULT '',
+                    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    message_count INTEGER DEFAULT 0, finding_count INTEGER DEFAULT 0,
+                    total_tokens INTEGER DEFAULT 0, total_duration_ms INTEGER DEFAULT 0
+                );
+                CREATE TABLE findings (
+                    id TEXT PRIMARY KEY, session_id TEXT NOT NULL,
+                    file_path TEXT NOT NULL DEFAULT '', line INTEGER DEFAULT 0,
+                    category TEXT NOT NULL DEFAULT 'BUG', severity TEXT NOT NULL DEFAULT 'Medium',
+                    description_en TEXT DEFAULT '', description_cn TEXT DEFAULT '',
+                    suggestion TEXT DEFAULT '', verdict TEXT DEFAULT 'PENDING',
+                    verified INTEGER DEFAULT 0, created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    embedding_id TEXT DEFAULT ''
+                );
+            """)
+
+        Database(str(db_path))
+
+        with sqlite3.connect(db_path) as conn:
+            session_columns = {row[1] for row in conn.execute("PRAGMA table_info(sessions)")}
+            finding_columns = {row[1] for row in conn.execute("PRAGMA table_info(findings)")}
+            indexes = {row[1] for row in conn.execute("PRAGMA index_list(sessions)")}
+        assert "owner_username" in session_columns
+        assert "owner_username" in finding_columns
+        assert "idx_sessions_owner" in indexes
 
     @classmethod
     def teardown_class(cls):

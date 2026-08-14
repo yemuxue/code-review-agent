@@ -63,8 +63,6 @@ CREATE INDEX IF NOT EXISTS idx_findings_session ON findings(session_id);
 CREATE INDEX IF NOT EXISTS idx_findings_category ON findings(category);
 CREATE INDEX IF NOT EXISTS idx_findings_severity ON findings(severity);
 CREATE INDEX IF NOT EXISTS idx_sessions_updated ON sessions(updated_at DESC);
-CREATE INDEX IF NOT EXISTS idx_sessions_owner ON sessions(owner_username);
-CREATE INDEX IF NOT EXISTS idx_findings_owner ON findings(owner_username);
 
 CREATE TABLE IF NOT EXISTS logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
