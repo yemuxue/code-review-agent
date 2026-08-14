@@ -35,6 +35,8 @@ from slowapi.errors import RateLimitExceeded
 from jose import JWTError, ExpiredSignatureError
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 
+# Importing config applies documented .env values before authentication initializes.
+import src.config  # noqa: F401
 from src.llm_client import AnthropicClient
 from src.harness.agent import AgentHarness, ToolDefinition
 from src.harness.telemetry import AgentLogger
