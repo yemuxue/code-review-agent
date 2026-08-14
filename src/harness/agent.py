@@ -1,6 +1,6 @@
 """Agent Harness core: Execution Loop + Tool Calling + Context Management"""
 from __future__ import annotations
-import json, asyncio
+import json
 from dataclasses import dataclass
 from typing import Any, Callable
 
@@ -29,6 +29,9 @@ class AgentHarness:
         self.tools_called = 0
         self.total_tokens_used = 0
         self.logger = logger
+        self.sandbox: Any = None
+        self.hitl: Any = None
+        self.memory: Any = None
 
     def run(self, user_query: str) -> str:
         self._reset(user_query)

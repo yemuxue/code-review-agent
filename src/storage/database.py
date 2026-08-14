@@ -9,10 +9,12 @@ SQLite 持久化层 / SQLite Persistence Layer
 """
 
 from __future__ import annotations
-import sqlite3, json, uuid, datetime
+import sqlite3
+import json
+import uuid
+import datetime
 from pathlib import Path
-from dataclasses import dataclass, field, asdict
-from typing import Optional
+from dataclasses import dataclass, field
 from contextlib import contextmanager
 
 
@@ -22,6 +24,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     name TEXT NOT NULL DEFAULT 'New Chat',
     mode TEXT NOT NULL DEFAULT 'Single',
     project_path TEXT DEFAULT '',
+    owner_username TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     message_count INTEGER DEFAULT 0,
@@ -41,6 +44,7 @@ CREATE TABLE IF NOT EXISTS messages (
 CREATE TABLE IF NOT EXISTS findings (
     id TEXT PRIMARY KEY,
     session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    owner_username TEXT NOT NULL DEFAULT '',
     file_path TEXT NOT NULL DEFAULT '',
     line INTEGER DEFAULT 0,
     category TEXT NOT NULL DEFAULT 'BUG',
@@ -59,6 +63,8 @@ CREATE INDEX IF NOT EXISTS idx_findings_session ON findings(session_id);
 CREATE INDEX IF NOT EXISTS idx_findings_category ON findings(category);
 CREATE INDEX IF NOT EXISTS idx_findings_severity ON findings(severity);
 CREATE INDEX IF NOT EXISTS idx_sessions_updated ON sessions(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sessions_owner ON sessions(owner_username);
+CREATE INDEX IF NOT EXISTS idx_findings_owner ON findings(owner_username);
 
 CREATE TABLE IF NOT EXISTS logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -82,6 +88,7 @@ class Session:
     name: str = "New Chat"
     mode: str = "Single"
     project_path: str = ""
+    owner_username: str = ""
     created_at: str = ""
     updated_at: str = ""
     message_count: int = 0
@@ -92,6 +99,7 @@ class Session:
 class Finding:
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     session_id: str = ""
+    owner_username: str = ""
     file_path: str = ""
     line: int = 0
     category: str = "BUG"
@@ -136,6 +144,12 @@ class Database:
             except: pass
             try: conn.execute("ALTER TABLE sessions ADD COLUMN total_duration_ms INTEGER DEFAULT 0")
             except: pass
+            try: conn.execute("ALTER TABLE sessions ADD COLUMN owner_username TEXT NOT NULL DEFAULT ''")
+            except: pass
+            try: conn.execute("ALTER TABLE findings ADD COLUMN owner_username TEXT NOT NULL DEFAULT ''")
+            except: pass
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_sessions_owner ON sessions(owner_username)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_findings_owner ON findings(owner_username)")
 
     @contextmanager
     def _get_conn(self):
@@ -155,12 +169,12 @@ class Database:
     # ─── Sessions / 会话 ──────────────────────────
 
     def create_session(self, name: str = "New Chat", mode: str = "Single",
-                       project_path: str = "") -> str:
+                       project_path: str = "", owner_username: str = "") -> str:
         sid = str(uuid.uuid4())
         with self._get_conn() as conn:
             conn.execute(
-                "INSERT INTO sessions (id,name,mode,project_path) VALUES (?,?,?,?)",
-                (sid, name, mode, project_path),
+                "INSERT INTO sessions (id,name,mode,project_path,owner_username) VALUES (?,?,?,?,?)",
+                (sid, name, mode, project_path, owner_username),
             )
         return sid
 
@@ -179,16 +193,28 @@ class Database:
                 (*updates.values(), sid),
             )
 
-    def get_session(self, sid: str) -> dict | None:
+    def get_session(self, sid: str, owner_username: str | None = None) -> dict | None:
         with self._get_conn() as conn:
-            row = conn.execute("SELECT * FROM sessions WHERE id=?", (sid,)).fetchone()
+            if owner_username is None:
+                row = conn.execute("SELECT * FROM sessions WHERE id=?", (sid,)).fetchone()
+            else:
+                row = conn.execute(
+                    "SELECT * FROM sessions WHERE id=? AND owner_username=?",
+                    (sid, owner_username),
+                ).fetchone()
             return dict(row) if row else None
 
-    def list_sessions(self, limit: int = 20) -> list[dict]:
+    def list_sessions(self, limit: int = 20, owner_username: str | None = None) -> list[dict]:
         with self._get_conn() as conn:
-            rows = conn.execute(
-                "SELECT * FROM sessions ORDER BY updated_at DESC LIMIT ?", (limit,)
-            ).fetchall()
+            if owner_username is None:
+                rows = conn.execute(
+                    "SELECT * FROM sessions ORDER BY updated_at DESC LIMIT ?", (limit,)
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT * FROM sessions WHERE owner_username=? ORDER BY updated_at DESC LIMIT ?",
+                    (owner_username, limit),
+                ).fetchall()
             return [dict(r) for r in rows]
 
     def delete_session(self, sid: str):
@@ -245,10 +271,10 @@ class Database:
     def add_finding(self, sid: str, finding: Finding) -> str:
         with self._get_conn() as conn:
             conn.execute(
-                """INSERT INTO findings (id,session_id,file_path,line,category,severity,
+                """INSERT INTO findings (id,session_id,owner_username,file_path,line,category,severity,
                    description_en,description_cn,suggestion,verdict,verified,embedding_id)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
-                (finding.id, sid, finding.file_path, finding.line, finding.category,
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (finding.id, sid, finding.owner_username, finding.file_path, finding.line, finding.category,
                  finding.severity, finding.description_en, finding.description_cn,
                  finding.suggestion, finding.verdict, int(finding.verified), finding.embedding_id),
             )
@@ -263,10 +289,10 @@ class Database:
         with self._get_conn() as conn:
             for f in findings:
                 conn.execute(
-                    """INSERT OR IGNORE INTO findings (id,session_id,file_path,line,category,severity,
+                    """INSERT OR IGNORE INTO findings (id,session_id,owner_username,file_path,line,category,severity,
                        description_en,description_cn,suggestion,verdict,verified,embedding_id)
-                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
-                    (f.id, sid, f.file_path, f.line, f.category, f.severity,
+                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    (f.id, sid, f.owner_username, f.file_path, f.line, f.category, f.severity,
                      f.description_en, f.description_cn, f.suggestion, f.verdict,
                      int(f.verified), f.embedding_id),
                 )
@@ -277,10 +303,11 @@ class Database:
             )
         return count
 
-    def get_findings(self, session_id: str = None, category: str = None,
-                     severity: str = None, verdict: str = None, limit: int = 50) -> list[dict]:
+    def get_findings(self, session_id: str | None = None, category: str | None = None,
+                     severity: str | None = None, verdict: str | None = None, limit: int = 50,
+                     owner_username: str | None = None) -> list[dict]:
         query = "SELECT * FROM findings WHERE 1=1"
-        params = []
+        params: list[object] = []
         if session_id:
             query += " AND session_id=?"; params.append(session_id)
         if category:
@@ -289,21 +316,28 @@ class Database:
             query += " AND severity=?"; params.append(severity)
         if verdict:
             query += " AND verdict=?"; params.append(verdict)
+        if owner_username is not None:
+            query += " AND owner_username=?"; params.append(owner_username)
         query += " ORDER BY created_at DESC LIMIT ?"; params.append(limit)
         with self._get_conn() as conn:
             return [dict(r) for r in conn.execute(query, params).fetchall()]
 
-    def search_findings(self, keyword: str, limit: int = 20) -> list[dict]:
+    def search_findings(self, keyword: str, limit: int = 20,
+                        owner_username: str | None = None) -> list[dict]:
         """关键词搜索发现"""
         kw = f"%{keyword}%"
         with self._get_conn() as conn:
-            rows = conn.execute(
-                """SELECT * FROM findings
-                   WHERE description_en LIKE ? OR description_cn LIKE ?
-                      OR file_path LIKE ? OR suggestion LIKE ?
-                   ORDER BY created_at DESC LIMIT ?""",
-                (kw, kw, kw, kw, limit),
-            ).fetchall()
+            query = """SELECT * FROM findings
+                   WHERE (description_en LIKE ? OR description_cn LIKE ?
+                       OR file_path LIKE ? OR suggestion LIKE ?)
+            """
+            params: list[object] = [kw, kw, kw, kw]
+            if owner_username is not None:
+                query += " AND owner_username=?"
+                params.append(owner_username)
+            query += " ORDER BY created_at DESC LIMIT ?"
+            params.append(limit)
+            rows = conn.execute(query, params).fetchall()
             return [dict(r) for r in rows]
 
     # ─── Stats / 统计 ─────────────────────────────

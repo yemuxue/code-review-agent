@@ -9,6 +9,9 @@ services:
       - ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN}
       - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:-https://api.deepseek.com/anthropic}
       - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-deepseek-chat}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?JWT_SECRET_KEY is required}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD is required}
+      - CODE_REVIEW_ALLOWED_ROOT=${CODE_REVIEW_ALLOWED_ROOT:-/app}
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
@@ -25,6 +28,9 @@ services:
       - ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN}
       - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:-https://api.deepseek.com/anthropic}
       - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-deepseek-chat}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?JWT_SECRET_KEY is required}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD is required}
+      - CODE_REVIEW_ALLOWED_ROOT=${CODE_REVIEW_ALLOWED_ROOT:-/app}
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs

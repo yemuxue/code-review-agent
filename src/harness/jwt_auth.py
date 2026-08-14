@@ -15,8 +15,6 @@ JWT Authentication — 真正的 JWT 认证（签名 + 过期 + 刷新）
 from __future__ import annotations
 import os
 import json
-import hashlib
-import hmac
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -114,13 +112,18 @@ class UserStore:
     def _ensure_default_admin(self):
         """确保默认管理员存在"""
         if "admin" not in self._users:
+            password = os.getenv("ADMIN_PASSWORD")
+            if not password:
+                raise RuntimeError(
+                    "ADMIN_PASSWORD is required when initializing the first administrator."
+                )
             self.create_user(
                 username="admin",
-                password=os.getenv("ADMIN_PASSWORD", "admin123"),
+                password=password,
                 role="admin",
                 email="admin@code-review.local",
             )
-            print("[JWT Auth] Created default admin user (change password in production!)")
+            print("[JWT Auth] Created administrator from ADMIN_PASSWORD")
 
     def create_user(self, username: str, password: str,
                     role: str = "user", email: str = "") -> User:

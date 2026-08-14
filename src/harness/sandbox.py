@@ -19,7 +19,13 @@
   - 面试话术见模块末尾
 """
 from __future__ import annotations
-import os, signal, shlex, shutil, tempfile, subprocess, threading
+import os
+import signal
+import shlex
+import shutil
+import tempfile
+import subprocess
+import threading
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -192,7 +198,10 @@ class Sandbox:
         """杀掉整个进程组（含孙进程），失败时退化为只杀直接子进程。"""
         if hasattr(os, "killpg"):
             try:
-                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                killpg = getattr(os, "killpg")
+                getpgid = getattr(os, "getpgid")
+                sigkill = getattr(signal, "SIGKILL")
+                killpg(getpgid(proc.pid), sigkill)
                 return
             except Exception:
                 pass

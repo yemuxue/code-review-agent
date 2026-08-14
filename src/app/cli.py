@@ -1,6 +1,14 @@
 """Code Review Agent -- CLI"""
 from __future__ import annotations
-import os, sys, io, re, asyncio, argparse
+import sys
+import io
+import re
+import asyncio
+import argparse
+import tempfile
+import shutil
+import atexit
+from functools import partial
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 if sys.platform == "win32" and hasattr(sys.stdout, "buffer"):
@@ -59,7 +67,7 @@ def main():
     args = p.parse_args()
 
     m = re.search(r"github\.com/([^/]+)/([^/]+)/pull/(\d+)", args.pr_url)
-    if not m: print(f"Invalid PR URL"); sys.exit(1)
+    if not m: print("Invalid PR URL"); sys.exit(1)
     owner, repo, num = m.group(1), m.group(2).removesuffix(".git"), m.group(3)
 
     print("="*43); print("  Code Review Agent"); print("="*43)
@@ -77,7 +85,20 @@ def main():
     client = AnthropicClient(api_key=args.api_key or get_api_key(),
                              base_url=args.base_url or get_base_url(),
                              model=args.model or get_model(), temperature=0.1)
-    agent = AgentHarness(model=client, tools=TOOLS, system_prompt=SYSTEM_PROMPT, max_turns=10)
+    review_dir = tempfile.mkdtemp(prefix="code_review_pr_")
+    atexit.register(shutil.rmtree, review_dir, ignore_errors=True)
+    tools = []
+    for tool in TOOLS:
+        if tool.name == "clone_repo":
+            fn = partial(clone_repo, destination=review_dir)
+        elif tool.name == "get_diff":
+            fn = partial(get_diff, cwd=review_dir)
+        elif tool.name == "fetch_pr":
+            fn = partial(fetch_pr, cwd=review_dir)
+        else:
+            fn = tool.fn
+        tools.append(ToolDefinition(tool.name, tool.description, tool.parameters, fn))
+    agent = AgentHarness(model=client, tools=tools, system_prompt=SYSTEM_PROMPT, max_turns=10)
 
     # ALWAYS use sandbox to isolate git operations
     sandbox = Sandbox()

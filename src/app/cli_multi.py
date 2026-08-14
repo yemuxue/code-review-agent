@@ -1,6 +1,9 @@
 """Multi-Agent Code Analysis — CLI 入口"""
 from __future__ import annotations
-import os, sys, io, argparse
+import os
+import sys
+import io
+import argparse
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -77,11 +80,11 @@ def main():
     ts = __import__("datetime").datetime.now().strftime("%Y%m%d_%H%M%S")
     report_path = f"reports/report_{ts}.md"
     with open(report_path, "w", encoding="utf-8") as f:
-        f.write(f"# Multi-Agent Analysis Report\n\n")
+        f.write("# Multi-Agent Analysis Report\n\n")
         f.write(f"**Project**: `{project_path}`\n")
         f.write(f"**Time**: {ts}\n\n")
         f.write(result["final_report"])
-        f.write(f"\n\n---\n## Stats\n")
+        f.write("\n\n---\n## Stats\n")
         for agent_name, stats in result.get("stats", {}).items():
             f.write(f"- **{agent_name}**: {stats['turns_taken']} turns, {stats['tools_called']} tools\n")
     print(f"\n[Report saved: {report_path}]")

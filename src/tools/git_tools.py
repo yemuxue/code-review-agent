@@ -1,6 +1,8 @@
 """Git 工具集 — clone_repo, get_diff, read_file, search_code"""
 from __future__ import annotations
-import os, re, subprocess
+import os
+import re
+import subprocess
 from pathlib import Path
 
 # 代理配置（用于 git clone / fetch 等网络操作）
@@ -8,31 +10,38 @@ PROXY_ENV = {"http_proxy": "http://127.0.0.1:7897",
              "https_proxy": "http://127.0.0.1:7897"}
 GIT_ENV = {**os.environ, **PROXY_ENV}
 
-def clone_repo(repo_url: str, branch: str = "main") -> str:
+def clone_repo(repo_url: str, branch: str = "main", destination: str = "") -> str:
     clean_url = repo_url.rstrip("/").removesuffix(".git")
     if "github.com" not in clean_url:
-        return f"Error: Only GitHub repos supported."
+        return "Error: Only GitHub repos supported."
+    if not destination:
+        return "Error: A dedicated empty destination directory is required."
+    target = Path(destination).resolve()
+    if target.exists() and any(target.iterdir()):
+        return f"Error: Clone destination is not empty: {target}"
+    target.mkdir(parents=True, exist_ok=True)
     try:
         result = subprocess.run(
-            ["git","clone","--depth","1","--branch",branch,clean_url+".git","."],
+            ["git","clone","--depth","1","--branch",branch,clean_url+".git",str(target)],
             capture_output=True, text=True, timeout=120, env=GIT_ENV)
         if result.returncode != 0:
             return f"Clone failed (exit {result.returncode}):\nSTDERR: {result.stderr[:1000]}\nSTDOUT: {result.stdout[:500]}"
-        file_count = sum(1 for _ in Path(".").rglob("*") if _.is_file())
+        file_count = sum(1 for _ in target.rglob("*") if _.is_file())
         return f"Cloned {clean_url} (branch: {branch}), ~{file_count} files."
     except subprocess.TimeoutExpired:
         return "Clone timed out (120s)."
     except Exception as e:
         return f"Clone error: {type(e).__name__}: {e}"
 
-def get_diff(base_branch: str = "main") -> str:
+def get_diff(base_branch: str = "main", cwd: str = "") -> str:
+    repo_dir = Path(cwd).resolve() if cwd else Path.cwd()
     try:
         subprocess.run(["git","fetch","origin",base_branch,"--depth=1"],
-                       capture_output=True, text=True, timeout=30, env=GIT_ENV)
+                       capture_output=True, text=True, timeout=30, env=GIT_ENV, cwd=repo_dir)
         r1 = subprocess.run(["git","diff",f"origin/{base_branch}..HEAD","--stat"],
-                            capture_output=True, text=True, timeout=30, env=GIT_ENV)
+                            capture_output=True, text=True, timeout=30, env=GIT_ENV, cwd=repo_dir)
         r2 = subprocess.run(["git","diff",f"origin/{base_branch}..HEAD"],
-                            capture_output=True, text=True, timeout=30, env=GIT_ENV)
+                            capture_output=True, text=True, timeout=30, env=GIT_ENV, cwd=repo_dir)
         stat, diff = r1.stdout, r2.stdout
         if not diff: return "No changes detected (diff is empty). PR may already be merged."
         max_chars = 8000
@@ -53,7 +62,7 @@ def read_file(file_path: str = "", start_line: int = 1, end_line: int | None = N
     path = Path(file_path)
     if not path.exists(): return f"File not found: {file_path}. Please check the path is correct and absolute."
     if path.suffix in {".exe",".dll",".so",".bin",".zip",".gz",".png",".jpg"}: return f"Cannot read binary: {file_path}"
-    if path.stat().st_size > 2*1024*1024: return f"File too large."
+    if path.stat().st_size > 2*1024*1024: return "File too large."
     try:
         with open(path,"r",encoding="utf-8",errors="replace") as f: lines = f.readlines()
         total = len(lines)
@@ -61,14 +70,14 @@ def read_file(file_path: str = "", start_line: int = 1, end_line: int | None = N
         start = max(1, start_line) - 1
         result = "".join(f"{i:4d}| {line}" for i, line in enumerate(lines[start:end], start=start+1))
         if end < total: result += f"\n\n[Lines {start+1}-{end} of {total}]"
-        if len(result) > 5000: result = result[:5000] + f"\n\n[Truncated]"
+        if len(result) > 5000: result = result[:5000] + "\n\n[Truncated]"
         return result
     except Exception as e:
         return f"Read error: {e}"
 
 def search_code(pattern: str, path: str = ".", file_glob: str = "*.py") -> str:
     root = Path(path)
-    if not root.exists(): return f"Path not found."
+    if not root.exists(): return "Path not found."
     try: regex = re.compile(pattern, re.IGNORECASE)
     except re.error as e: return f"Invalid regex: {e}"
     results = []
@@ -87,25 +96,26 @@ def search_code(pattern: str, path: str = ".", file_glob: str = "*.py") -> str:
     if len(results) >= 50: out += "\n\n[Truncated at 50]"
     return out
 
-def fetch_pr(pr_number: int) -> str:
+def fetch_pr(pr_number: int, cwd: str = "") -> str:
     """Fetch a GitHub PR ref and checkout the branch. Call AFTER clone_repo."""
     try:
         # Fetch the PR ref
+        repo_dir = Path(cwd).resolve() if cwd else Path.cwd()
         r = subprocess.run(
             ["git","fetch","origin",f"pull/{pr_number}/head:pr-{pr_number}"],
-            capture_output=True, text=True, timeout=60, env=GIT_ENV)
+            capture_output=True, text=True, timeout=60, env=GIT_ENV, cwd=repo_dir)
         if r.returncode != 0:
             return f"Fetch PR failed (exit {r.returncode}):\n{r.stderr[:800]}"
         # Checkout the PR branch
         r2 = subprocess.run(
             ["git","checkout",f"pr-{pr_number}"],
-            capture_output=True, text=True, timeout=30, env=GIT_ENV)
+            capture_output=True, text=True, timeout=30, env=GIT_ENV, cwd=repo_dir)
         if r2.returncode != 0:
             return f"Checkout PR failed (exit {r2.returncode}):\n{r2.stderr[:800]}"
         # Show what changed
         r3 = subprocess.run(
             ["git","diff","origin/main","--stat"],
-            capture_output=True, text=True, timeout=30, env=GIT_ENV)
+            capture_output=True, text=True, timeout=30, env=GIT_ENV, cwd=repo_dir)
         return f"Fetched PR #{pr_number} branch. Files changed:\n{r3.stdout}"
     except Exception as e:
         return f"Fetch PR error: {type(e).__name__}: {e}"
@@ -114,7 +124,6 @@ def fetch_pr(pr_number: int) -> str:
 
 def list_files(path: str = ".", pattern: str = "*") -> str:
     """List all files in a directory recursively (excludes __pycache__, .git, node_modules)."""
-    import fnmatch
     root = Path(path)
     if not root.exists(): return f"Path not found: {path}"
     results = []
