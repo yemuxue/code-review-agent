@@ -164,7 +164,8 @@ def _make_session_id() -> str:
     return datetime.now().strftime("%Y%m%d_%H%M%S") + f"_{_random_suffix(4)}"
 
 def _random_suffix(n: int) -> str:
-    import random, string
+    import random
+    import string
     return "".join(random.choices(string.ascii_lowercase + string.digits, k=n))
 
 def _iso_now() -> str:

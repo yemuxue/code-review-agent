@@ -1,7 +1,6 @@
 """Streaming Parser: state machine for parsing tool call JSON from streaming chunks"""
 from __future__ import annotations
 import json
-from typing import Any
 
 class Chunk:
     def __init__(self, type: str, content_block=None, delta=None, index=0, usage=None):

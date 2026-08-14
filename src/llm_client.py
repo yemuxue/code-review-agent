@@ -1,6 +1,7 @@
 """LLM Client adapter: Anthropic API"""
 from __future__ import annotations
-import json, os, asyncio
+import json
+import asyncio
 from dataclasses import dataclass, field
 try:
     from src.harness.streaming import Chunk
@@ -90,7 +91,8 @@ class AnthropicClient:
         }
 
     def chat(self, messages: list[dict], tools: list[dict] | None = None) -> LLMResponse:
-        import urllib.request, urllib.error
+        import urllib.request
+        import urllib.error
         # Check cache
         if self.use_cache and not tools:
             cached = _llm_cache.get(messages, self.model)
@@ -142,7 +144,8 @@ class AnthropicClient:
             raise RuntimeError(f"API timeout/connection error: {e}")
 
     async def stream(self, messages: list[dict], tools: list[dict] | None = None):
-        import urllib.request, urllib.error
+        import urllib.request
+        import urllib.error
         sp, apimsg = self._convert(messages)
         ant = None
         if tools:

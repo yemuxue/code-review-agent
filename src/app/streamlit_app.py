@@ -3,7 +3,11 @@ Code Review Agent — Streamlit Frontend
 Claude Code / Codex UI | Bilingual CN+EN | Multi-Agent
 """
 from __future__ import annotations
-import sys, io, os, time, datetime, json, uuid
+import sys
+import os
+import datetime
+import json
+import uuid
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -24,11 +28,10 @@ from src.harness.telemetry import AgentLogger
 from src.harness.auth import HumanInTheLoop
 from src.harness.sandbox import Sandbox
 from src.harness.memory import ContextMemory
-from src.harness.jwt_auth import get_user_store, get_auth, User
-from src.model_router import ModelRouter
+from src.harness.jwt_auth import get_user_store, get_auth
 from src.multi_agent.langgraph_orchestrator import LangGraphOrchestrator as Orchestrator
 from src.tools.git_tools import list_files, read_file, grep_pattern, run_command, write_file
-from src.storage.database import Database, Session as DBSession
+from src.storage.database import Database, Finding
 from src.memory.vector_store import VectorStore, FindingDocument
 
 # ═══════════════════════════════════════
@@ -293,7 +296,7 @@ with st.sidebar:
         if result.success:
             st.success(f"Sandbox active ✅\n`{result.stdout.strip()}`")
         else:
-            st.error(f"Sandbox FAILED ❌")
+            st.error("Sandbox FAILED ❌")
         st.caption(f"Timeout={sb.timeout}s | Thread isolation | Command whitelist")
     else:
         st.caption("点击测试沙箱是否正常工作")
@@ -462,7 +465,7 @@ if prompt:
         pass
 
     with st.chat_message("user"):
-        st.markdown(f'<span style="color:#8b949e;font-size:10px;font-weight:700;">YOU</span>', unsafe_allow_html=True)
+        st.markdown('<span style="color:#8b949e;font-size:10px;font-weight:700;">YOU</span>', unsafe_allow_html=True)
         st.markdown(prompt)
         if st.session_state.selected_files:
             chips = "".join(f'<span class="file-chip">📄 {Path(f).name}</span>' for f in st.session_state.selected_files)
@@ -470,7 +473,7 @@ if prompt:
 
     # Run
     with st.chat_message("assistant"):
-        st.markdown(f'<span style="color:#58a6ff;font-size:10px;font-weight:700;">AGENT</span>', unsafe_allow_html=True)
+        st.markdown('<span style="color:#58a6ff;font-size:10px;font-weight:700;">AGENT</span>', unsafe_allow_html=True)
 
         target = full_query
         mode_label = "MultiAgent" if is_multi else "SingleAgent"
@@ -582,7 +585,7 @@ if prompt:
 
                     # 节点级统计展示（可观测性）
                     node_stats = lang_result.get("node_stats", {})
-                    status.write(f"🧠 LangGraph: plan -> execute(并行) -> review -> fix -> verify")
+                    status.write("🧠 LangGraph: plan -> execute(并行) -> review -> fix -> verify")
                     status.write(f"📊 Findings: {n_findings} | Verified: {n_verdicts} | Fixed: {n_fixed}")
                     if node_stats:
                         for node, s in node_stats.items():
@@ -601,7 +604,7 @@ if prompt:
                 agent.hitl = hitl_guard  # Wire HITL into tool execution
                 agent.sandbox = Sandbox()  # Wire Sandbox for run_command isolation
                 agent.memory = ContextMemory(strategy="hybrid", window_size=10)  # Context compaction
-                status.write(f"🛡️ Sandbox: ON | HITL: ON | 🧠 Memory: hybrid")
+                status.write("🛡️ Sandbox: ON | HITL: ON | 🧠 Memory: hybrid")
                 placeholder = st.empty()
                 buffer = [""]  # use list for mutable capture in closure
 

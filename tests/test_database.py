@@ -71,6 +71,16 @@ class TestDatabase:
         assert "by_category" in s
         assert "by_severity" in s
 
+    def test_session_owner_filters_access(self):
+        sid = self.db.create_session("Private", "single", owner_username="alice")
+
+        assert self.db.get_session(sid, owner_username="bob") is None
+        assert self.db.get_session(sid, owner_username="alice")["id"] == sid
+        assert all(
+            row["owner_username"] == "alice"
+            for row in self.db.list_sessions(20, owner_username="alice")
+        )
+
     @classmethod
     def teardown_class(cls):
         shutil.rmtree("./data/_test", ignore_errors=True)

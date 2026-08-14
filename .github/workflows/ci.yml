@@ -22,13 +22,16 @@ jobs:
           pip install ruff mypy
 
       - name: Lint
-        run: ruff check src/ --ignore E501,F841 || true
+        run: ruff check src/ --ignore E501,F841,E701,E702,E722,E741,E402
 
       - name: Type check
-        run: mypy src/ --ignore-missing-imports || true
+        run: >-
+          mypy src/security src/harness/agent.py src/harness/jwt_auth.py
+          src/storage/database.py src/memory/vector_store.py
+          --ignore-missing-imports --explicit-package-bases
 
       - name: Test with coverage
-        run: pytest tests/ -v --tb=short --cov=src --cov-report=term-missing
+        run: pytest tests/ -v --tb=short --cov=src --cov-report=term-missing --cov-report=xml
 
       - name: Eval dataset
         run: python -c "from tests.eval_dataset import EVAL_SAMPLES; print('Eval samples:', len(EVAL_SAMPLES), 'ready')"

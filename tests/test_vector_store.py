@@ -50,6 +50,15 @@ class TestVectorStore:
         r = self.vs.search("xyz_nonexistent_abc")
         assert len(r) == 0
 
+    def test_add_batch_inserts_each_document_once(self, tmp_path):
+        store = VectorStore(str(tmp_path / "batch.db"))
+        try:
+            ids = store.add_batch([FindingDocument(description_en="insert once")])
+            assert len(ids) == 1
+            assert store.count() == 1
+        finally:
+            store.close()
+
     @classmethod
     def teardown_class(cls):
         cls.vs.close()

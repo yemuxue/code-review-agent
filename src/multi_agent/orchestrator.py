@@ -18,13 +18,12 @@ Multi-Agent Orchestrator: 任务分解 → 分派 → 执行 → 合并 → 最�
 try:
     from src.harness.agent import AgentHarness, ToolDefinition
 except ImportError:
-    from harness.agent import AgentHarness, ToolDefinition
-from typing import Callable
+    from harness.agent import AgentHarness, ToolDefinition  # type: ignore[no-redef]
 
 
 def parse_findings(text: str) -> list[dict]:
     """从 Planner 输出中解析 FINDING 行"""
-    findings = []
+    findings: list[dict] = []
     for line in text.split("\n"):
         line = line.strip()
         if line.startswith("FINDING|"):
@@ -80,7 +79,7 @@ class MultiAgentOrchestrator:
         self._defs = AGENT_DEFINITIONS
 
         # 按名称筛选工具
-        def _tools_for(names: list[str]) -> list[ToolDefinition]:
+        def _tools_for(names) -> list[ToolDefinition]:
             return [t for t in all_tools if t.name in names]
 
         self._planner_tools = _tools_for(self._defs["planner"]["tools"])
@@ -132,9 +131,9 @@ class MultiAgentOrchestrator:
         print(f"  Verdicts: {confirmed} confirmed, {fp} false-positive, {uncertain} uncertain")
 
         # ─── Phase 3: Reviewer ───
-        print(f"\n[Phase 3/3] Reviewer: Producing final report...")
+        print("\n[Phase 3/3] Reviewer: Producing final report...")
         final_report = self._run_reviewer(findings, verdicts, project_path)
-        print(f"  Report ready.")
+        print("  Report ready.")
 
         return {
             "planner_findings": findings,
@@ -182,9 +181,9 @@ class MultiAgentOrchestrator:
             max_turns=8,
             logger=self.logger,
         )
-        if self.sandbox: self._planner_agent.sandbox = self.sandbox
-        if self.hitl: self._planner_agent.hitl = self.hitl
-        if self.memory: self._planner_agent.memory = self.memory
+        if self.sandbox: self._executor_agent.sandbox = self.sandbox
+        if self.hitl: self._executor_agent.hitl = self.hitl
+        if self.memory: self._executor_agent.memory = self.memory
 
         # 把 Planner 的发现列出来
         findings_text = "## Planner's Findings to Verify\n\n"

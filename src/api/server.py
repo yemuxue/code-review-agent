@@ -15,14 +15,16 @@ FastAPI REST Server — 生产级 API
 """
 
 from __future__ import annotations
-import sys, os, json, uuid, datetime
+import sys
+import os
+import asyncio
 from pathlib import Path
 from typing import Optional
 from contextlib import asynccontextmanager
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from fastapi import FastAPI, HTTPException, Query, Request, Depends, Body
+from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.responses import HTMLResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -37,13 +39,14 @@ from src.llm_client import AnthropicClient
 from src.harness.agent import AgentHarness, ToolDefinition
 from src.harness.telemetry import AgentLogger
 from src.harness.jwt_auth import (
-    JWTAuth, UserStore, TokenRevocationList, User,
+    User,
     get_auth, get_user_store, get_revocation_list,
 )
 from src.multi_agent.orchestrator import MultiAgentOrchestrator
-from src.tools.git_tools import list_files, read_file, grep_pattern, run_command
+from src.tools.git_tools import list_files, read_file, grep_pattern
 from src.storage.database import Database, Finding
 from src.memory.vector_store import VectorStore, FindingDocument
+from src.security.paths import resolve_under_root
 
 # ─── 数据目录 / 延迟初始化 ─────────────────
 
@@ -176,12 +179,47 @@ def _parse_metric_value(line: str) -> float:
         return 0.0
 
 
-TOOLS = [
-    ToolDefinition("list_files","List files recursively",{"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}, list_files),
-    ToolDefinition("read_file","Read file content",{"type":"object","properties":{"file_path":{"type":"string"},"start_line":{"type":"integer"},"end_line":{"type":"integer"}},"required":["file_path"]}, read_file),
-    ToolDefinition("grep_pattern","Search regex in code",{"type":"object","properties":{"pattern":{"type":"string"},"path":{"type":"string"},"file_glob":{"type":"string"}},"required":["pattern","path"]}, grep_pattern),
-    ToolDefinition("run_command","Run shell command",{"type":"object","properties":{"command":{"type":"string"}},"required":["command"]}, run_command),
-]
+def _allowed_root() -> Path:
+    configured = os.environ.get("CODE_REVIEW_ALLOWED_ROOT")
+    fallback = Path(__file__).parent.parent.parent
+    root = Path(configured) if configured else fallback
+    return root.resolve(strict=True)
+
+
+def build_api_tools(project_root: Path) -> list[ToolDefinition]:
+    """Create read-only tools constrained to one resolved project directory."""
+    root = resolve_under_root(_allowed_root(), project_root)
+
+    def bound_list_files(path: str = "", pattern: str = "*") -> str:
+        target = resolve_under_root(root, path or root)
+        return list_files(str(target), pattern)
+
+    def bound_read_file(file_path: str, start_line: int = 1,
+                        end_line: int | None = None) -> str:
+        target = resolve_under_root(root, file_path)
+        return read_file(str(target), start_line, end_line)
+
+    def bound_grep_pattern(pattern: str, path: str = "", file_glob: str = "*.py",
+                           context_lines: int = 2, max_results: int = 30) -> str:
+        target = resolve_under_root(root, path or root)
+        return grep_pattern(pattern, str(target), file_glob, context_lines, max_results)
+
+    return [
+        ToolDefinition("list_files", "List files recursively under the project root",
+                       {"type": "object", "properties": {"path": {"type": "string"},
+                       "pattern": {"type": "string"}}}, bound_list_files),
+        ToolDefinition("read_file", "Read a file under the project root",
+                       {"type": "object", "properties": {"file_path": {"type": "string"},
+                       "start_line": {"type": "integer"}, "end_line": {"type": "integer"}},
+                       "required": ["file_path"]}, bound_read_file),
+        ToolDefinition("grep_pattern", "Search code under the project root",
+                       {"type": "object", "properties": {"pattern": {"type": "string"},
+                       "path": {"type": "string"}, "file_glob": {"type": "string"}},
+                       "required": ["pattern"]}, bound_grep_pattern),
+    ]
+
+
+TOOLS = build_api_tools(_allowed_root())
 
 # ─── Models ─────────────────────────────────────
 
@@ -414,9 +452,15 @@ async def logout(current_user: User = Depends(get_current_user),
 @app.post("/analyze", response_model=AnalyzeResponse)
 async def analyze(req: AnalyzeRequest, current_user: User = Depends(get_current_user)):
     """运行代码分析"""
+    try:
+        project_path = resolve_under_root(_allowed_root(), req.project_path)
+    except (FileNotFoundError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     logger = AgentLogger("./logs")
     client = AnthropicClient(temperature=0.1)
-    sid = db.create_session(name=req.query[:60], mode=req.mode, project_path=req.project_path)
+    tools = build_api_tools(project_path)
+    sid = db.create_session(name=req.query[:60], mode=req.mode,
+                            project_path=str(project_path), owner_username=current_user.username)
 
     # 构建 query
     target = req.query
@@ -426,8 +470,10 @@ async def analyze(req: AnalyzeRequest, current_user: User = Depends(get_current_
     is_multi = req.mode == "multi"
 
     if is_multi:
-        orch = MultiAgentOrchestrator(client, TOOLS, logger=logger)
-        result = orch.run(task=target, project_path=req.project_path)
+        orch = MultiAgentOrchestrator(client, tools, logger=logger)
+        result = await asyncio.to_thread(
+            orch.run, task=target, project_path=str(project_path)
+        )
         result_text = result["final_report"]
         ms = result.get("stats", {})
         stats = {
@@ -437,9 +483,9 @@ async def analyze(req: AnalyzeRequest, current_user: User = Depends(get_current_
         }
     else:
         SYSTEM_PROMPT = "You are a code analysis agent. Find bugs, security, performance, style issues."
-        agent = AgentHarness(model=client, tools=TOOLS, system_prompt=SYSTEM_PROMPT,
+        agent = AgentHarness(model=client, tools=tools, system_prompt=SYSTEM_PROMPT,
                              max_turns=req.max_turns, logger=logger)
-        result_text = agent.run(target)
+        result_text = await asyncio.to_thread(agent.run, target)
         stats = agent.get_stats()
 
     # 保存消息
@@ -447,7 +493,7 @@ async def analyze(req: AnalyzeRequest, current_user: User = Depends(get_current_
     db.add_message(sid, "assistant", result_text, stats)
 
     # 解析发现并存入向量库
-    _index_findings(sid, result_text)
+    _index_findings(sid, result_text, current_user.username)
 
     return AnalyzeResponse(
         session_id=sid, mode=req.mode, result=result_text,
@@ -458,7 +504,7 @@ async def analyze(req: AnalyzeRequest, current_user: User = Depends(get_current_
 async def list_sessions(limit: int = 20, offset: int = 0,
                          current_user: User = Depends(get_current_user)):
     """会话列表，支持分页"""
-    all_sessions = db.list_sessions(limit + offset)
+    all_sessions = db.list_sessions(limit + offset, owner_username=current_user.username)
     return all_sessions[offset:offset + limit]
 
 
@@ -468,9 +514,11 @@ async def list_findings_paginated(
     limit: int = 20,
     category: Optional[str] = None,
     severity: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
 ):
     """发现列表，支持分页 + 筛选"""
-    all_findings = db.get_findings(category=category, severity=severity, limit=limit + offset)
+    all_findings = db.get_findings(category=category, severity=severity, limit=limit + offset,
+                                   owner_username=current_user.username)
     return {
         "offset": offset,
         "limit": limit,
@@ -480,11 +528,11 @@ async def list_findings_paginated(
 
 @app.get("/sessions/{sid}")
 async def get_session(sid: str, current_user: User = Depends(get_current_user)):
-    session = db.get_session(sid)
+    session = db.get_session(sid, owner_username=current_user.username)
     if not session:
         raise HTTPException(404, "Session not found")
     messages = db.get_messages(sid)
-    findings = db.get_findings(session_id=sid)
+    findings = db.get_findings(session_id=sid, owner_username=current_user.username)
     return {"session": session, "messages": messages, "findings": findings}
 
 @app.get("/findings")
@@ -494,22 +542,30 @@ async def list_findings(
     severity: Optional[str] = None,
     verdict: Optional[str] = None,
     limit: int = 50,
+    current_user: User = Depends(get_current_user),
 ):
-    return db.get_findings(session_id, category, severity, verdict, limit)
+    return db.get_findings(session_id, category, severity, verdict, limit,
+                           owner_username=current_user.username)
 
 @app.post("/findings/search")
-async def search_findings(req: SearchRequest):
+async def search_findings(req: SearchRequest, current_user: User = Depends(get_current_user)):
     """向量语义搜索 + 关键词搜索"""
-    vector_results = vector_store.search(req.query, req.n_results, req.category, req.severity)
-    keyword_results = db.search_findings(req.query, req.n_results)
+    vector_results = [result for result in vector_store.search(
+        req.query, req.n_results, req.category, req.severity
+    ) if db.get_session(result.get("session_id", ""), owner_username=current_user.username)]
+    keyword_results = db.search_findings(req.query, req.n_results,
+                                         owner_username=current_user.username)
     return {"vector": vector_results, "keyword": keyword_results}
 
 @app.get("/findings/keyword")
-async def keyword_search(q: str, limit: int = 20):
-    return db.search_findings(q, limit)
+async def keyword_search(q: str, limit: int = 20,
+                         current_user: User = Depends(get_current_user)):
+    return db.search_findings(q, limit, owner_username=current_user.username)
 
 @app.get("/stats")
 async def system_stats(current_user: User = Depends(get_current_user)):
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Administrator role required")
     return {
         "database": db.get_stats(),
         "vector_store": {"document_count": vector_store.count()},
@@ -517,7 +573,7 @@ async def system_stats(current_user: User = Depends(get_current_user)):
 
 # ─── Helpers ────────────────────────────────────
 
-def _index_findings(sid: str, text: str):
+def _index_findings(sid: str, text: str, owner_username: str):
     """从输出文本中解析 FINDING 行并存入向量库"""
     docs = []
     for line in text.split("\n"):
@@ -564,6 +620,7 @@ def _index_findings(sid: str, text: str):
                         line=doc.line, category=doc.category, severity=doc.severity,
                         description_en=doc.description_en, description_cn=doc.description_cn,
                         suggestion=doc.suggestion, verdict="PENDING", embedding_id=doc.id,
+                        owner_username=owner_username,
                     ))
                 except (ValueError, IndexError):
                     continue

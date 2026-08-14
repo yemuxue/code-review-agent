@@ -5,9 +5,12 @@ LLM 响应缓存 / LLM Response Cache
 面试话术：'用 LRU + TTL 做 LLM 缓存，相同 prompt 直接返回缓存，节省 50%+ Token'
 """
 
-import hashlib, json, time, threading
+import hashlib
+import json
+import time
+import threading
 from collections import OrderedDict
-from typing import Optional
+from typing import Any, Optional
 
 
 class LLMCache:
@@ -21,7 +24,7 @@ class LLMCache:
     """
 
     def __init__(self, max_size: int = 100, ttl_seconds: int = 300):
-        self._cache: OrderedDict[str, tuple[float, any]] = OrderedDict()
+        self._cache: OrderedDict[str, tuple[float, Any]] = OrderedDict()
         self._lock = threading.Lock()
         self.max_size = max_size
         self.ttl = ttl_seconds

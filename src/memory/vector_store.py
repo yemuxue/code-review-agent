@@ -6,7 +6,9 @@
 """
 
 from __future__ import annotations
-import sqlite3, re, uuid 
+import sqlite3
+import re
+import uuid
 from pathlib import Path
 from dataclasses import dataclass, field
 
@@ -61,7 +63,12 @@ class VectorStore:
             return ""
 
     def add_batch(self, docs: list[FindingDocument]) -> list[str]:
-        return [self.add_finding(d) for d in docs if self.add_finding(d)]
+        inserted_ids = []
+        for doc in docs:
+            doc_id = self.add_finding(doc)
+            if doc_id:
+                inserted_ids.append(doc_id)
+        return inserted_ids
 
     def search(self, query: str, n_results: int = 5,
                category: str | None = None, severity: str | None = None) -> list[dict]:
