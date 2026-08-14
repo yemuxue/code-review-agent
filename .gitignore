@@ -10,5 +10,6 @@ sessions/
 *.db
 /dist/
 *.egg-info/
+.worktrees/
 面试*.md
 *.bak
