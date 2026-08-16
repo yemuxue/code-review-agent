@@ -33,7 +33,7 @@ def test_write_file_full_rewrite_ok(tmp_path):
     p = tmp_path / "a.py"
     p.write_text(ORIGINAL, encoding="utf-8")
     new = "# comment\n" + ORIGINAL
-    r = write_file(str(p), new, start_line=1)
+    r = write_file(str(p), new, start_line=1, allowed_root=str(tmp_path))
     assert r.startswith("OK:"), r
     assert p.read_text(encoding="utf-8") == new
     assert p.with_suffix(".py.bak").exists()  # 写前备份已生成
@@ -44,7 +44,7 @@ def test_write_file_refuses_truncated_full_write(tmp_path):
     p = tmp_path / "a.py"
     p.write_text(ORIGINAL, encoding="utf-8")
     truncated = "def foo():\n    return 1\n"  # 约原文件 1/4
-    r = write_file(str(p), truncated, start_line=1)
+    r = write_file(str(p), truncated, start_line=1, allowed_root=str(tmp_path))
     assert "REFUSED" in r, r
     assert p.read_text(encoding="utf-8") == ORIGINAL        # 原文件未被修改
     assert not p.with_suffix(".py.bak").exists()            # 未生成备份
@@ -57,7 +57,7 @@ def test_write_file_partial_edit_allowed(tmp_path):
     p.write_text(ORIGINAL, encoding="utf-8")
     # 替换第 2 行起的全部内容，但保留足够长度
     body = "    return 100\n\n\n" + "def bar():\n    return 2\n\n\n" + "def baz():\n    return 3\n"
-    r = write_file(str(p), body, start_line=2)
+    r = write_file(str(p), body, start_line=2, allowed_root=str(tmp_path))
     assert r.startswith("OK:"), r
     assert "return 100" in p.read_text(encoding="utf-8")
     assert "def bar" in p.read_text(encoding="utf-8")
@@ -67,7 +67,8 @@ def test_write_file_refuses_truncated_partial_edit(tmp_path):
     """部分编辑合并后仍不足原文件一半 → 同样拒绝（截断路径之二）"""
     p = tmp_path / "a.py"
     p.write_text(ORIGINAL, encoding="utf-8")
-    r = write_file(str(p), "    return 100\n", start_line=2)  # 只保留第 1 行 + 1 行新内容
+    r = write_file(str(p), "    return 100\n", start_line=2,
+                   allowed_root=str(tmp_path))  # 只保留第 1 行 + 1 行新内容
     assert "REFUSED" in r, r
     assert p.read_text(encoding="utf-8") == ORIGINAL  # 原文件未被修改
 
@@ -75,9 +76,40 @@ def test_write_file_refuses_truncated_partial_edit(tmp_path):
 def test_write_file_new_file_no_guard(tmp_path):
     """新建文件没有原文件可对比，不触发守卫"""
     p = tmp_path / "new.py"
-    r = write_file(str(p), "x = 1\n", start_line=1)
+    r = write_file(str(p), "x = 1\n", start_line=1, allowed_root=str(tmp_path))
     assert r.startswith("OK:"), r
     assert not p.with_suffix(".py.bak").exists()  # 新文件无备份
+
+
+def test_write_file_refuses_path_outside_allowed_root(tmp_path):
+    """允许根目录外的目标必须被拒绝，且不能创建备份或修改原文件。"""
+    allowed_root = tmp_path / "project"
+    allowed_root.mkdir()
+    outside = tmp_path / "outside.py"
+    outside.write_text("x = 1\n", encoding="utf-8")
+
+    result = write_file(
+        str(outside), "x = 2\n", allowed_root=str(allowed_root)
+    )
+
+    assert "REFUSED" in result
+    assert outside.read_text(encoding="utf-8") == "x = 1\n"
+    assert not outside.with_suffix(".py.bak").exists()
+    assert not outside.with_suffix(".py.tmp").exists()
+
+
+def test_write_file_allows_path_inside_allowed_root(tmp_path):
+    """显式允许根目录内的新文件仍可正常写入。"""
+    allowed_root = tmp_path / "project"
+    allowed_root.mkdir()
+    target = allowed_root / "inside.py"
+
+    result = write_file(
+        str(target), "x = 1\n", allowed_root=str(allowed_root)
+    )
+
+    assert result.startswith("OK:"), result
+    assert target.read_text(encoding="utf-8") == "x = 1\n"
 
 
 # ═══════ 2. restore_from_backup ═══════
@@ -85,7 +117,8 @@ def test_write_file_new_file_no_guard(tmp_path):
 def test_restore_from_backup(tmp_path):
     p = tmp_path / "a.py"
     p.write_text(ORIGINAL, encoding="utf-8")
-    write_file(str(p), "# modified\n" + ORIGINAL)  # 触发首次备份
+    write_file(str(p), "# modified\n" + ORIGINAL,
+               allowed_root=str(tmp_path))  # 触发首次备份
     p.write_text("broken partial content", encoding="utf-8")  # 模拟修复损坏
     r = restore_from_backup(str(p))
     assert r.startswith("OK:"), r
@@ -105,7 +138,8 @@ def _make_with_backup(tmp_path, content: str) -> Path:
     """写入文件 + 通过 write_file 生成 .bak 备份"""
     p = tmp_path / "a.py"
     p.write_text(ORIGINAL, encoding="utf-8")
-    write_file(str(p), "# hdr\n" + ORIGINAL)  # 生成备份（内容完整）
+    write_file(str(p), "# hdr\n" + ORIGINAL,
+               allowed_root=str(tmp_path))  # 生成备份（内容完整）
     p.write_text(content, encoding="utf-8")   # 模拟修复后的状态
     return p
 

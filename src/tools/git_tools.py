@@ -162,7 +162,8 @@ def grep_pattern(pattern: str, path: str = ".", file_glob: str = "*.py",
     if not results: return f"No matches for: {pattern}"
     return "\n".join(results)
 
-def write_file(file_path: str = "", content: str = "", start_line: int = 1) -> str:
+def write_file(file_path: str = "", content: str = "", start_line: int = 1,
+               *, allowed_root: str = "") -> str:
     """写入/修改文件。修复 Agent 专用：替换指定行范围的内容。
 
     ⚠️ 写前自动备份：修改前先复制一份 <file>.bak，防止修复破坏代码后无法回滚。
@@ -175,11 +176,23 @@ def write_file(file_path: str = "", content: str = "", start_line: int = 1) -> s
         file_path: 目标文件的绝对路径
         content: 新内容（替换 start_line 起的部分）
         start_line: 从哪一行开始替换（默认 1 = 覆盖整个文件）
+        allowed_root: 已批准的项目根目录；缺失时拒绝写入
     """
     if not file_path:
         return ("ERROR: You MUST provide file_path. "
                 "Use write_file(file_path='/absolute/path/to/file.py', content='...').")
-    path = Path(file_path)
+    if not allowed_root:
+        return "ERROR: REFUSED — allowed_root is required for write_file."
+    try:
+        root = Path(allowed_root).resolve(strict=True)
+        raw_path = Path(file_path)
+        if not root.is_dir() or not raw_path.is_absolute():
+            return "ERROR: REFUSED — allowed_root and file_path must be absolute directories/paths."
+        # 在创建备份或临时文件前解析路径，避免符号链接把受限写入带到项目外。
+        path = raw_path.resolve(strict=False)
+        path.relative_to(root)
+    except (OSError, RuntimeError, ValueError):
+        return "ERROR: REFUSED — target path is outside the allowed project root."
     if path.suffix in {".exe", ".dll", ".so", ".bin", ".zip", ".gz", ".png", ".jpg"}:
         return f"Cannot write binary: {file_path}"
     try:
