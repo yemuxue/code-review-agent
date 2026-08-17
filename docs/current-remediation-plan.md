@@ -11,9 +11,18 @@
 - 修复必须有对应测试。涉及写入、权限、用户隔离或命令执行的变更，必须覆盖失败路径。
 - 未经明确批准，不提交或覆盖用户已有的未提交文件。
 
+## 本轮已完成（2026-08-17）
+
+- **修复落盘证据**：LangGraph 只认可当前 `run()` 产生的写入 receipt（目标路径、写前/写后 SHA-256、备份路径、时间）。历史 `.bak` 不再能把未写入的结果误判为成功。
+- **状态与行为验证**：修复先标为 `APPLIED`，只有项目根目录内、受限 `pytest` 命令通过后才标为 `VERIFIED`。没有目标测试、命令被拒绝或测试失败时均不会升级状态。
+- **入口统一**：CLI、API、Streamlit 的多代理调用都经由 `create_langgraph_orchestrator` 创建同一个 LangGraph 编排器。CLI 新增默认关闭的 `--auto-fix`；API 维持只读工具集与默认仅审查。
+- **回归测试**：新增 receipt 假阳性、行为验证、命令白名单、入口统一与报告完整性的测试，不触发真实模型网络请求。
+
 ## P0：立即整改
 
 ### 1. 三个入口使用不同的执行编排
+
+**状态：已完成（2026-08-17）**。三个正式入口已统一到 LangGraph 工厂；旧 `MultiAgentOrchestrator` 仅保留为未迁移外部调用的兼容实现。
 
 **现状**：Streamlit 使用包含 `plan -> execute_one -> review -> fix_one -> verify_fix` 的 `LangGraphOrchestrator`；CLI 和 API 仍使用只含 Planner、Executor、Reviewer 的旧 `MultiAgentOrchestrator`。
 
@@ -55,6 +64,8 @@
 
 ### 5. 修复落盘验证可能产生假阳性
 
+**状态：已完成（2026-08-17）**。验证节点只检查本次运行的 receipt 与当前文件哈希，不再以 `.bak` 是否存在判断写入成功。
+
 **现状**：验证节点以 `.bak` 文件存在作为 `write_file` 本次成功的证据。旧备份也会满足条件。
 
 **风险**：流程会将未实际写入的 finding 标为 `FIXED`。
@@ -64,6 +75,8 @@
 **涉及文件**：`src/tools/git_tools.py`、`src/multi_agent/langgraph_orchestrator.py`。
 
 ### 6. 修复验证不足以证明业务正确性
+
+**状态：已完成（2026-08-17）**。状态已区分 `APPLIED` 与 `VERIFIED`；只有受控的目标 `pytest` 测试通过才会标记为 `VERIFIED`。
 
 **现状**：`verify_fix` 主要检查语法和文件完整性。
 
@@ -140,6 +153,8 @@
 `tests/bug_injection_sample.py` 已在真实 Fixer 流程中被修改，但尚未提交。应明确它是“漏洞注入基线”还是“修复后样本”；建议保留基线并创建独立的期望输出 fixture，避免测试输入被流程副作用改变。
 
 ### 17. 建立覆盖完整工作流的测试矩阵
+
+**状态：部分完成（2026-08-17）**。已覆盖 receipt、行为验证、命令白名单及三入口编排一致性；所有者隔离、持久化和完整端到端模型调用仍待后续整改。
 
 增加审查、审批、拒绝写入、路径越界、修复、行为验证、持久化、用户隔离、CLI/API/前端入口一致性的测试，并在 CI 显示对应结果。
 

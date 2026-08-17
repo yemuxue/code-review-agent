@@ -12,8 +12,8 @@ if sys.platform == "win32" and hasattr(sys.stdout, "buffer"):
 
 from src.llm_client import AnthropicClient
 from src.harness.agent import ToolDefinition
-from src.multi_agent.orchestrator import MultiAgentOrchestrator
-from src.tools.git_tools import (list_files, read_file, grep_pattern, run_command)
+from src.multi_agent.factory import create_langgraph_orchestrator, langgraph_final_report
+from src.tools.git_tools import (list_files, read_file, grep_pattern, run_command, write_file)
 from src.config import get_api_key, get_base_url, get_model
 
 # Multi-Agent 需要的所有工具
@@ -30,6 +30,9 @@ ALL_TOOLS = [
     ToolDefinition(name="run_command", description="Run a shell command (pytest, mypy, etc). Timeout: 60s.",
         parameters={"type":"object","properties":{"command":{"type":"string","description":"Shell command to run"}},"required":["command"]},
         fn=run_command),
+    ToolDefinition(name="write_file", description="Write a complete repaired file inside the current project root.",
+        parameters={"type":"object","properties":{"file_path":{"type":"string"},"content":{"type":"string"},"start_line":{"type":"integer"}},"required":["file_path","content"]},
+        fn=write_file),
 ]
 
 def main():
@@ -40,6 +43,8 @@ def main():
     parser.add_argument("--model", default=None, help="Model name")
     parser.add_argument("--api-key", default=None, help="API key")
     parser.add_argument("--base-url", default=None, help="API base URL")
+    parser.add_argument("--auto-fix", action="store_true",
+                        help="Allow confirmed findings to be repaired (off by default)")
     args = parser.parse_args()
 
     project_path = os.path.abspath(args.path)
@@ -67,13 +72,15 @@ def main():
         temperature=0.1,
     )
 
-    orchestrator = MultiAgentOrchestrator(client, ALL_TOOLS)
+    orchestrator = create_langgraph_orchestrator(client, ALL_TOOLS, auto_fix=args.auto_fix)
     result = orchestrator.run(task=task, project_path=project_path)
+    final_report = langgraph_final_report(result)
+    node_stats = result.get("node_stats", {})
 
     print("\n" + "=" * 50)
     print("  FINAL REPORT")
     print("=" * 50 + "\n")
-    print(result["final_report"])
+    print(final_report)
 
     # 自动保存报告和日志路径
     os.makedirs("reports", exist_ok=True)
@@ -83,19 +90,19 @@ def main():
         f.write("# Multi-Agent Analysis Report\n\n")
         f.write(f"**Project**: `{project_path}`\n")
         f.write(f"**Time**: {ts}\n\n")
-        f.write(result["final_report"])
+        f.write(final_report)
         f.write("\n\n---\n## Stats\n")
-        for agent_name, stats in result.get("stats", {}).items():
-            f.write(f"- **{agent_name}**: {stats['turns_taken']} turns, {stats['tools_called']} tools\n")
+        for node_name, stats in node_stats.items():
+            f.write(f"- **{node_name}**: {stats.get('turns', 0)} turns, {stats.get('tools', 0)} tools\n")
     print(f"\n[Report saved: {report_path}]")
 
     print("\n" + "=" * 50)
     print("  STATS")
     print("=" * 50)
-    for agent_name, stats in result.get("stats", {}).items():
-        print(f"  {agent_name}: {stats['turns_taken']} turns, "
-              f"{stats['tools_called']} tools, "
-              f"{stats['messages_count']} messages")
+    for node_name, stats in node_stats.items():
+        print(f"  {node_name}: {stats.get('turns', 0)} turns, "
+              f"{stats.get('tools', 0)} tools, "
+              f"{stats.get('messages', 0)} messages")
 
 if __name__ == "__main__":
     main()

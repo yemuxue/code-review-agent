@@ -29,7 +29,7 @@ from src.harness.auth import HumanInTheLoop
 from src.harness.sandbox import Sandbox
 from src.harness.memory import ContextMemory
 from src.harness.jwt_auth import get_user_store, get_auth
-from src.multi_agent.langgraph_orchestrator import LangGraphOrchestrator as Orchestrator
+from src.multi_agent.factory import create_langgraph_orchestrator
 from src.tools.git_tools import list_files, read_file, grep_pattern, run_command, write_file
 from src.storage.database import Database, Finding
 from src.memory.vector_store import VectorStore, FindingDocument
@@ -493,9 +493,11 @@ if prompt:
             if is_multi:
                 status.write("**LangGraph: plan → execute(并行) → review → fix**")
                 try:
-                    orch = Orchestrator(client, TOOLS, sandbox=Sandbox(), hitl=hitl_guard,
-                                        memory=ContextMemory(strategy="hybrid", window_size=10),
-                                        auto_fix=auto_fix_enabled)
+                    orch = create_langgraph_orchestrator(
+                        client, TOOLS, sandbox=Sandbox(), hitl=hitl_guard,
+                        memory=ContextMemory(strategy="hybrid", window_size=10),
+                        auto_fix=auto_fix_enabled,
+                    )
                     lang_result = orch.run(task=target, project_path=st.session_state.current_project)
                     n_findings = len(lang_result.get("findings", []))
                     n_verdicts = len(lang_result.get("verdicts", []))
