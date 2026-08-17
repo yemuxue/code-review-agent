@@ -11,6 +11,7 @@ from __future__ import annotations
 import sys
 import json
 import time
+from dataclasses import replace
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from pathlib import Path as _Path
@@ -54,6 +55,7 @@ class LangGraphOrchestrator:
         self.sandbox = sandbox
         self.hitl = hitl
         self.memory = memory
+        self._project_root: _Path | None = None
         from src.harness.agent import AgentHarness
         from src.multi_agent.agents import PLANNER_SYSTEM_PROMPT, EXECUTOR_SYSTEM_PROMPT, REVIEWER_SYSTEM_PROMPT, FIXER_SYSTEM_PROMPT
         self.AgentHarness = AgentHarness
@@ -64,9 +66,28 @@ class LangGraphOrchestrator:
         self.graph = self._build_graph()
 
     # ═══ 共享工厂 ═══
+    def _tools_for_names(self, tool_names: list[str]) -> list:
+        """按名称取工具，并只为 Fixer 绑定本次任务的写入根目录。"""
+        selected = [tool for tool in self.tools if tool.name in tool_names]
+        return [self._scoped_write_tool(tool) if tool.name == "write_file" else tool
+                for tool in selected]
+
+    def _scoped_write_tool(self, tool):
+        """把项目根目录闭包绑定到写入工具，避免模型伪造 allowed_root。"""
+        project_root = self._project_root
+
+        def scoped_write_file(file_path: str = "", content: str = "",
+                              start_line: int = 1) -> str:
+            if project_root is None:
+                return "ERROR: REFUSED — write_file has no active project root."
+            return tool.fn(file_path=file_path, content=content, start_line=start_line,
+                           allowed_root=str(project_root))
+
+        return replace(tool, fn=scoped_write_file)
+
     def _make_agent(self, tool_names: list[str], system_prompt: str, max_turns: int):
         """统一创建 Agent，注入 sandbox/hitl/memory"""
-        tools = [t for t in self.tools if t.name in tool_names]
+        tools = self._tools_for_names(tool_names)
         agent = self.AgentHarness(model=self.client, tools=tools, system_prompt=system_prompt, max_turns=max_turns)
         if self.sandbox: agent.sandbox = self.sandbox
         if self.hitl:     agent.hitl = self.hitl
@@ -112,7 +133,13 @@ class LangGraphOrchestrator:
 
     # ═══ 对外入口 ═══
     def run(self, task: str, project_path: str) -> dict:
-        self._project_path = project_path  # 供 Send fan-out 使用
+        try:
+            self._project_root = _Path(project_path).resolve(strict=True)
+        except (OSError, RuntimeError):
+            raise ValueError("project_path must be an existing directory") from None
+        if not self._project_root.is_dir():
+            raise ValueError("project_path must be an existing directory")
+        self._project_path = str(self._project_root)  # 供 Send fan-out 使用
         state = {
             "messages": [HumanMessage(content=f"Task: {task}\nProject: {project_path}")],
             "findings": [], "verdicts": [], "fixes": [], "node_stats": {},
