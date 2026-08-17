@@ -30,6 +30,7 @@ from src.harness.sandbox import Sandbox
 from src.harness.memory import ContextMemory
 from src.harness.jwt_auth import get_user_store, get_auth
 from src.multi_agent.factory import create_langgraph_orchestrator
+from src.app.frontend_errors import format_frontend_error
 from src.tools.git_tools import list_files, read_file, grep_pattern, run_command, write_file
 from src.storage.database import Database, Finding
 from src.memory.vector_store import VectorStore, FindingDocument
@@ -603,7 +604,9 @@ if prompt:
                     stats = {"turns_taken": f"{n_findings} findings", "tools_called": n_verdicts, "messages_count": len(messages)}
                 except Exception as ex:
                     import traceback
-                    result_text = f"❌ Error:\n```\n{traceback.format_exc()}\n```"
+                    raw_traceback = traceback.format_exc()
+                    logger.error(0, type(ex).__name__, raw_traceback)
+                    result_text = format_frontend_error(ex)
                     stats = {"turns_taken": "ERR", "tools_called": 0, "messages_count": 0}
                     status.update(label="❌ Failed", state="error")
             else:
