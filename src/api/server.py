@@ -44,7 +44,7 @@ from src.harness.jwt_auth import (
     User,
     get_auth, get_user_store, get_revocation_list,
 )
-from src.multi_agent.orchestrator import MultiAgentOrchestrator
+from src.multi_agent.factory import create_langgraph_orchestrator, langgraph_final_report
 from src.tools.git_tools import list_files, read_file, grep_pattern
 from src.storage.database import Database, Finding
 from src.memory.vector_store import VectorStore, FindingDocument
@@ -472,16 +472,16 @@ async def analyze(req: AnalyzeRequest, current_user: User = Depends(get_current_
     is_multi = req.mode == "multi"
 
     if is_multi:
-        orch = MultiAgentOrchestrator(client, tools, logger=logger)
-        result = await asyncio.to_thread(
+        orch = create_langgraph_orchestrator(client, tools)
+        langgraph_result = await asyncio.to_thread(
             orch.run, task=target, project_path=str(project_path)
         )
-        result_text = result["final_report"]
-        ms = result.get("stats", {})
+        result_text = langgraph_final_report(langgraph_result)
+        ms = langgraph_result.get("node_stats", {})
         stats = {
-            "planner": ms.get("planner", {}),
-            "executor": ms.get("executor", {}),
-            "reviewer": ms.get("reviewer", {}),
+            "plan": ms.get("plan", {}),
+            "review": ms.get("review", {}),
+            "node_stats": ms,
         }
     else:
         SYSTEM_PROMPT = "You are a code analysis agent. Find bugs, security, performance, style issues."

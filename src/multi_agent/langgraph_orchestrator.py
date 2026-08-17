@@ -11,6 +11,9 @@ from __future__ import annotations
 import sys
 import json
 import time
+import hashlib
+import shlex
+import subprocess
 from dataclasses import replace
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -58,6 +61,8 @@ class LangGraphOrchestrator:
         self.memory = memory
         self.auto_fix = auto_fix
         self._project_root: _Path | None = None
+        # receipt 只存活于单次 run：历史 .bak 不能作为本轮写入成功的证据。
+        self._write_receipts: dict[str, dict[str, str | float]] = {}
         from src.harness.agent import AgentHarness
         from src.multi_agent.agents import PLANNER_SYSTEM_PROMPT, EXECUTOR_SYSTEM_PROMPT, REVIEWER_SYSTEM_PROMPT, FIXER_SYSTEM_PROMPT
         self.AgentHarness = AgentHarness
@@ -82,10 +87,84 @@ class LangGraphOrchestrator:
                               start_line: int = 1) -> str:
             if project_root is None:
                 return "ERROR: REFUSED — write_file has no active project root."
-            return tool.fn(file_path=file_path, content=content, start_line=start_line,
-                           allowed_root=str(project_root))
+            target = _Path(file_path).resolve(strict=False)
+            try:
+                before = target.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                before = ""
+            result = tool.fn(file_path=file_path, content=content, start_line=start_line,
+                             allowed_root=str(project_root))
+            if result.startswith("OK:"):
+                try:
+                    after = target.read_text(encoding="utf-8", errors="replace")
+                except OSError:
+                    return result
+                self._write_receipts[str(target)] = {
+                    "before_sha256": self._text_sha256(before),
+                    "after_sha256": self._text_sha256(after),
+                    "backup_path": str(target.with_suffix(target.suffix + ".bak")),
+                    "written_at": time.time(),
+                }
+            return result
 
         return replace(tool, fn=scoped_write_file)
+
+    @staticmethod
+    def _text_sha256(content: str) -> str:
+        return hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+    def _has_current_write_receipt(self, file_path: str) -> bool:
+        """确认目标仍是本轮成功写入后的版本，避免后续覆盖导致误判。"""
+        path = _Path(file_path).resolve(strict=False)
+        receipt = self._write_receipts.get(str(path))
+        if not receipt:
+            return False
+        try:
+            content = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return False
+        return self._text_sha256(content) == receipt["after_sha256"]
+
+    def _run_behavior_verification(self, command: str) -> tuple[bool, str]:
+        """只运行项目内的受限 pytest，用于证明修复后的目标行为。"""
+        if self._project_root is None:
+            return False, "没有活动项目根目录，未执行行为验证"
+        try:
+            args = shlex.split(command, posix=False)
+        except ValueError as exc:
+            return False, f"验证命令无法解析：{exc}"
+        # 仅允许 PATH 中的 pytest，不能让模型用同名绝对路径替换可执行文件。
+        if not args or args[0].lower() != "pytest":
+            return False, "验证命令仅允许 pytest"
+
+        allowed_options = {"-q", "-v", "--disable-warnings", "--tb=short"}
+        for arg in args[1:]:
+            if arg in allowed_options:
+                continue
+            if arg.startswith("-"):
+                return False, f"不允许的 pytest 参数：{arg}"
+            test_path = _Path(arg.split("::", 1)[0])
+            candidate = (self._project_root / test_path).resolve(strict=False)
+            try:
+                candidate.relative_to(self._project_root)
+            except ValueError:
+                return False, f"测试路径超出项目根目录：{arg}"
+            if not candidate.is_file():
+                return False, f"测试文件不存在：{arg}"
+
+        try:
+            completed = subprocess.run(
+                args, cwd=self._project_root, capture_output=True, text=True,
+                timeout=60, check=False,
+            )
+        except subprocess.TimeoutExpired:
+            return False, "行为验证超时（60 秒）"
+        except OSError as exc:
+            return False, f"行为验证无法启动：{type(exc).__name__}: {exc}"
+        if completed.returncode == 0:
+            return True, "pytest 通过"
+        detail = (completed.stderr or completed.stdout).strip().splitlines()
+        return False, f"pytest 失败（exit {completed.returncode}）：{detail[-1] if detail else '无输出'}"
 
     def _make_agent(self, tool_names: list[str], system_prompt: str, max_turns: int):
         """统一创建 Agent，注入 sandbox/hitl/memory"""
@@ -142,6 +221,7 @@ class LangGraphOrchestrator:
         if not self._project_root.is_dir():
             raise ValueError("project_path must be an existing directory")
         self._project_path = str(self._project_root)  # 供 Send fan-out 使用
+        self._write_receipts = {}
         state = {
             "messages": [HumanMessage(content=f"Task: {task}\nProject: {project_path}")],
             "findings": [], "verdicts": [], "fixes": [], "node_stats": {},
@@ -260,6 +340,11 @@ class LangGraphOrchestrator:
             "IMPORTANT: This is the ONLY agent editing this file. One read + one write is enough for all fixes."
         )
         fixes = self._parse_fixes(result)
+        verify_commands = self._parse_behavior_verifications(result)
+        for fix in fixes:
+            command = verify_commands.get(fix["finding_id"])
+            if command:
+                fix["verify_command"] = command
         return {
             "messages": [AIMessage(content=result)],
             "fixes": fixes,
@@ -285,14 +370,12 @@ class LangGraphOrchestrator:
         # 覆盖所有修复目标文件（FIXED 和 FAILED 的 file_path 都检查）
         check_files = sorted({f.get("file_path", "") for f in fixes if f.get("file_path")})
 
-        # 假成功校正：write_file 首次成功必然生成 .bak。
-        # 声称 FIXED 但文件从未被写入过（无 .bak）→ 修复未落盘，降级 NOT_APPLIED。
-        written_files = {fp for fp in check_files
-                         if _Path(fp).with_suffix(_Path(fp).suffix + ".bak").exists()}
-
         lines = []
         rollback_entries = []  # 追加到 fixes（operator.add 拼接，不改原条目）
         not_applied_entries = []
+        applied_entries = []
+        verified_entries = []
+        invalid_files = set()
         for fp in check_files:
             issues = verify_file_integrity(fp)
             if not issues:
@@ -301,6 +384,7 @@ class LangGraphOrchestrator:
                 lines.append(f"- [FAIL] {_Path(fp).name}: "
                              + "; ".join(issues) + " → restoring from backup")
                 restore_from_backup(fp)
+                invalid_files.add(str(_Path(fp).resolve(strict=False)))
                 rollback_entries.append({
                     "finding_id": 0,
                     "file_path": fp,
@@ -310,15 +394,41 @@ class LangGraphOrchestrator:
                 })
 
         for f in fixes:
-            if f.get("status") == "FIXED" and f.get("file_path") not in written_files:
+            if f.get("status") != "FIXED":
+                continue
+            fp = f.get("file_path", "")
+            normalized = str(_Path(fp).resolve(strict=False))
+            if not self._has_current_write_receipt(fp):
                 not_applied_entries.append({
                     "finding_id": f.get("finding_id", 0),
-                    "file_path": f.get("file_path", ""),
-                    "summary": "Claimed FIXED but write_file never persisted "
-                               "(no backup created) — fix not applied",
-                    "summary_cn": "声称 FIXED 但 write_file 从未成功落盘（无备份）— 修复未应用",
+                    "file_path": fp,
+                    "summary": "Claimed FIXED but this run has no matching write receipt "
+                               "— fix not applied",
+                    "summary_cn": "声称 FIXED 但本轮没有匹配的写入凭据 — 修复未应用",
                     "status": "NOT_APPLIED",
                 })
+            elif normalized not in invalid_files:
+                applied = {
+                    "finding_id": f.get("finding_id", 0),
+                    "file_path": fp,
+                    "summary": "Write receipt and integrity checks passed — fix applied",
+                    "summary_cn": "写入凭据与完整性检查均通过 — 修复已应用",
+                    "status": "APPLIED",
+                }
+                applied_entries.append(applied)
+                command = f.get("verify_command")
+                if command:
+                    passed, detail = self._run_behavior_verification(command)
+                    if passed:
+                        verified_entries.append({
+                            "finding_id": f.get("finding_id", 0),
+                            "file_path": fp,
+                            "summary": f"Behavior verification passed: {command}",
+                            "summary_cn": f"行为验证通过：{command}",
+                            "status": "VERIFIED",
+                        })
+                    else:
+                        lines.append(f"- [APPLIED] {_Path(fp).name}: {detail}")
 
         result = "## Fix Verification Report\n\n"
         if not fixes:
@@ -328,8 +438,12 @@ class LangGraphOrchestrator:
             n_failed = sum(1 for f in fixes if f.get("status") == "FAILED")
             n_rolled = len(rollback_entries)
             n_na = len(not_applied_entries)
+            n_applied = len(applied_entries)
+            n_verified = len(verified_entries)
             result += (f"Fixed: {n_fixed} | Failed: {n_failed}"
                        + (f" | Not applied: {n_na}" if n_na else "")
+                       + (f" | Applied: {n_applied}" if n_applied else "")
+                       + (f" | Verified: {n_verified}" if n_verified else "")
                        + (f" | Rolled back: {n_rolled}" if n_rolled else "") + "\n\n")
             if lines:
                 result += "### Integrity & Syntax Check\n" + "\n".join(f"- {l}" for l in lines) + "\n\n"
@@ -343,7 +457,7 @@ class LangGraphOrchestrator:
 
         return {
             "messages": [AIMessage(content=result)],
-            "fixes": rollback_entries + not_applied_entries,  # 经 operator.add 追加到 state.fixes
+            "fixes": rollback_entries + not_applied_entries + applied_entries + verified_entries,
             "phase": "verify_fix",
             "node_stats": {"verify_fix": {
                 "turns": 0, "tools": 0, "messages": 0, "tokens": 0,
@@ -419,6 +533,19 @@ class LangGraphOrchestrator:
                         "status": status,
                     })
         return fixes
+
+    def _parse_behavior_verifications(self, text: str) -> dict[int, str]:
+        """解析 Fixer 为单个 finding 指定的行为测试命令。"""
+        commands: dict[int, str] = {}
+        for raw_line in text.split("\n"):
+            line = raw_line.strip().removeprefix("- ").strip()
+            if not line.startswith("VERIFY|"):
+                continue
+            parts = line.split("|", 2)
+            if len(parts) != 3 or not parts[1].strip().isdigit():
+                continue
+            commands.setdefault(int(parts[1].strip()), parts[2].strip())
+        return commands
 
     def _merge_findings_verdicts(self, findings: list, verdicts: list) -> str:
         vmap = {v["finding_id"]: v for v in verdicts}
