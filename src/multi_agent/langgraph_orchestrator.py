@@ -49,12 +49,14 @@ class AgentState(TypedDict):
 
 class LangGraphOrchestrator:
 
-    def __init__(self, llm_client, tools: list, sandbox=None, hitl=None, memory=None):
+    def __init__(self, llm_client, tools: list, sandbox=None, hitl=None, memory=None,
+                 auto_fix: bool = False):
         self.client = llm_client
         self.tools = tools
         self.sandbox = sandbox
         self.hitl = hitl
         self.memory = memory
+        self.auto_fix = auto_fix
         self._project_root: _Path | None = None
         from src.harness.agent import AgentHarness
         from src.multi_agent.agents import PLANNER_SYSTEM_PROMPT, EXECUTOR_SYSTEM_PROMPT, REVIEWER_SYSTEM_PROMPT, FIXER_SYSTEM_PROMPT
@@ -173,6 +175,10 @@ class LangGraphOrchestrator:
         并发安全设计：同一文件的多个 finding 合并到一个 fix 任务，
         由单个 Agent 串行处理——避免多个 Agent 并行写同一文件互相覆盖。
         """
+        # 必须在处理 finding 前终止，确保默认仅审查流程没有任何写入副作用。
+        if not self.auto_fix:
+            return [END]
+
         findings = state.get("findings", [])
         verdicts = state.get("verdicts", [])
         vmap = {v.get("finding_id"): v for v in verdicts}

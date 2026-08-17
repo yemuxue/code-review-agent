@@ -231,8 +231,14 @@ with st.sidebar:
     st.markdown('<div class="sidebar-section"><h4>Mode / 分析模式</h4></div>', unsafe_allow_html=True)
     mode = st.selectbox("mode", list(SYSTEM_PROMPTS.keys()), label_visibility="collapsed")
     is_multi = "Multi-Agent" in mode
+    auto_fix_enabled = False
     if is_multi:
         st.caption("🧠 plan → execute(并行) → review → fix → verify")
+        auto_fix_enabled = st.checkbox(
+            "Allow automatic fixes / 允许自动修复",
+            value=False,
+            help="默认仅审查；开启后才允许 Fixer 修改当前项目内的文件。",
+        )
     else:
         st.caption("🔍 快速代码分析")
 
@@ -488,7 +494,8 @@ if prompt:
                 status.write("**LangGraph: plan → execute(并行) → review → fix**")
                 try:
                     orch = Orchestrator(client, TOOLS, sandbox=Sandbox(), hitl=hitl_guard,
-                                        memory=ContextMemory(strategy="hybrid", window_size=10))
+                                        memory=ContextMemory(strategy="hybrid", window_size=10),
+                                        auto_fix=auto_fix_enabled)
                     lang_result = orch.run(task=target, project_path=st.session_state.current_project)
                     n_findings = len(lang_result.get("findings", []))
                     n_verdicts = len(lang_result.get("verdicts", []))
