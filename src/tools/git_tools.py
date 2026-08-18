@@ -176,13 +176,15 @@ def write_file(file_path: str = "", content: str = "", start_line: int = 1,
         file_path: 目标文件的绝对路径
         content: 新内容（替换 start_line 起的部分）
         start_line: 从哪一行开始替换（默认 1 = 覆盖整个文件）
-        allowed_root: 已批准的项目根目录；缺失时拒绝写入
+        allowed_root: 已批准的项目根目录；缺失时默认绑定当前项目根
+                      （前端/CLI 直接注册 write_file 不带此参数也能用，
+                      但写入范围仍被限制在项目目录内，防越界写 .ssh 等）
     """
     if not file_path:
         return ("ERROR: You MUST provide file_path. "
                 "Use write_file(file_path='/absolute/path/to/file.py', content='...').")
     if not allowed_root:
-        return "ERROR: REFUSED — allowed_root is required for write_file."
+        allowed_root = str(Path(__file__).resolve().parent.parent.parent)
     try:
         root = Path(allowed_root).resolve(strict=True)
         raw_path = Path(file_path)
