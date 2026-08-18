@@ -7,11 +7,15 @@
 运行:
     python scripts/run_full_pipeline_test.py
 """
-import sys, json
+import sys, json, io
 from pathlib import Path
 
 PROJ = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJ))
+# Windows 控制台默认 GBK，无法输出 emoji/中文，强制 UTF-8（与 cli.py 相同处理）
+if sys.platform == "win32" and hasattr(sys.stdout, "buffer"):
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
 from src.llm_client import AnthropicClient
 from src.multi_agent.langgraph_orchestrator import LangGraphOrchestrator
@@ -21,7 +25,11 @@ from src.harness.auth import HumanInTheLoop
 from src.harness.sandbox import Sandbox
 from src.harness.memory import ContextMemory
 
-TARGET = sys.argv[1] if len(sys.argv) > 1 else "X:/VScode/code-review-agent/tests/bug_injection_sample.py"
+# 取第一个非 "--" 参数作为 TARGET（--safe 等旗标不应被当作目标路径）
+TARGET = next(
+    (a for a in sys.argv[1:] if not a.startswith("--")),
+    str(PROJ / "tests" / "bug_injection_sample.py"),
+)
 
 # --safe: 复制目标到临时目录再分析，防止 fix 修改原文件
 if "--safe" in sys.argv:
@@ -48,6 +56,7 @@ def main():
         sandbox=Sandbox(),
         hitl=HumanInTheLoop(auto_approve_safe=True),
         memory=ContextMemory(strategy="hybrid", window_size=10),
+        auto_fix=True,  # 全流程测试脚本：验证修复能力（--safe 模式已防止污染原文件）
     )
 
     print("=" * 70)
