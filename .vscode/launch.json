@@ -1,0 +1,49 @@
+{
+    // IDE 启动配置：模型 API 通过本机代理访问。
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "启动 Streamlit 前端（代理）",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "streamlit",
+            "args": [
+                "run",
+                "${workspaceFolder}/src/app/streamlit_app.py",
+                "--server.address",
+                "127.0.0.1",
+                "--server.port",
+                "8501"
+            ],
+            "python": "C:\\tools\\anaconda3\\envs\\pytorch\\python.exe",
+            "env": {
+                "HTTP_PROXY": "http://127.0.0.1:7897",
+                "HTTPS_PROXY": "http://127.0.0.1:7897",
+                "ALL_PROXY": "http://127.0.0.1:7897"
+            },
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "启动 FastAPI（代理）",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "uvicorn",
+            "args": [
+                "src.api.server:app",
+                "--host",
+                "127.0.0.1",
+                "--port",
+                "8000"
+            ],
+            "python": "C:\\tools\\anaconda3\\envs\\pytorch\\python.exe",
+            "env": {
+                "HTTP_PROXY": "http://127.0.0.1:7897",
+                "HTTPS_PROXY": "http://127.0.0.1:7897",
+                "ALL_PROXY": "http://127.0.0.1:7897"
+            },
+            "console": "integratedTerminal",
+            "justMyCode": true
+        }
+    ]
+}

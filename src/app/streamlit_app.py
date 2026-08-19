@@ -86,8 +86,9 @@ st.markdown("""<style>
 # ═══════════════════════════════════════
 
 # Session defaults
+DEFAULT_PROJECT_ROOT = str(Path(__file__).resolve().parents[2] / "src")
 for k, v in {
-    "messages": [], "selected_files": [], "current_project": "X:/VScode/code-review-agent/src",
+    "messages": [], "selected_files": [], "current_project": DEFAULT_PROJECT_ROOT,
     "session_id": None, "sessions": {},  # session_id -> {name, messages, mode}
     "authenticated": False, "current_user": None, "jwt_token": None, "login_error": "",
     "hitl_pending": None, "hitl_decision": None, "hitl_count": 0,
@@ -259,6 +260,7 @@ with st.sidebar:
                 pass
         st.session_state.messages = []
         st.session_state.selected_files = []
+        st.session_state.current_project = DEFAULT_PROJECT_ROOT
         st.session_state.session_id = db.create_session(name="New Chat", mode=mode)
         st.rerun()
 
@@ -420,9 +422,11 @@ if uploaded:
     import tempfile
     upload_dir = Path(tempfile.gettempdir()) / "code_review_uploads"
     upload_dir.mkdir(parents=True, exist_ok=True)
+    # 上传副本作为本次任务根目录，允许 Fixer 在临时目录内落盘。
+    st.session_state.current_project = str(upload_dir.resolve())
     for f in uploaded:
         if f.file_id not in st.session_state._seen_file_ids:
-            dest = upload_dir / f.name
+            dest = upload_dir / Path(f.name).name
             dest.write_bytes(f.getvalue())
             real_path = str(dest.absolute())
             if real_path not in st.session_state.selected_files:
@@ -441,12 +445,15 @@ if st.session_state.selected_files:
         with cols[i]:
             if st.button(f"✕ {Path(fp).name[:12]}", key=f"del_{i}", use_container_width=True):
                 st.session_state.selected_files = [x for x in st.session_state.selected_files if x != fp]
+                if not st.session_state.selected_files:
+                    st.session_state.current_project = DEFAULT_PROJECT_ROOT
                 st.rerun()
     if len(files) > 1:
         with cols[-1]:
             if st.button("🗑️ All", key="clear_files", use_container_width=True):
                 st.session_state.selected_files = []
                 st.session_state._seen_file_ids = set()
+                st.session_state.current_project = DEFAULT_PROJECT_ROOT
                 st.rerun()
 
 # Chat input
