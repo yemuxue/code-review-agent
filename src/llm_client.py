@@ -2,6 +2,7 @@
 from __future__ import annotations
 import json
 import asyncio
+import time
 from dataclasses import dataclass, field
 try:
     from src.harness.streaming import Chunk
@@ -126,22 +127,29 @@ class AnthropicClient:
             headers={"Content-Type":"application/json","x-api-key":self.api_key,
                      "anthropic-version":"2023-06-01","anthropic-beta":"prompt-caching-2024-07-31"},
             method="POST")
-        try:
-            with urllib.request.urlopen(req, timeout=120) as resp:
-                raw = json.loads(resp.read().decode("utf-8"))
-                result = LLMResponse.from_anthropic(raw)
-                # Save to cache (text-only and tool-call-only responses)
-                if self.use_cache and not tools and (result.content or result.tool_calls):
-                    _llm_cache.set(messages, json.dumps(
-                        {"content": result.content, "tool_calls": result.tool_calls,
-                         "usage": result.usage}, ensure_ascii=False), self.model)
-                return result
-        except urllib.error.HTTPError as e:
-            raise RuntimeError(f"API HTTP {e.code}: {e.read().decode('utf-8',errors='replace')}")
-        except urllib.error.URLError as e:
-            raise RuntimeError(f"API connection error: {e.reason}")
-        except (TimeoutError, ConnectionError, OSError) as e:
-            raise RuntimeError(f"API timeout/connection error: {e}")
+        # 瞬时故障（限流 429 / 服务端 5xx / 过载 529）重试 2 次，退避 1s、2s；
+        # 其余 HTTP 错误（4xx 等）与连接类错误不重试，直接抛给上层展示。
+        transient_codes = (429, 500, 502, 503, 504, 529)
+        for attempt in range(3):
+            try:
+                with urllib.request.urlopen(req, timeout=120) as resp:
+                    raw = json.loads(resp.read().decode("utf-8"))
+                    result = LLMResponse.from_anthropic(raw)
+                    # Save to cache (text-only and tool-call-only responses)
+                    if self.use_cache and not tools and (result.content or result.tool_calls):
+                        _llm_cache.set(messages, json.dumps(
+                            {"content": result.content, "tool_calls": result.tool_calls,
+                             "usage": result.usage}, ensure_ascii=False), self.model)
+                    return result
+            except urllib.error.HTTPError as e:
+                if e.code in transient_codes and attempt < 2:
+                    time.sleep(1.0 * (attempt + 1))
+                    continue
+                raise RuntimeError(f"API HTTP {e.code}: {e.read().decode('utf-8',errors='replace')}")
+            except urllib.error.URLError as e:
+                raise RuntimeError(f"API connection error: {e.reason}")
+            except (TimeoutError, ConnectionError, OSError) as e:
+                raise RuntimeError(f"API timeout/connection error: {e}")
 
     async def stream(self, messages: list[dict], tools: list[dict] | None = None):
         import urllib.request

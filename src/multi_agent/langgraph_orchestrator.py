@@ -25,6 +25,8 @@ from langgraph.graph import StateGraph, END
 from langgraph.types import Send
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
 
+from src.skills import Skill, load_skills, build_role_blocks
+
 
 def _merge_stats(a: dict, b: dict) -> dict:
     """node_stats 合并器：dict 深合并（LangGraph reducer）"""
@@ -53,7 +55,7 @@ class AgentState(TypedDict):
 class LangGraphOrchestrator:
 
     def __init__(self, llm_client, tools: list, sandbox=None, hitl=None, memory=None,
-                 auto_fix: bool = False):
+                 auto_fix: bool = False, skills_dir=None):
         self.client = llm_client
         self.tools = tools
         self.sandbox = sandbox
@@ -63,6 +65,9 @@ class LangGraphOrchestrator:
         self._project_root: _Path | None = None
         # receipt 只存活于单次 run：历史 .bak 不能作为本轮写入成功的证据。
         self._write_receipts: dict[str, dict[str, str | float]] = {}
+        # 技能：构造时加载一次（skills_dir=None → 仓库根默认 skills/）；命中结果每次 run() 按 task 重算。
+        self.skills: tuple[Skill, ...] = tuple(load_skills(skills_dir))
+        self._role_blocks: dict[str, str] = {}
         from src.harness.agent import AgentHarness
         from src.multi_agent.agents import PLANNER_SYSTEM_PROMPT, EXECUTOR_SYSTEM_PROMPT, REVIEWER_SYSTEM_PROMPT, FIXER_SYSTEM_PROMPT
         self.AgentHarness = AgentHarness
@@ -166,13 +171,24 @@ class LangGraphOrchestrator:
         detail = (completed.stderr or completed.stdout).strip().splitlines()
         return False, f"pytest 失败（exit {completed.returncode}）：{detail[-1] if detail else '无输出'}"
 
-    def _make_agent(self, tool_names: list[str], system_prompt: str, max_turns: int):
-        """统一创建 Agent，注入 sandbox/hitl/memory"""
+    def _make_agent(self, tool_names: list[str], system_prompt: str, max_turns: int,
+                    role: str | None = None):
+        """统一创建 Agent，注入 sandbox/hitl/memory
+
+        role（planner/executor/reviewer/fixer）命中技能时，把追加块接在基础 prompt
+        之后。role=None 或 run() 之外调用（_role_blocks 为空）→ 零注入，与改造前一致。
+        """
         tools = self._tools_for_names(tool_names)
+        extra = self._role_blocks.get(role) if role else None
+        if extra:
+            system_prompt = system_prompt + extra
         agent = self.AgentHarness(model=self.client, tools=tools, system_prompt=system_prompt, max_turns=max_turns)
-        if self.sandbox: agent.sandbox = self.sandbox
-        if self.hitl:     agent.hitl = self.hitl
-        if self.memory:   agent.memory = self.memory
+        if self.sandbox:
+            agent.sandbox = self.sandbox
+        if self.hitl:
+            agent.hitl = self.hitl
+        if self.memory:
+            agent.memory = self.memory
         return agent
 
     def _node_stats(self, agent, name: str, start: float) -> dict:
@@ -222,6 +238,9 @@ class LangGraphOrchestrator:
             raise ValueError("project_path must be an existing directory")
         self._project_path = str(self._project_root)  # 供 Send fan-out 使用
         self._write_receipts = {}
+        # 技能按本轮 task 匹配（Send 并行子状态不含 task 文本，只能在此算一次）。
+        # 无技能/无匹配 → {} → 各角色 prompt 与改造前逐字节一致。
+        self._role_blocks = build_role_blocks(self.skills, task)
         state = {
             "messages": [HumanMessage(content=f"Task: {task}\nProject: {project_path}")],
             "findings": [], "verdicts": [], "fixes": [], "node_stats": {},
@@ -279,8 +298,10 @@ class LangGraphOrchestrator:
     # ═══ 节点 ═══
     def _plan_node(self, state: AgentState) -> dict:
         start = time.time()
+        # role 取值对应 AGENT_DEFINITIONS 的键（planner/executor/reviewer/fixer），
+        # 命中技能时 _make_agent 按角色把技能正文追加进 system prompt。
         agent = self._make_agent(["list_files", "read_file", "grep_pattern"],
-                                 self.PLANNER_PROMPT, max_turns=8)
+                                 self.PLANNER_PROMPT, max_turns=8, role="planner")
         result = agent.run(state["messages"][-1].content)
         findings = self._parse_findings(result)
         return {
@@ -297,7 +318,7 @@ class LangGraphOrchestrator:
         fid = finding.get("id", 0)
 
         agent = self._make_agent(["grep_pattern", "read_file"],
-                                 self.EXECUTOR_PROMPT, max_turns=4)
+                                 self.EXECUTOR_PROMPT, max_turns=4, role="executor")
         result = agent.run(
             f"Verify finding #{fid}:\n" +
             json.dumps(finding, indent=2, ensure_ascii=False) +
@@ -313,7 +334,7 @@ class LangGraphOrchestrator:
     def _review_node(self, state: AgentState) -> dict:
         start = time.time()
         agent = self._make_agent(["read_file", "grep_pattern"],
-                                 self.REVIEWER_PROMPT, max_turns=5)
+                                 self.REVIEWER_PROMPT, max_turns=5, role="reviewer")
         merged = self._merge_findings_verdicts(state["findings"], state.get("verdicts", []))
         result = agent.run(merged + "\n\nProduce final report.")
         return {
@@ -330,7 +351,7 @@ class LangGraphOrchestrator:
         file_path = state.get("file_path", "unknown")
 
         agent = self._make_agent(["read_file", "write_file"],
-                                 self.FIXER_PROMPT, max_turns=10)
+                                 self.FIXER_PROMPT, max_turns=10, role="fixer")
         result = agent.run(
             "Fix ALL " + str(len(group)) + " findings in " + file_path + ":\n" +
             json.dumps(group, indent=2, ensure_ascii=False) +

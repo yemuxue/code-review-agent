@@ -45,6 +45,8 @@ def main():
     parser.add_argument("--base-url", default=None, help="API base URL")
     parser.add_argument("--auto-fix", action="store_true",
                         help="Allow confirmed findings to be repaired (off by default)")
+    parser.add_argument("--skills-dir", default=None, metavar="DIR",
+                        help="Skill packages directory (default: <repo>/skills or $SKILLS_DIR)")
     args = parser.parse_args()
 
     project_path = os.path.abspath(args.path)
@@ -72,7 +74,10 @@ def main():
         temperature=0.1,
     )
 
-    orchestrator = create_langgraph_orchestrator(client, ALL_TOOLS, auto_fix=args.auto_fix)
+    orchestrator = create_langgraph_orchestrator(client, ALL_TOOLS, auto_fix=args.auto_fix,
+                                                 skills_dir=args.skills_dir)
+    if orchestrator.skills:
+        print(f"  Skills: {len(orchestrator.skills)} loaded ({args.skills_dir or 'default'})")
     result = orchestrator.run(task=task, project_path=project_path)
     final_report = langgraph_final_report(result)
     node_stats = result.get("node_stats", {})

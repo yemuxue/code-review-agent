@@ -13,6 +13,7 @@ graph TD
     subgraph Orchestrator["Orchestration Layer"]
         LG["LangGraph<br/>plan → execute(并行) → review → fix → verify"]
         HC["Hardcoded Pipeline<br/>Planner → Executor → Reviewer"]
+        SK["Agent Skills<br/>roles + triggers 筛选"]
     end
 
     subgraph Agent["Agent Harness Layer"]
@@ -52,6 +53,7 @@ graph TD
     API --> LG
     API --> HC
     LG --> EL
+    SK --> LG
     HC --> EL
     EL --> SP
     EL --> SB
@@ -112,6 +114,17 @@ review (去重合并，生成报告)
         ▼
 verify_fix (语法检查 + 修复统计) → END
 ```
+
+## Agent Skills 注入
+
+`LangGraphOrchestrator` 在构造时从 `<repo>/skills/*/SKILL.md` 加载技能包，并在每轮
+`run(task, project_path)` 开始时为 `planner`、`executor`、`reviewer`、`fixer` 计算注入块。
+一个技能正文被注入的条件是：`roles` 为空或包含当前角色，且 `triggers` 为空或至少一个关键词
+命中任务文本（忽略大小写）。角色可用技能索引始终保留，完整正文只在关键词命中时追加。
+
+CLI 的 `--skills-dir` 优先级最高；未指定时工厂依次使用 `SKILLS_DIR` 和仓库默认 `skills/`。
+Streamlit、FastAPI 和 CLI Multi-Agent 都通过同一个工厂创建编排器，因此选择规则一致。详情见
+[skills 使用说明](skills.md)。
 
 ## Tech Stack
 

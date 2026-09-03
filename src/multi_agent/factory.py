@@ -1,5 +1,6 @@
 """三个正式入口共用的 LangGraph 编排器工厂。"""
 from __future__ import annotations
+import os
 
 from src.multi_agent.langgraph_orchestrator import LangGraphOrchestrator
 
@@ -12,8 +13,16 @@ def create_langgraph_orchestrator(
     hitl=None,
     memory=None,
     auto_fix: bool = False,
+    skills_dir: str | None = None,
 ) -> LangGraphOrchestrator:
-    """集中传递运行依赖，避免不同入口悄然使用不同编排。"""
+    """集中传递运行依赖，避免不同入口悄然使用不同编排。
+
+    skills_dir 解析优先级：显式参数 > $SKILLS_DIR 环境变量 > <仓库根>/skills 默认。
+    环境变量回退放这里而非各入口，保证 CLI/Streamlit/API 行为一致
+    （.env 中设置 SKILLS_DIR 也会经 src.config 推入 os.environ 而生效）。
+    """
+    if skills_dir is None:
+        skills_dir = os.environ.get("SKILLS_DIR") or None  # 空串视为未设置
     return LangGraphOrchestrator(
         client,
         tools,
@@ -21,6 +30,7 @@ def create_langgraph_orchestrator(
         hitl=hitl,
         memory=memory,
         auto_fix=auto_fix,
+        skills_dir=skills_dir,
     )
 
 

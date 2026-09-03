@@ -81,10 +81,12 @@ class AgentLogger:
         })
 
     def error(self, turn: int, error_type: str, message: str):
+        # 错误事件罕见且常带 traceback，根因在栈尾 —— 不截断，保持与
+        # "原始堆栈已写入本次运行日志" 的 UI 承诺一致（截断曾吞掉真正的异常消息）。
         self._write("error", {
             "turn": turn,
             "error_type": error_type,
-            "message": message[:500],
+            "message": message,
         })
 
     def finish(self, stats: dict):

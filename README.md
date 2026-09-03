@@ -17,6 +17,7 @@
 
 - [架构概览](#架构概览)
 - [核心特性](#核心特性)
+- [Agent Skills](#agent-skills)
 - [快速开始](#快速开始)
 - [项目结构](#项目结构)
 - [使用方式](#使用方式)
@@ -47,6 +48,7 @@
   │  │   fix (分组串行) → verify   │   │
   │  │    (无发现) → END           │   │
   │  └─────────────────────────────┘   │
+  │     Agent Skills                    │  ← 按角色和任务关键词注入
   ├─────────────────────────────────────┤
   │         Agent Harness               │  ← 八大组件
   │  ┌──────────┐ ┌──────────┐         │
@@ -101,6 +103,18 @@
 - ✅ **Verify** / 审核——修复后语法检查，防止 Agent 修坏代码
 - 🕸️ **LangGraph**——图编排替代硬编码，支持条件路由、Send 并行和循环
 
+### Agent Skills
+
+Multi-Agent 请求会从仓库根目录的 `skills/*/SKILL.md` 加载只读技能包。每个技能用
+frontmatter 声明适用 `roles` 和 `triggers`；运行时仅把命中任务关键词且适用于当前角色的
+技能正文追加到对应 Agent 的 system prompt。技能不会改变既有 `FINDING`、`VERDICT` 等机器
+可读输出格式。
+
+- 默认目录：`<仓库根>/skills`
+- 覆盖目录：CLI 使用 `--skills-dir DIR`，或为 CLI、API、Streamlit 设置 `SKILLS_DIR`
+- 当前示例：`security-review-rules`（安全审查）与 `fix-encoding-safety`（修复阶段编码安全）
+- 详细格式、选择规则和新增技能步骤见 [skills 使用说明](docs/skills.md)
+
 ### 基础设施
 
 - 📈 **Prometheus `/metrics`**——70+ HTTP 指标自动采集
@@ -134,12 +148,15 @@ pip install -e ".[dev]"             # 含测试工具
 
 # 配置 API
 cp .env.example .env
-# 编辑 .env，填入你的 ANTHROPIC_AUTH_TOKEN
+# 编辑 .env，至少填入 ANTHROPIC_AUTH_TOKEN、JWT_SECRET_KEY 和 ADMIN_PASSWORD
 ```
 
 ### 启动
 
 ```bash
+# Windows：同时启动 FastAPI 和 Streamlit（推荐，脚本会配置本地代理）
+start_services.bat
+
 # 方式 1: Streamlit Web UI（推荐）
 streamlit run src/app/streamlit_app.py
 
@@ -157,6 +174,11 @@ python -m uvicorn src.api.server:app --port 8000
 - Streamlit: http://localhost:8501
 - FastAPI: http://localhost:8000/docs
 - Metrics: http://localhost:8000/metrics
+
+`start_services.bat` 默认使用 `C:\tools\anaconda3\envs\pytorch\python.exe`，不可用时回退到
+`python`；若未继承代理环境变量，会使用 `http://127.0.0.1:7897`。两个服务独立运行，启动日志
+写入 `logs/fastapi-service.*.log` 和 `logs/streamlit-service.*.log`。如本机未运行该代理，请在
+启动前设置正确的 `HTTP_PROXY`、`HTTPS_PROXY` 和 `ALL_PROXY`。
 
 ### Docker
 
@@ -200,6 +222,9 @@ code-review-agent/
 │   ├── llm_client.py         ← Anthropic API 适配（含 XML 解析）
 │   ├── model_router.py       ← 多模型路由
 │   └── config.py              ← 配置加载
+├── skills/                    ← 可版本控制的 Agent Skill 包
+│   └── <skill-name>/SKILL.md  ← frontmatter + 只读指令正文
+├── src/skills/                ← Skill 加载、筛选和 prompt 拼装
 ├── tests/                    ← 测试（12 项 + Eval）
 │   ├── test_database.py          7 项 DB 集成测试
 │   ├── test_vector_store.py      5 项 FTS5 测试
@@ -234,7 +259,7 @@ code-review-agent/
 └─ 侧栏 Logs 查看执行日志
 ```
 
-> 默认账号：`admin` / `admin123`（首次启动自动创建）
+> 首次启动会以 `.env` 的 `ADMIN_PASSWORD` 创建 `admin` 账号；请勿依赖或提交固定默认密码。
 
 ### CLI
 
