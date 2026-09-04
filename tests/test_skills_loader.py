@@ -173,15 +173,20 @@ def test_duplicate_frontmatter_key_last_wins(tmp_path):
 def test_symlinked_dir_escaping_root_skipped(tmp_path):
     if sys.platform == "win32":
         pytest.skip("Windows 默认无 symlink 特权")
+    # 真实技能目录位于扫描根之外
     outside = tmp_path / "outside"
     outside.mkdir()
     (outside / "SKILL.md").write_text(SAMPLE_SKILL, encoding="utf-8")
-    link = tmp_path / "evil"
-    link.symlink_to(outside, target_is_directory=True)
+    # 扫描根内放置指向根外目录的 symlink
+    skills_dir = tmp_path / "skills"
+    skills_dir.mkdir()
+    (skills_dir / "evil").symlink_to(outside, target_is_directory=True)
 
-    skills = load_skills(tmp_path)
+    # 条目解析后离开扫描根 → 整条跳过，不越权读取
+    skills = load_skills(skills_dir)
     assert skills == []
-    assert [s.name for s in load_skills(outside)] == ["demo-skill"]  # 原目录本身可正常加载
+    # 真实目录作为根的直接子目录（非 symlink）仍可正常加载
+    assert [s.name for s in load_skills(tmp_path)] == ["demo-skill"]
 
 
 def test_default_skills_dir_is_repo_root_skills():
