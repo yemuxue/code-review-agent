@@ -184,10 +184,25 @@ F-09 平台差异       仅特定 OS/环境复现(如 Windows skip 遮蔽类)
 
 **验收**:真实跑一次多 Agent 流程,JSONL 含带 role 的 turn/tool 事件与 node_stats;`logger=None` 时全部现有测试绿(byte-identical 守卫)。
 
+> **实施记录(2026-09-10,commit f0433ce)**:已完成,含三项计划外但必要的补全——
+> (a) `AgentHarness._execute_single_tool` 此前**从不发 tool_call_start**(历史 84 个日志 0 条),已补齐并统一出口;
+> (b) HITL 拦截路径此前完全静默,现落 `failure_kind=hitl_blocked`;
+> (c) `TimedToolCall.__enter__ + execute()` 双记 tool_call_start(评测集已知缺陷)已修复。
+> 另修:参数校验只观测不拦截(参数合法率数据源),`session_end` 增 `fix_status` 计数(fix 类指标数据源)。
+> 测试:`tests/test_telemetry_roles.py`(8)+`tests/test_harness_telemetry.py`(10),全量 133 passed。
+
 ### Phase 1 — 指标库 + 基线报告(1 人日)
 
 **任务**:`src/eval/log_parser.py`(JSONL → 事件流,兼容无 role 旧日志)+ `src/eval/metrics.py`(4.2–4.4 指标计算 + F-01~F-09 分类);扫描现有 84 个日志 + 重跑 5 个样本,产出**基线报告** `reports/eval_baseline_<date>.md`。
 **验收**:报告含全部指标数值与 Top 失败类;旧日志(无 role)可降级统计不报错。
+
+> **实施记录(2026-09-10)**:已完成——`src/eval/{log_parser,metrics,report}.py`,
+> 产出 `reports/eval_baseline_20260910.md`(84 个历史日志),测试 `tests/test_eval_metrics.py`(19)。
+> 基线读数:工具调用成功率 **99.0%**(495/500)✅、空转率 **0.0%**(0/135)✅、
+> 端到端成功率 **8.3%**(7/84,缺口即 P0 前的未收尾运行 77 个)、失败分布 F-04×5 + F-05×4。
+> 其余指标 n/a 且标注原因(历史日志无 role/node_stats/parse_result/tool_call_start)。
+> **方法学要点**:测不到的指标一律 `None`+原因,不用 0 冒充;未收尾运行归"采集缺口"
+> 而不计入 F-08,否则日志问题会被伪装成模型失败。
 
 ### Phase 2 — 故障注入用例集(1.5 人日)
 
