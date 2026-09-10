@@ -113,6 +113,15 @@ def render_report(data: EvalReportData, source: str, generated_at: datetime | No
         f"- **总 token**: {data.tokens['total_tokens']}（{data.tokens['runs']} 次运行，"
         f"平均 {data.tokens['tokens_per_run']}/次）",
         "- **成本/任务**: 未启用（需 `src/eval/pricing.py` 单价表，Phase 5）",
+    ]
+    par = data.parallel
+    if par.get("concurrency") is not None:
+        lines.append(f"- **并行效率**: 节点耗时合计 {par['node_total_s']} s ÷ 挂钟 {par['wall_s']} s "
+                     f"= 有效并发度 {par['concurrency']}×（{par['runs']} 次运行；"
+                     "Send 并行执行节点的实测收益）")
+    else:
+        lines.append("- **并行效率**: n/a（需同时具备 node_stats 与 session_end.elapsed_s 的运行）")
+    lines += [
         "",
         "## 4. 失败分类（F-01..F-09）",
         "",
@@ -189,16 +198,19 @@ def write_report(markdown: str, out_path: str | Path) -> Path:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="生成 Agent 评测报告（默认扫 logs/）")
     parser.add_argument("--logs", default="logs", help="JSONL 日志目录")
+    parser.add_argument("--since", default=None, metavar="YYYYMMDD",
+                        help="只统计该日期及之后的运行（按日志文件名前缀）")
     parser.add_argument("--out", default=None, help="输出 markdown 路径")
     args = parser.parse_args(argv)
 
-    runs: list[RunLog] = load_logs(args.logs)
+    runs: list[RunLog] = load_logs(args.logs, since=args.since)
     if not runs:
-        print(f"[eval] 未在 {args.logs} 找到 *.jsonl", file=sys.stderr)
+        print(f"[eval] 未在 {args.logs} 找到 *.jsonl（since={args.since}）", file=sys.stderr)
         return 1
     out = Path(args.out) if args.out else Path("reports") / f"eval_baseline_{datetime.now():%Y%m%d}.md"
     data = compute_all(runs)
-    path = write_report(render_report(data, source=args.logs), out)
+    source = f"{args.logs}（since {args.since}）" if args.since else args.logs
+    path = write_report(render_report(data, source=source), out)
     print(f"[eval] {len(runs)} 个运行 → {path}")
     for metric in data.trajectory:
         print(f"  {metric.name}: {metric.display()}")

@@ -210,7 +210,7 @@ class LangGraphOrchestrator:
             kind, ok=(not saw) or bool(parsed), count=len(parsed), marker=saw)
 
     def _node_stats(self, agent, name: str, start: float) -> dict:
-        """采集节点级统计：turns/tokens/耗时"""
+        """采集节点级统计：turns/tokens/耗时/turn 预算"""
         stats = agent.get_stats()
         return {name: {
             "turns": stats.get("turns_taken", 0),
@@ -218,6 +218,9 @@ class LangGraphOrchestrator:
             "messages": stats.get("messages_count", 0),
             "tokens": stats.get("total_tokens_used", 0),
             "elapsed_ms": round((time.time() - start) * 1000),
+            # 记录上限才能算"turn 预算耗尽率"——耗尽后由 _force_finish 兜底，
+            # 产出质量下降且不会被任何现有指标捕捉
+            "max_turns": getattr(agent, "max_turns", 0),
         }}
 
     # ═══ 图结构 ═══
@@ -270,10 +273,16 @@ class LangGraphOrchestrator:
         if self.logger:
             # 节点统计此前只活在内存返回值里 —— 落盘后才能算耗时/token 分布
             self.logger.node_stats(node_stats)
+            # 修复结论按状态计数落盘：否则 fix 成功率/回滚率只能靠解析报告文本
+            fix_status: dict[str, int] = {}
+            for fix in result.get("fixes", []):
+                key = str(fix.get("status", "UNKNOWN"))
+                fix_status[key] = fix_status.get(key, 0) + 1
             self.logger.finish({
                 "findings": len(result.get("findings", [])),
                 "verdicts": len(result.get("verdicts", [])),
                 "fixes": len(result.get("fixes", [])),
+                "fix_status": fix_status,
                 "complete": bool(result.get("complete", False)),
                 "nodes": len(node_stats),
             })

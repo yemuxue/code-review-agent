@@ -139,6 +139,13 @@ class AgentLogger:
         """节点级统计快照：run 结束时一次性落盘，供轨迹指标消费。"""
         self._write("node_stats", {"stats": stats})
 
+    def forced_finish(self, turn: int, max_turns: int):
+        """turn 预算耗尽的兜底收尾（agent 已被强制要求"不再调工具，直接作答"）。
+
+        显式留痕而非靠 node_end 缺失反推：兜底产出质量下降，是需要被计数的路径。
+        """
+        self._write("forced_finish", {"turn": turn, "max_turns": max_turns})
+
     def error(self, turn: int, error_type: str, message: str):
         # 错误事件罕见且常带 traceback，根因在栈尾 —— 不截断，保持与
         # "原始堆栈已写入本次运行日志" 的 UI 承诺一致（截断曾吞掉真正的异常消息）。

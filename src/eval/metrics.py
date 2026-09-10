@@ -68,9 +68,10 @@ def _fmt(x: float) -> str:
 
 
 def _ratio(name: str, num: float, den: float, note: str = "") -> Metric:
+    """note 是"为什么算不出"的说明：有数据时清空，避免报告里出现自相矛盾的提示。"""
     if den <= 0:
         return Metric(name, None, 0, 0, note=note or "分母为 0")
-    return Metric(name, num / den, num, den, note=note)
+    return Metric(name, num / den, num, den, note="")
 
 
 # ═══ 轨迹指标（§4.2） ═══
@@ -203,6 +204,27 @@ def fix_regression_rate(runs: list[RunLog]) -> Metric:
     return _ratio("回归引入率", bad, total, note="需 auto_fix 运行")
 
 
+def turn_budget_exhausted_rate(runs: list[RunLog]) -> Metric:
+    """turn 预算耗尽率：用满 max_turns 的节点占比（F-06 的另一面：没崩但没收敛）。
+
+    真实运行发现：耗尽预算的节点由 `_force_finish` 兜底（额外一次 LLM 调用 +
+    "Max turns reached, give your best answer now"），其产出质量下降，
+    且 node_end 事件缺失——这条路径此前无任何指标覆盖。
+    """
+    nodes = [(name, s) for r in runs for name, s in r.node_stats().items()
+             if isinstance(s, dict) and int(s.get("max_turns", 0)) > 0]
+    exhausted = [(n, s) for n, s in nodes if int(s.get("turns", 0)) >= int(s["max_turns"])]
+    forced = sum(len(r.of("forced_finish")) for r in runs)
+    metric = _ratio("turn 预算耗尽率", len(exhausted), len(nodes),
+                    note="需 node_stats.max_turns（P1 补采）")
+    if exhausted:
+        # 用满上限 ≠ 被强制收尾：末轮若已给出最终答案则属正常收尾
+        names = ", ".join(n for n, _ in exhausted[:3]) + ("…" if len(exhausted) > 3 else "")
+        metric.note = (f"{len(exhausted)} 个节点用满 turns 上限（{names}），"
+                       f"其中 {forced} 次由 _force_finish 强制收尾（末轮仍在调工具）")
+    return metric
+
+
 def e2e_success_rate(runs: list[RunLog]) -> Metric:
     """端到端成功率：有 session_end 且无 error 事件、且未被标记 complete=False 的 run 占比。
 
@@ -255,6 +277,32 @@ def _percentile(sorted_values: list[float], q: float) -> float:
         return 0.0
     idx = min(len(sorted_values) - 1, max(0, round(q * (len(sorted_values) - 1))))
     return sorted_values[idx]
+
+
+def parallel_efficiency(runs: list[RunLog]) -> dict:
+    """Send 并行的实际收益：节点耗时合计 / 挂钟时间 = 有效并发度。
+
+    真实运行读数（2 次运行合计，src/eval 范围）: 节点合计 352 s vs 挂钟 160 s ≈ 2.2×。
+    并发度 < 1 说明存在串行等待或日志/时钟异常，值得排查。
+    """
+    wall = 0.0
+    node_ms = 0.0
+    samples = 0
+    for run in runs:
+        elapsed = run.summary().get("elapsed_s")
+        stats = run.node_stats()
+        if not elapsed or not stats:
+            continue
+        samples += 1
+        wall += float(elapsed)
+        node_ms += sum(float(s.get("elapsed_ms", 0)) for s in stats.values()
+                       if isinstance(s, dict))
+    return {
+        "runs": samples,
+        "wall_s": round(wall, 1),
+        "node_total_s": round(node_ms / 1000, 1),
+        "concurrency": round(node_ms / 1000 / wall, 2) if wall > 0 else None,
+    }
 
 
 def total_tokens(runs: list[RunLog]) -> dict:
@@ -392,6 +440,7 @@ class EvalReportData:
     failures: dict[str, list[dict]] = field(default_factory=dict)
     node_efficiency: dict = field(default_factory=dict)
     tokens: dict = field(default_factory=dict)
+    parallel: dict = field(default_factory=dict)
     coverage: dict = field(default_factory=dict)
 
 
@@ -409,12 +458,14 @@ def compute_all(runs: list[RunLog], pass_groups: list[list[bool]] | None = None)
             loop_rate(runs),
             fix_success_rate(runs),
             fix_regression_rate(runs),
+            turn_budget_exhausted_rate(runs),
             e2e_success_rate(runs),
         ],
         stability=[pass_at_k(pass_groups or []), flaky_rate(pass_groups or [])],
         failures=classify_failures(runs),
         node_efficiency=node_efficiency(runs),
         tokens=total_tokens(runs),
+        parallel=parallel_efficiency(runs),
         coverage={
             "runs": len(runs),
             "with_roles": sum(1 for r in runs if r.has_roles),

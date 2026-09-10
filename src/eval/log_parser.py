@@ -21,6 +21,7 @@ from pathlib import Path
 KNOWN_EVENTS = frozenset({
     "session_start", "session_end", "node_end", "turn_start", "turn_end",
     "tool_call_start", "tool_call_end", "parse_result", "node_stats", "error",
+    "forced_finish",
 })
 
 
@@ -129,12 +130,20 @@ def parse_log_file(path: str | Path) -> RunLog:
     return run
 
 
-def load_logs(logs_dir: str | Path = "logs") -> list[RunLog]:
-    """解析目录下全部 JSONL（按文件名排序，确定性顺序）。"""
+def load_logs(logs_dir: str | Path = "logs", since: str | None = None) -> list[RunLog]:
+    """解析目录下全部 JSONL（按文件名排序，确定性顺序）。
+
+    since（YYYYMMDD）按文件名前缀过滤——日志名以运行时刻开头，用于把
+    "P0 后新格式运行"与历史日志分开统计，而不是混在一张表里。
+    """
     logs_dir = Path(logs_dir)
     if not logs_dir.is_dir():
         return []
-    return [parse_log_file(p) for p in sorted(logs_dir.glob("*.jsonl"))]
+    paths = sorted(logs_dir.glob("*.jsonl"))
+    if since:
+        prefix = since.replace("-", "")
+        paths = [p for p in paths if p.stem[:8] >= prefix]
+    return [parse_log_file(p) for p in paths]
 
 
 def invalid_json_ratio(runs: list[RunLog]) -> float:

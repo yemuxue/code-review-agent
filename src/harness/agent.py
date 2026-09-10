@@ -201,6 +201,8 @@ class AgentHarness:
                                        "content":"Not executed (max turns reached)."})
         self.messages.append({"role":"user","content":"Max turns reached. Give your best answer now. No more tools."})
         resp = self.model.chat(messages=self.messages, tools=[])
+        if self.logger:
+            self.logger.forced_finish(self.turns_taken, self.max_turns)
         return resp.content or "Agent stopped."
 
     def get_stats(self) -> dict:

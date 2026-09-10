@@ -235,10 +235,50 @@ def test_node_efficiency_aggregates_and_percentiles(tmp_path):
     assert stats["elapsed_p95_ms"] == 400
 
 
+def test_parallel_efficiency_measures_send_gain(tmp_path):
+    """节点耗时合计 / 挂钟时间 = 有效并发度（Send 并行的实测收益）；缺数据则 n/a。"""
+    from src.eval.metrics import parallel_efficiency
+    ok = _write_log(tmp_path, "parallel", [
+        {"event": "session_start"},
+        {"event": "node_stats", "stats": {
+            "execute_1": {"turns": 2, "max_turns": 4, "tokens": 1, "elapsed_ms": 60000},
+            "execute_2": {"turns": 2, "max_turns": 4, "tokens": 1, "elapsed_ms": 60000},
+        }},
+        {"event": "session_end", "elapsed_s": 80.0, "complete": True},
+    ])
+    partial = _write_log(tmp_path, "no_wall", [
+        {"event": "session_start"},
+        {"event": "node_stats", "stats": {"plan": {"turns": 1, "tokens": 1, "elapsed_ms": 1000}}},
+    ])
+    stat = parallel_efficiency([parse_log_file(ok), parse_log_file(partial)])
+    assert stat["runs"] == 1 and stat["wall_s"] == 80.0 and stat["node_total_s"] == 120.0
+    assert stat["concurrency"] == 1.5
+    assert parallel_efficiency([])["concurrency"] is None
+
+
 def test_stability_metrics_need_repeats():
     assert pass_at_k([]).value is None and flaky_rate([]).value is None
     assert pass_at_k([[True, True], [True, False]]).value == 0.5
     assert flaky_rate([[True, True], [True, False], [False, False]]).value == 1 / 3
+
+
+def test_turn_budget_exhausted_rate_counts_capped_nodes(tmp_path):
+    """真实运行暴露的信号：用满 turn 预算的节点（由 _force_finish 兜底）此前无指标覆盖。"""
+    path = _write_log(tmp_path, "r1", [
+        {"event": "session_start"},
+        {"event": "node_stats", "stats": {
+            "plan": {"turns": 6, "max_turns": 8, "tokens": 10, "elapsed_ms": 1},
+            "execute_1": {"turns": 4, "max_turns": 4, "tokens": 10, "elapsed_ms": 1},
+            "execute_2": {"turns": 2, "max_turns": 4, "tokens": 10, "elapsed_ms": 1},
+        }},
+        {"event": "forced_finish", "turn": 4, "max_turns": 4, "role": "executor"},
+        {"event": "session_end", "complete": True},
+    ])
+    from src.eval.metrics import turn_budget_exhausted_rate
+    metric = turn_budget_exhausted_rate([parse_log_file(path)])
+    assert metric.numerator == 1 and metric.denominator == 3
+    assert "execute_1" in metric.note
+    assert "1 次由 _force_finish 强制收尾" in metric.note  # 用满 ≠ 被强制收尾
 
 
 def test_fix_metrics_from_session_end_status(tmp_path):

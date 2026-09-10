@@ -1,7 +1,7 @@
 # Agent 评测基线报告
 
 - **生成时间**: 2026-09-10 22:30
-- **数据来源**: `logs`（86 个运行日志）
+- **数据来源**: `logs（since 20260910）`（2 个运行日志）
 - **评测体系版本**: v1（Phase 1 指标库；故障注入用例集为 Phase 2，尚未接入）
 - **日志坏行率**: 0.00%（0 行）
 
@@ -12,30 +12,30 @@
 
 | 采集能力 | 覆盖运行数 | 占比 |
 |----------|-----------|------|
-| 带角色归因（role） | 2 | 2.3% |
-| tool_call_start（工具调用起点） | 2 | 2.3% |
-| node_stats（节点统计） | 2 | 2.3% |
-| parse_result（结构化解析埋点） | 2 | 2.3% |
-| 多 Agent 完整运行 | 2 | 2.3% |
-| 运行已收尾（有 session_end） | 9 | 10.5% |
+| 带角色归因（role） | 2 | 100.0% |
+| tool_call_start（工具调用起点） | 2 | 100.0% |
+| node_stats（节点统计） | 2 | 100.0% |
+| parse_result（结构化解析埋点） | 2 | 100.0% |
+| 多 Agent 完整运行 | 2 | 100.0% |
+| 运行已收尾（有 session_end） | 2 | 100.0% |
 
-未收尾运行 77 个（进程中断或 Phase 0 前多 Agent 未接 logger）。此项属**采集缺口**，不计入失败分类——否则会把日志问题伪装成模型失败。
+未收尾运行 0 个（进程中断或 Phase 0 前多 Agent 未接 logger）。此项属**采集缺口**，不计入失败分类——否则会把日志问题伪装成模型失败。
 
 ## 2. 轨迹指标（JD 核心）
 
 | 指标 | 数值 | 样本量 | 目标 | 状态 | 备注 |
 |------|------|--------|------|------|------|
-| 工具调用成功率 | 99.2%（648/653） | 653 | ≥ 98% | ✅ 达标 | 失败构成: legacy(无 failure_kind，归因见 §4)×5 |
+| 工具调用成功率 | 100.0%（153/153） | 153 | ≥ 98% | ✅ 达标 |  |
 | 参数合法率 | 100.0%（153/153） | 153 | 建立基线 | — |  |
 | Plan 可执行率 | 100.0%（2/2） | 2 | ≥ 95% | ✅ 达标 |  |
 | VERDICT 解析率 | 100.0%（34/34） | 34 | ≥ 95% | ✅ 达标 |  |
 | fix 输出解析率 | n/a（样本不足：需 P0 后新日志（parse_result 事件）） | — | 建立基线 | — | 需 P0 后新日志（parse_result 事件） |
-| 空转率 | 0.0%（0/250） | 250 | ≤ 10% | ✅ 达标 |  |
+| 空转率 | 0.0%（0/115） | 115 | ≤ 10% | ✅ 达标 |  |
 | 循环率 | 0.0%（0/2） | 2 | ≤ 0% | ✅ 达标 |  |
 | fix 成功率 | n/a（样本不足：需 auto_fix 运行） | — | ≥ 70% | — | 需 auto_fix 运行 |
 | 回归引入率 | n/a（样本不足：需 auto_fix 运行） | — | 建立基线 | — | 需 auto_fix 运行 |
 | turn 预算耗尽率 | 42.1%（8/19） | 19 | 建立基线 | — | 8 个节点用满 turns 上限（execute_1, execute_2, execute_6…），其中 5 次由 _force_finish 强制收尾（末轮仍在调工具） |
-| 端到端成功率 | 10.5%（9/86） | 86 | ≥ 90% | ❌ 未达标 |  |
+| 端到端成功率 | 100.0%（2/2） | 2 | ≥ 90% | ✅ 达标 |  |
 
 ## 3. 效率与成本
 
@@ -61,29 +61,13 @@
 | plan | 2 | 12 | 19 | 23900.0 | 48672 ms | 50945 ms |
 | review | 2 | 2 | 0 | 6758.0 | 13308 ms | 14759 ms |
 
-- **总 token**: 241642（86 次运行，平均 2809.8/次）
+- **总 token**: 241642（2 次运行，平均 120821.0/次）
 - **成本/任务**: 未启用（需 `src/eval/pricing.py` 单价表，Phase 5）
 - **并行效率**: 节点耗时合计 352.3 s ÷ 挂钟 160.2 s = 有效并发度 2.2×（2 次运行；Send 并行执行节点的实测收益）
 
 ## 4. 失败分类（F-01..F-09）
 
-| 代码 | 类型 | 次数 |
-|------|------|------|
-| F-04 | 工具执行异常 | 5 |
-| F-05 | 模型API故障 | 4 |
-
-### F-04 工具执行异常（5 次）
-- `20260720_223211_wcst` tool=read_file, detail=Tool error: TypeError: read_file() got an unexpected keyword argument 'offset'
-- `20260721_004831_b0q9` tool=read_file, detail=Tool error: TypeError: read_file() got an unexpected keyword argument 'offset'
-- `20260721_004927_eng7` tool=read_file, detail=Tool error: TypeError: read_file() got an unexpected keyword argument 'offset'
-- `20260721_004927_eng7` tool=read_file, detail=Tool error: TypeError: read_file() got an unexpected keyword argument 'offset'
-- `20260721_004927_eng7` tool=read_file, detail=Tool error: TypeError: read_file() got an unexpected keyword argument 'offset'
-
-### F-05 模型API故障（4 次）
-- `20260818_214109_mx34` error_type=RuntimeError, detail=Traceback (most recent call last):   File "X:\VScode\code-review-agent\src\llm_client.py", line 130, in chat     with urllib.request.urlopen(req, timeout=120) a …（老日志在 500 字处截断，栈尾根因不可见）
-- `20260819_123105_ze5d` error_type=RuntimeError, detail=Traceback (most recent call last):   File "C:\Python314\Lib\urllib\request.py", line 1321, in do_open     h.request(req.get_method(), req.selector, req.data, he …（老日志在 500 字处截断，栈尾根因不可见）
-- `20260903_142537_jwl7` error_type=RuntimeError, detail=Traceback (most recent call last):   File "C:\Python314\Lib\urllib\request.py", line 1321, in do_open     h.request(req.get_method(), req.selector, req.data, he …（老日志在 500 字处截断，栈尾根因不可见）
-- `20260903_143309_hpc7` error_type=RuntimeError, detail=Traceback (most recent call last):   File "X:\VScode\code-review-agent\src\llm_client.py", line 130, in chat     with urllib.request.urlopen(req, timeout=120) a …（老日志在 500 字处截断，栈尾根因不可见）
+本批运行未检出分类失败。
 
 ## 5. 稳定性
 
@@ -95,8 +79,7 @@
 ## 6. 结论与下一步
 
 - 可算指标 8/11（数据源缺失：fix 输出解析率、fix 成功率、回归引入率）。
-- 未达标指标：端到端成功率 —— 需在 Phase 2 用故障注入用例验证指标是否真能抓到对应故障，再决定修复优先级。
-- 失败集中在 F-04 工具执行异常（5 次），对应 Phase 2 故障注入用例优先覆盖该路径。
+- 已可算的指标均达标或无需达标（循环率/回归引入率目标为建立基线）。
 - **下一步（Phase 2）**: 为每个指标补一条故障注入用例，证明指标真能抓住故障。
 
 ---
