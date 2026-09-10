@@ -55,13 +55,15 @@ class AgentState(TypedDict):
 class LangGraphOrchestrator:
 
     def __init__(self, llm_client, tools: list, sandbox=None, hitl=None, memory=None,
-                 auto_fix: bool = False, skills_dir=None):
+                 auto_fix: bool = False, skills_dir=None, logger=None):
         self.client = llm_client
         self.tools = tools
         self.sandbox = sandbox
         self.hitl = hitl
         self.memory = memory
         self.auto_fix = auto_fix
+        # 遥测（Phase 0）：logger=None → 全链路零日志，行为与改造前一致
+        self.logger = logger
         self._project_root: _Path | None = None
         # receipt 只存活于单次 run：历史 .bak 不能作为本轮写入成功的证据。
         self._write_receipts: dict[str, dict[str, str | float]] = {}
@@ -182,7 +184,10 @@ class LangGraphOrchestrator:
         extra = self._role_blocks.get(role) if role else None
         if extra:
             system_prompt = system_prompt + extra
-        agent = self.AgentHarness(model=self.client, tools=tools, system_prompt=system_prompt, max_turns=max_turns)
+        # 同一 session 文件 + role 标签：此前不传 logger，多 Agent 运行只有 session_start
+        agent_logger = self.logger.for_role(role) if (self.logger and role) else self.logger
+        agent = self.AgentHarness(model=self.client, tools=tools, system_prompt=system_prompt,
+                                  max_turns=max_turns, logger=agent_logger)
         if self.sandbox:
             agent.sandbox = self.sandbox
         if self.hitl:
@@ -190,6 +195,19 @@ class LangGraphOrchestrator:
         if self.memory:
             agent.memory = self.memory
         return agent
+
+    def _log_parse(self, role: str, kind: str, markers: tuple[str, ...], raw: str,
+                   parsed: list) -> None:
+        """结构化输出解析埋点（Plan 可执行率 / VERDICT 解析率 / fix 解析率数据源）。
+
+        只记"输出是否含协议标记 + 成功解析条目数"，不落 LLM 全文。
+        含标记但解析 0 条 = 格式失败（F-01），与"本就没发现问题"区分开。
+        """
+        if not self.logger:
+            return
+        saw = any(m in raw for m in markers)
+        self.logger.for_role(role).parse_result(
+            kind, ok=(not saw) or bool(parsed), count=len(parsed), marker=saw)
 
     def _node_stats(self, agent, name: str, start: float) -> dict:
         """采集节点级统计：turns/tokens/耗时"""
@@ -248,6 +266,17 @@ class LangGraphOrchestrator:
             "retry_count": 0, "max_retries": 2,
         }
         result = self.graph.invoke(state)
+        node_stats = result.get("node_stats", {})
+        if self.logger:
+            # 节点统计此前只活在内存返回值里 —— 落盘后才能算耗时/token 分布
+            self.logger.node_stats(node_stats)
+            self.logger.finish({
+                "findings": len(result.get("findings", [])),
+                "verdicts": len(result.get("verdicts", [])),
+                "fixes": len(result.get("fixes", [])),
+                "complete": bool(result.get("complete", False)),
+                "nodes": len(node_stats),
+            })
         return {
             "findings": result.get("findings", []),
             "verdicts": result.get("verdicts", []),
@@ -255,7 +284,7 @@ class LangGraphOrchestrator:
             "messages": [m.content for m in result.get("messages", [])],
             "complete": result.get("complete", False),
             "retries": result.get("retry_count", 0),
-            "node_stats": result.get("node_stats", {}),
+            "node_stats": node_stats,
         }
 
     # ═══ 路由 ═══
@@ -304,6 +333,7 @@ class LangGraphOrchestrator:
                                  self.PLANNER_PROMPT, max_turns=8, role="planner")
         result = agent.run(state["messages"][-1].content)
         findings = self._parse_findings(result)
+        self._log_parse("planner", "findings", ("FINDING|",), result, findings)
         return {
             "messages": [AIMessage(content=result)],
             "findings": findings,
@@ -325,6 +355,7 @@ class LangGraphOrchestrator:
             "\n\nOutput: VERDICT|finding_id|CONFIRMED/FALSE_POSITIVE/UNCERTAIN|evidence"
         )
         verdicts = self._parse_verdicts(result, [finding])
+        self._log_parse("executor", "verdict", ("VERDICT|",), result, verdicts)
         return {
             "messages": [AIMessage(content=result)],
             "verdicts": verdicts,
@@ -361,6 +392,7 @@ class LangGraphOrchestrator:
             "IMPORTANT: This is the ONLY agent editing this file. One read + one write is enough for all fixes."
         )
         fixes = self._parse_fixes(result)
+        self._log_parse("fixer", "fix", ("FIXED|", "FAILED|", "FIXED:", "FAILED:"), result, fixes)
         verify_commands = self._parse_behavior_verifications(result)
         for fix in fixes:
             command = verify_commands.get(fix["finding_id"])

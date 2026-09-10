@@ -504,7 +504,7 @@ if prompt:
                     orch = create_langgraph_orchestrator(
                         client, TOOLS, sandbox=Sandbox(), hitl=hitl_guard,
                         memory=ContextMemory(strategy="hybrid", window_size=10),
-                        auto_fix=auto_fix_enabled,
+                        auto_fix=auto_fix_enabled, logger=logger,
                     )
                     lang_result = orch.run(task=target, project_path=st.session_state.current_project)
                     n_findings = len(lang_result.get("findings", []))

@@ -126,17 +126,24 @@ class AgentHarness:
     def _execute_single_tool(self, tc: ToolCall) -> str:
         import time
         start = time.time()
+        tool = self.tools.get(tc.name)
+        args_ok, args_error = (None, None) if tool is None else self._validate_args(tool, tc.args)
+        if self.logger:
+            # 观测埋点：此前该事件从未被发出（轨迹指标全链路缺口）
+            self.logger.tool_call_start(self.turns_taken, tc.name, tc.args,
+                                        args_ok=args_ok, args_error=args_error)
         try:
-            tool = self.tools.get(tc.name)
             if tool is None:
                 result = f"Tool '{tc.name}' not found."
-                if self.logger:
-                    self.logger.tool_call_end(self.turns_taken, tc.name, result, (time.time()-start)*1000, error=True)
+                self._log_tool_end(tc.name, result, start, error=True, failure_kind="unknown_tool")
                 return result
             # HITL check
             if hasattr(self, 'hitl') and self.hitl and self.hitl.needs_approval(tc.name, tc.args):
                 if not self.hitl.request_approval(tc.name, tc.args):
-                    return f"Tool '{tc.name}' blocked by Human-in-the-Loop guard."
+                    result = f"Tool '{tc.name}' blocked by Human-in-the-Loop guard."
+                    # 拦截路径此前完全静默 —— 补记，便于统计"被人工/策略拦下的动作"
+                    self._log_tool_end(tc.name, result, start, error=True, failure_kind="hitl_blocked")
+                    return result
             # Sandbox: run_command 类工具在沙箱中执行
             if hasattr(self, 'sandbox') and self.sandbox and tc.name == 'run_command':
                 cmd = tc.args.get('command', '')
@@ -147,15 +154,40 @@ class AgentHarness:
                 result = sb_result.summary()
             else:
                 result = str(tool.fn(**tc.args))
-            if self.logger:
-                self.logger.tool_call_end(self.turns_taken, tc.name, result, (time.time()-start)*1000)
+            self._log_tool_end(tc.name, result, start)
             return result
         except Exception as e:
             result = f"Tool error: {type(e).__name__}: {e}"
+            kind = "args_invalid" if args_ok is False else "tool_exception"
             if self.logger:
                 self.logger.error(self.turns_taken, type(e).__name__, str(e))
-                self.logger.tool_call_end(self.turns_taken, tc.name, result, (time.time()-start)*1000, error=True)
+            self._log_tool_end(tc.name, result, start, error=True, failure_kind=kind)
             return result
+
+    def _log_tool_end(self, tool_name: str, result: str, start: float,
+                      error: bool = False, failure_kind: str | None = None) -> None:
+        """工具结束落盘（统一出口，保证每条 tool_call_start 都有对应 end）"""
+        import time
+        if not self.logger:
+            return
+        self.logger.tool_call_end(self.turns_taken, tool_name, result,
+                                  (time.time() - start) * 1000, error=error,
+                                  failure_kind=failure_kind)
+
+    @staticmethod
+    def _validate_args(tool: ToolDefinition, args: dict) -> tuple[bool | None, str | None]:
+        """轻量参数校验：参数是否为对象 + required 字段是否齐全。
+
+        纯观测（参数合法率指标），不拦截调用 —— 与既有宽松工具调用行为一致。
+        """
+        if not isinstance(args, dict):
+            return False, f"args 非对象: {type(args).__name__}"
+        schema = tool.parameters if isinstance(tool.parameters, dict) else {}
+        required = schema.get("required") or []
+        missing = [str(k) for k in required if k not in args]
+        if missing:
+            return False, "缺少必填参数: " + ", ".join(missing)
+        return True, None
 
     def _get_tool_schemas(self) -> list[dict]:
         return [{"type":"function","function":{"name":t.name,"description":t.description,"parameters":t.parameters}}

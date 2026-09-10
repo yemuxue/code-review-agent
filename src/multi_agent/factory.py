@@ -14,6 +14,7 @@ def create_langgraph_orchestrator(
     memory=None,
     auto_fix: bool = False,
     skills_dir: str | None = None,
+    logger=None,
 ) -> LangGraphOrchestrator:
     """集中传递运行依赖，避免不同入口悄然使用不同编排。
 
@@ -31,6 +32,7 @@ def create_langgraph_orchestrator(
         memory=memory,
         auto_fix=auto_fix,
         skills_dir=skills_dir,
+        logger=logger,
     )
 
 

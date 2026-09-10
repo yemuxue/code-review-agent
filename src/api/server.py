@@ -472,7 +472,7 @@ async def analyze(req: AnalyzeRequest, current_user: User = Depends(get_current_
     is_multi = req.mode == "multi"
 
     if is_multi:
-        orch = create_langgraph_orchestrator(client, tools)
+        orch = create_langgraph_orchestrator(client, tools, logger=logger)
         langgraph_result = await asyncio.to_thread(
             orch.run, task=target, project_path=str(project_path)
         )
