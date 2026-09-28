@@ -16,7 +16,7 @@
   对比：
   - 当前：进程级 subprocess，临时目录隔离
   - Docker：网络隔离 + 只读根FS + 内存限制 + capabilities/pids 限制
-  - 面试话术见模块末尾
+  - 设计说明见模块末尾
 """
 from __future__ import annotations
 import os
@@ -258,7 +258,7 @@ class DockerSandbox:
         sandbox = DockerSandbox(image="python:3.11-slim")
         result = sandbox.run(["python", "-c", "print(2+2)"], cwd="/tmp/mywork")
 
-    面试话术: "当前项目的沙箱是进程级——线程+subprocess+临时目录，
+    设计说明: "当前项目的沙箱是进程级——线程+subprocess+临时目录，
     适合内网开发环境。生产环境会升级为 Docker 容器隔离：禁用网络、
     只读根文件系统、256MB 内存上限、禁止提权——这四条把攻击面从
     '能访问整个操作系统'压缩到 '只能在一个受限容器里跑几行代码'。"

@@ -1,6 +1,7 @@
 """Agent Harness core: Execution Loop + Tool Calling + Context Management"""
 from __future__ import annotations
 import json
+import time
 from dataclasses import dataclass
 from typing import Any, Callable
 
@@ -37,7 +38,10 @@ class AgentHarness:
         self._reset(user_query)
         for turn in range(self.max_turns):
             self._pre_turn(turn)
-            response = self.model.chat(messages=self.messages, tools=self._get_tool_schemas())
+            try:
+                response = self.model.chat(messages=self.messages, tools=self._get_tool_schemas())
+            except Exception as exc:
+                return self._model_failure(turn + 1, exc)
             self._accumulate_usage(response)  # ← 累计 token
             result = self._process_turn_response(response, turn)
             if result is not None:
@@ -99,11 +103,12 @@ class AgentHarness:
                 self.logger.turn_end(turn + 1, has_tools)
             return None  # 继续循环
         else:
-            self.messages.append({"role":"assistant","content":response.content})
+            content = response.content or "Agent returned an empty final answer."
+            self.messages.append({"role":"assistant","content":content})
             if self.logger:
                 self.logger.turn_end(turn + 1, has_tools, getattr(response, 'usage', None))
                 self.logger.finish(self.get_stats())
-            return response.content  # 最终答案
+            return content  # 最终答案
 
     def _reset(self, user_query: str):
         self.messages = [{"role":"system","content":self.system_prompt},
@@ -111,7 +116,25 @@ class AgentHarness:
         self.turns_taken = 0; self.tools_called = 0
 
     def _execute_tool_calls(self, tool_calls: list):
-        normalized = [ToolCall(**tc) if isinstance(tc, dict) else tc for tc in tool_calls]
+        normalized = []
+        for raw in tool_calls:
+            try:
+                tc = ToolCall(**raw) if isinstance(raw, dict) else raw
+                if not isinstance(tc, ToolCall) or not isinstance(tc.args, dict):
+                    raise TypeError("tool_call 必须包含 id、name 与对象类型 args")
+            except (TypeError, KeyError) as exc:
+                # LLM 的工具调用协议不能信任；丢弃坏条目并留下可归因事件，避免整轮崩溃。
+                result = f"Malformed tool call ignored: {exc}"
+                if self.logger:
+                    self.logger.tool_call_start(self.turns_taken, "<malformed>", {}, args_ok=False,
+                                                args_error=str(exc))
+                    self.logger.error(self.turns_taken, type(exc).__name__, result)
+                self._log_tool_end("<malformed>", result, time.time(), error=True,
+                                   failure_kind="malformed_tool_call")
+                continue
+            normalized.append(tc)
+        if not normalized:
+            return
         self.messages.append({
             "role":"assistant","content":None,
             "tool_calls":[{"id":tc.id,"type":"function",
@@ -122,6 +145,15 @@ class AgentHarness:
             result = self._execute_single_tool(tc)
             self.messages.append({"role":"tool","tool_call_id":tc.id,"content":str(result)})
             self.tools_called += 1
+
+    def _model_failure(self, turn: int, exc: Exception) -> str:
+        """把模型层异常降级为可读终态，保证日志与端到端指标都有明确分母。"""
+        result = f"Model error: {type(exc).__name__}: {exc}"
+        if self.logger:
+            self.logger.error(turn, type(exc).__name__, str(exc))
+            self.logger.turn_end(turn, False)
+            self.logger.finish({**self.get_stats(), "complete": False})
+        return result
 
     def _execute_single_tool(self, tc: ToolCall) -> str:
         import time
@@ -203,6 +235,8 @@ class AgentHarness:
         resp = self.model.chat(messages=self.messages, tools=[])
         if self.logger:
             self.logger.forced_finish(self.turns_taken, self.max_turns)
+            # 达到预算后虽有兜底答案，但该 run 已发生质量降级，不能记作正常成功。
+            self.logger.finish({**self.get_stats(), "complete": False, "forced_finish": True})
         return resp.content or "Agent stopped."
 
     def get_stats(self) -> dict:

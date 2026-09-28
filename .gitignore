@@ -11,5 +11,5 @@ sessions/
 /dist/
 *.egg-info/
 .worktrees/
-面试*.md
+.eval-runs/
 *.bak

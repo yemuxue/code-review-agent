@@ -235,6 +235,19 @@ def test_node_efficiency_aggregates_and_percentiles(tmp_path):
     assert stats["elapsed_p95_ms"] == 400
 
 
+def test_total_tokens_denominator_counts_only_runs_with_data(tmp_path):
+    """无 token 数据的老日志不得进分母——否则平均值被摊薄成一个假数。"""
+    from src.eval.metrics import total_tokens
+    with_data = _write_log(tmp_path, "with", [
+        {"event": "session_start"},
+        {"event": "node_stats", "stats": {"plan": {"turns": 1, "tokens": 300, "elapsed_ms": 1}}},
+    ])
+    without = _write_log(tmp_path, "without", [{"event": "session_start"}])
+    stat = total_tokens([parse_log_file(with_data), parse_log_file(without)])
+    assert stat["total_tokens"] == 300 and stat["runs"] == 1
+    assert stat["tokens_per_run"] == 300.0  # 不是 150.0
+
+
 def test_parallel_efficiency_measures_send_gain(tmp_path):
     """节点耗时合计 / 挂钟时间 = 有效并发度（Send 并行的实测收益）；缺数据则 n/a。"""
     from src.eval.metrics import parallel_efficiency

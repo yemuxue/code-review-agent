@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from statistics import median
 
 from src.eval.log_parser import RunLog
+from src.eval.pricing import estimate_cost_usd
 
 # 失败分类（§4.5）
 FAILURE_KINDS = {
@@ -306,18 +307,46 @@ def parallel_efficiency(runs: list[RunLog]) -> dict:
 
 
 def total_tokens(runs: list[RunLog]) -> dict:
-    """全局 token 消耗（node_stats 求和；单 Agent 路径取 session_end.total_tokens_used）。"""
+    """全局 token 消耗（node_stats 求和；单 Agent 路径取 session_end.total_tokens_used）。
+
+    `runs` 只统计**真有 token 数据**的运行：老日志两者皆无，若拿它们做分母，
+    平均值会被摊薄成一个看似精确的假数——分母是多少就要如实说多少。
+    """
     total = 0
+    contributing = 0
     for run in runs:
         stats = run.node_stats()
         if stats:
             total += sum(int(s.get("tokens", 0)) for s in stats.values()
                          if isinstance(s, dict))
-        else:
-            total += int(run.summary().get("total_tokens_used") or 0)
+            contributing += 1
+        elif run.summary().get("total_tokens_used"):
+            total += int(run.summary()["total_tokens_used"])
+            contributing += 1
     return {"total_tokens": total,
-            "tokens_per_run": round(total / len(runs), 1) if runs else 0,
-            "runs": len(runs)}
+            "tokens_per_run": round(total / contributing, 1) if contributing else 0,
+            "runs": contributing}
+
+
+def token_usage(runs: list[RunLog]) -> dict[str, int]:
+    """从 turn_end 的原始 usage 汇总输入/输出 token，缺失字段按零处理。"""
+    input_tokens = output_tokens = 0
+    for run in runs:
+        for event in run.of("turn_end"):
+            usage = event.get("usage")
+            if not isinstance(usage, dict):
+                continue
+            input_tokens += int(usage.get("input_tokens", 0) or 0)
+            output_tokens += int(usage.get("output_tokens", 0) or 0)
+    return {"input_tokens": input_tokens, "output_tokens": output_tokens}
+
+
+def cost_per_task(runs: list[RunLog], model: str | None = None) -> dict:
+    """基于落盘 usage 和显式单价计算成本；缺模型或单价时保持 n/a。"""
+    usage = token_usage(runs)
+    total = estimate_cost_usd(model, **usage) if model else None
+    return {**usage, "model": model, "total_usd": total,
+            "per_run_usd": round(total / len(runs), 8) if total is not None and runs else None}
 
 
 # ═══ 失败分类（§4.5） ═══
@@ -348,7 +377,10 @@ def classify_failures(runs: list[RunLog]) -> dict[str, list[dict]]:
             if not end or not end.get("error"):
                 continue
             kind = end.get("failure_kind")
-            if kind == "unknown_tool":
+            if kind == "malformed_tool_call":
+                buckets["F-01"].append({"run": rid, "tool": end.get("tool"),
+                                         "detail": "畸形 tool_call"})
+            elif kind == "unknown_tool":
                 buckets["F-02"].append({"run": rid, "tool": end.get("tool")})
             elif kind == "args_invalid":
                 buckets["F-03"].append({"run": rid, "tool": end.get("tool"),
@@ -440,11 +472,13 @@ class EvalReportData:
     failures: dict[str, list[dict]] = field(default_factory=dict)
     node_efficiency: dict = field(default_factory=dict)
     tokens: dict = field(default_factory=dict)
+    cost: dict = field(default_factory=dict)
     parallel: dict = field(default_factory=dict)
     coverage: dict = field(default_factory=dict)
 
 
-def compute_all(runs: list[RunLog], pass_groups: list[list[bool]] | None = None) -> EvalReportData:
+def compute_all(runs: list[RunLog], pass_groups: list[list[bool]] | None = None,
+                model: str | None = None) -> EvalReportData:
     """计算全部可算指标，并如实标注数据源覆盖度。"""
     return EvalReportData(
         runs=runs,
@@ -465,6 +499,7 @@ def compute_all(runs: list[RunLog], pass_groups: list[list[bool]] | None = None)
         failures=classify_failures(runs),
         node_efficiency=node_efficiency(runs),
         tokens=total_tokens(runs),
+        cost=cost_per_task(runs, model),
         parallel=parallel_efficiency(runs),
         coverage={
             "runs": len(runs),

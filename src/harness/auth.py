@@ -2,7 +2,7 @@
 Human-in-the-loop Guard / 人机协作审批
 危险工具调用前需人工确认
 
-面试话术：'用权限分级 + 人工审批实现 Human-in-the-loop，危险操作不自动执行'
+设计说明：'用权限分级 + 人工审批实现 Human-in-the-loop，危险操作不自动执行'
 """
 
 from enum import Enum

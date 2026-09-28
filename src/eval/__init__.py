@@ -4,12 +4,13 @@ from src.eval.metrics import (
     FAILURE_KINDS,
     EvalReportData,
     classify_failures,
+    cost_per_task,
     compute_all,
 )
 from src.eval.report import render_report, write_report
 
 __all__ = [
     "RunLog", "load_logs", "parse_log_file",
-    "FAILURE_KINDS", "EvalReportData", "classify_failures", "compute_all",
+    "FAILURE_KINDS", "EvalReportData", "classify_failures", "compute_all", "cost_per_task",
     "render_report", "write_report",
 ]

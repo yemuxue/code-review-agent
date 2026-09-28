@@ -69,7 +69,7 @@ def render_report(data: EvalReportData, source: str, generated_at: datetime | No
         "",
         f"- **生成时间**: {generated_at.strftime('%Y-%m-%d %H:%M')}",
         f"- **数据来源**: `{source}`（{cov['runs']} 个运行日志）",
-        "- **评测体系版本**: v1（Phase 1 指标库；故障注入用例集为 Phase 2，尚未接入）",
+        "- **评测体系版本**: v2（含 Phase 2 故障注入；健康链路门禁由统一 runner 单独统计）",
         f"- **日志坏行率**: {invalid_json_ratio(runs):.2%}（{cov['bad_lines']} 行）",
         "",
         "> 本报告是**基线**：只统计现有运行日志能算出的指标。数据源缺失的指标明确标注",
@@ -110,10 +110,16 @@ def render_report(data: EvalReportData, source: str, generated_at: datetime | No
         lines += ["无 node_stats 数据（Phase 0 前的运行未持久化节点统计）。", ""]
 
     lines += [
-        f"- **总 token**: {data.tokens['total_tokens']}（{data.tokens['runs']} 次运行，"
-        f"平均 {data.tokens['tokens_per_run']}/次）",
-        "- **成本/任务**: 未启用（需 `src/eval/pricing.py` 单价表，Phase 5）",
+        f"- **总 token**: {data.tokens['total_tokens']}（{data.tokens['runs']} 次运行有 token 数据，"
+        f"平均 {data.tokens['tokens_per_run']}/次；其余 {cov['runs'] - data.tokens['runs']} 个运行"
+        "未落 token，不计入平均值）",
     ]
+    cost = data.cost
+    if cost.get("total_usd") is None:
+        lines.append("- **成本/任务**: n/a（未提供已审计的模型单价或无模型标识）")
+    else:
+        lines.append(f"- **成本/任务**: ${cost['per_run_usd']:.8f}/次（模型 {cost['model']}；"
+                     f"输入 {cost['input_tokens']} token，输出 {cost['output_tokens']} token）")
     par = data.parallel
     if par.get("concurrency") is not None:
         lines.append(f"- **并行效率**: 节点耗时合计 {par['node_total_s']} s ÷ 挂钟 {par['wall_s']} s "
@@ -172,15 +178,15 @@ def _conclusions(data: EvalReportData) -> list[str]:
              f"（数据源缺失：{('、'.join(missing)) if missing else '无'}）。"]
     failed = [m.name for m in usable if _verdict(m).startswith("❌")]
     if failed:
-        lines.append(f"- 未达标指标：{('、'.join(failed))} —— 需在 Phase 2 用故障注入用例"
-                     "验证指标是否真能抓到对应故障，再决定修复优先级。")
+        lines.append(f"- 未达标指标：{('、'.join(failed))} —— 先区分是否为故障注入中的预期信号，"
+                     "再按失败归因确定修复优先级。")
     else:
         lines.append("- 已可算的指标均达标或无需达标（循环率/回归引入率目标为建立基线）。")
     top = failure_summary(data.failures)
     if top:
         lines.append(f"- 失败集中在 {top[0][0]} {top[0][1]}（{top[0][2]} 次），"
                      "对应 Phase 2 故障注入用例优先覆盖该路径。")
-    lines.append("- **下一步（Phase 2）**: 为每个指标补一条故障注入用例，证明指标真能抓住故障。")
+    lines.append("- **下一步**: 持续把生产事故沉淀为回归用例，并在真实 replay 中复核离线结论。")
     return lines
 
 
