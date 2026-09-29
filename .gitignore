@@ -11,5 +11,9 @@ sessions/
 /dist/
 *.egg-info/
 .worktrees/
-面试*.md
+.eval-runs/
 *.bak
+/.pm-workflow/
+/scripts/pm-runtime-config.js
+/scripts/.venv/
+/.handoff/

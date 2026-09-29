@@ -2,7 +2,7 @@
 LLM 响应缓存 / LLM Response Cache
 避免相同查询重复调用 API，基于内存 + TTL
 
-面试话术：'用 LRU + TTL 做 LLM 缓存，相同 prompt 直接返回缓存，节省 50%+ Token'
+设计说明：'用 LRU + TTL 做 LLM 缓存，相同 prompt 直接返回缓存，节省 50%+ Token'
 """
 
 import hashlib

@@ -12,6 +12,7 @@ if sys.platform == "win32" and hasattr(sys.stdout, "buffer"):
 
 from src.llm_client import AnthropicClient
 from src.harness.agent import ToolDefinition
+from src.harness.telemetry import AgentLogger
 from src.multi_agent.factory import create_langgraph_orchestrator, langgraph_final_report
 from src.tools.git_tools import (list_files, read_file, grep_pattern, run_command, write_file)
 from src.config import get_api_key, get_base_url, get_model
@@ -74,8 +75,11 @@ def main():
         temperature=0.1,
     )
 
+    # 遥测：一次运行一个 JSONL（含各角色事件与节点统计），是评测集的主要数据来源
+    logger = AgentLogger("logs")
     orchestrator = create_langgraph_orchestrator(client, ALL_TOOLS, auto_fix=args.auto_fix,
-                                                 skills_dir=args.skills_dir)
+                                                 skills_dir=args.skills_dir, logger=logger)
+    print(f"  Log: {logger.log_path}")
     if orchestrator.skills:
         print(f"  Skills: {len(orchestrator.skills)} loaded ({args.skills_dir or 'default'})")
     result = orchestrator.run(task=task, project_path=project_path)

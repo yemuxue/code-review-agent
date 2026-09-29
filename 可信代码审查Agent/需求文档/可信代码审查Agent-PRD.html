@@ -1,0 +1,1309 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>可信代码审查 Agent · 产品需求文档（PRD） v1.0</title>
+<style>
+  /* ===== 全局交互骨架样式（留在 head，不会被一键复制带走） ===== */
+  :root { --panel-w: 520px; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:#f4f5fa; font-family:"Microsoft YaHei","微软雅黑","PingFang SC","Hiragino Sans GB","Noto Sans CJK SC",sans-serif; }
+  .prototype-sidebar { position:fixed; right:0; top:0; height:100vh; width:var(--panel-w); background:#1a1a2e; color:#e8e6ff; display:none; flex-direction:column; z-index:60; box-shadow:-6px 0 24px rgba(0,0,0,.28); }
+  body.dual-pane .prototype-sidebar { display:flex; }
+  body.dual-pane { margin:0 !important; max-width:none !important; padding-right:calc(var(--panel-w) + 36px); }
+  .sidebar-header { display:flex; align-items:center; gap:10px; padding:14px 16px; border-bottom:1px solid rgba(255,255,255,.1); font-weight:700; font-size:15px; }
+  .sidebar-header button { margin-left:auto; background:rgba(255,255,255,.1); color:#e8e6ff; border:1px solid rgba(255,255,255,.18); border-radius:6px; padding:3px 10px; cursor:pointer; font-size:13px; }
+  .preview-context { padding:10px 16px; font-size:12.5px; line-height:1.7; color:#b9b5e0; border-bottom:1px solid rgba(255,255,255,.08); }
+  .page-selector { padding:10px 16px; border-bottom:1px solid rgba(255,255,255,.08); }
+  .page-selector select { width:100%; background:#252547; color:#e8e6ff; border:1px solid rgba(255,255,255,.2); border-radius:6px; padding:6px 8px; font-size:13px; }
+  .preview-zoom { display:flex; align-items:center; gap:6px; padding:8px 16px; border-bottom:1px solid rgba(255,255,255,.08); }
+  .preview-zoom button { background:rgba(255,255,255,.08); color:#e8e6ff; border:1px solid rgba(255,255,255,.16); border-radius:6px; padding:3px 10px; font-size:12px; cursor:pointer; line-height:1.6; }
+  .preview-zoom button:hover { background:rgba(255,255,255,.18); }
+  .preview-zoom #previewZoomLabel { min-width:82px; text-align:center; font-size:12px; color:#b9b5e0; font-variant-numeric:tabular-nums; }
+  .device-shell { flex:1 1 auto; overflow:auto; display:flex; align-items:flex-start; justify-content:center; padding:16px; }
+  .device-wrapper { flex:0 0 auto; transform-origin:top left; }
+  .device-wrapper iframe, .device-wrapper img { display:block; transform-origin:top left; border:0; background:#fff; }
+  .prototype-resizer { position:absolute; left:0; top:0; width:7px; height:100%; cursor:col-resize; background:transparent; }
+  .prototype-resizer:hover { background:rgba(255,255,255,.15); }
+  .fab-group { position:fixed; right:28px; bottom:28px; display:flex; gap:10px; z-index:70; }
+  body.dual-pane .fab-group { right:calc(var(--panel-w) + 28px); }
+  .fab-group button { border:none; border-radius:999px; padding:11px 18px; font-size:13.5px; font-weight:700; cursor:pointer; box-shadow:0 6px 18px rgba(31,41,55,.22); font-family:inherit; }
+  #dualPaneToggle { background:#ffffff; color:#3730a3; border:1px solid #c7d2fe; }
+  .save-btn { background:var(--pm-accent,#5b5bd6); color:#fff; }
+  .copy-btn { position:fixed; left:28px; bottom:28px; z-index:70; background:#ffffff; color:#334155; border:1px solid #cbd5e1; border-radius:999px; padding:11px 18px; font-size:13.5px; font-weight:700; cursor:pointer; box-shadow:0 6px 18px rgba(31,41,55,.18); font-family:inherit; }
+  .row-ctrl { position:absolute; left:-30px; display:flex; flex-direction:column; gap:3px; opacity:0; pointer-events:none; transition:opacity .15s; z-index:4; }
+  tr:hover > * .pm-anchor > .row-ctrl, tr:hover .pm-anchor > .row-ctrl { opacity:1; pointer-events:auto; }
+  .row-ctrl button { width:22px; height:18px; border:none; border-radius:5px; cursor:pointer; color:#fff; font-size:13px; font-weight:700; line-height:1; }
+  .row-add { background:#00b894; } .row-del { background:#e74c3c; }
+  .editable-table-remove { position:absolute; top:-12px; right:8px; z-index:5; border:none; border-radius:999px; background:rgba(231,76,60,.96); color:#fff; font-size:12px; padding:6px 10px; cursor:pointer; opacity:0; pointer-events:none; transition:opacity .15s; }
+  .editable-table-wrap:hover .editable-table-remove { opacity:1; pointer-events:auto; }
+  .col-resizer { position:absolute; top:0; right:0; width:9px; height:100%; cursor:col-resize; transform:translateX(50%); z-index:3; opacity:0; transition:opacity .15s; }
+  .col-resizer::after { content:''; position:absolute; left:4px; top:0; width:2px; height:100%; background:#00b894; opacity:0; transition:opacity .15s; }
+  th:hover .col-resizer, td:hover .col-resizer, body.col-resizing .col-resizer.active { opacity:1; }
+  .col-resizer:hover::after, body.col-resizing .col-resizer.active::after { opacity:1; }
+  .row-resizer { position:absolute; left:0; bottom:0; width:100%; height:9px; cursor:row-resize; transform:translateY(50%); z-index:3; }
+  .row-resizer::after { content:''; position:absolute; top:4px; left:0; width:100%; height:2px; background:#00b894; opacity:0; transition:opacity .15s; }
+  .row-resizer:hover::after, body.row-resizing .row-resizer.active::after { opacity:1; }
+  body.col-resizing, body.row-resizing { user-select:none !important; }
+  body.col-resizing { cursor:col-resize !important; } body.row-resizing { cursor:row-resize !important; }
+  .edited-cell { background:#e8f5e9 !important; }
+  .editable-table-wrap { position:relative; margin:14px 0; }
+  .editable-table-wrap > table { margin:0 !important; }
+  .pm-anchor { position:relative; }
+  .pm-undo-toast { position:fixed; left:50%; bottom:34px; transform:translateX(-50%); background:rgba(33,33,45,.92); color:#fff; padding:8px 16px; border-radius:8px; font-size:13px; line-height:1.4; pointer-events:none; opacity:0; transition:opacity .18s; z-index:9999; }
+  .pm-undo-toast.show { opacity:1; }
+</style>
+</head>
+<body>
+
+<main id="prdContent">
+<style>
+  /* ===== 正文样式：必须位于 #prdContent 内，一键复制全文才带得走 ===== */
+  :root{
+    --pm-accent:#5b5bd6;
+    --pm-ink:#1f2937;
+    --pm-heading:color-mix(in srgb, var(--pm-accent) 38%, #1f2937);
+    --pm-line:color-mix(in srgb, var(--pm-accent) 13%, #fff);
+    --pm-soft:color-mix(in srgb, var(--pm-accent) 9%, #fff);
+    --pm-panel:520px;
+  }
+  #prdContent { max-width:1400px; margin:0 auto; padding:34px 36px 120px; background:#fff; color:var(--pm-ink); font-family:"Microsoft YaHei","微软雅黑","PingFang SC","Hiragino Sans GB","Noto Sans CJK SC",sans-serif; line-height:1.75; }
+  #prdContent h1.doc-title { font-size:30px; font-weight:800; color:var(--pm-heading); margin:0 0 8px; line-height:1.35; }
+  #prdContent p.doc-sub { font-size:14.5px; color:#64748b; margin:0 0 26px; }
+  #prdContent h2 { font-size:21px; font-weight:800; color:var(--pm-heading); margin:38px 0 14px; padding-left:12px; border-left:5px solid var(--pm-accent); line-height:1.45; }
+  #prdContent h3 { font-size:16px; font-weight:700; color:var(--pm-heading); margin:24px 0 10px; }
+  #prdContent p { margin:9px 0; font-size:14.5px; }
+  #prdContent ul, #prdContent ol { margin:8px 0 8px 22px; padding:0; font-size:14.5px; }
+  #prdContent li { margin:4px 0; }
+  #prdContent strong { color:#111827; }
+  #prdContent table { width:100%; table-layout:fixed; border-collapse:collapse; margin:14px 0; font-size:13.8px; }
+  #prdContent th, #prdContent td { border:1px solid var(--pm-line); padding:9px 11px; text-align:left; vertical-align:top; word-break:break-word; }
+  #prdContent thead th, #prdContent tr > th { background:var(--pm-soft); font-weight:700; color:var(--pm-heading); }
+  #prdContent tbody tr:nth-child(even) td { background:#fcfcff; }
+  #prdContent .meta-table td:first-child { width:160px; font-weight:700; background:var(--pm-soft); }
+  #prdContent .source-note, #prdContent .note { font-size:13px; color:#64748b; background:#f8fafc; border-left:3px solid #cbd5e1; padding:9px 12px; margin:10px 0; }
+  #prdContent .alert { font-size:13.5px; background:#fffbeb; border-left:4px solid #f59e0b; padding:10px 14px; margin:12px 0; }
+  #prdContent .scope-card, #prdContent .risk-card { border-radius:10px; padding:12px 16px; margin:12px 0; font-size:14px; }
+  #prdContent .scope-card { background:#eef7f0; border:1px solid #bfe3c8; }
+  #prdContent .risk-card { background:#fdf1f1; border:1px solid #f3c9c9; }
+  #prdContent .scope-card b, #prdContent .risk-card b { display:block; margin-bottom:6px; font-size:14.5px; }
+  #prdContent .desc-block { margin:0 0 10px; }
+  #prdContent .desc-block:last-child { margin-bottom:0; }
+  #prdContent .desc-block > b { display:block; color:var(--pm-heading); margin-bottom:4px; font-size:13.5px; }
+  #prdContent .desc-block p { margin:3px 0; font-size:13.5px; }
+  #prdContent td.proto { text-align:center; }
+  #prdContent img.proto-shot { max-width:100%; height:auto; border:1px solid var(--pm-line); border-radius:6px; background:#fff; }
+  #prdContent p.asset-note { font-size:12px; color:#94a3b8; margin:6px 0 0; }
+  #prdContent pre.seq-code { background:#0f172a; color:#e2e8f0; border-radius:8px; padding:14px 16px; font-size:12.5px; line-height:1.65; overflow:auto; font-family:Consolas,Menlo,monospace; }
+  #prdContent code { font-family:Consolas,Menlo,monospace; font-size:12.8px; }
+  #prdContent p.flow-note { font-size:12.5px; color:#94a3b8; }
+</style>
+
+<h1 class="doc-title">可信代码审查 Agent · 产品需求文档（PRD）</h1>
+<p class="doc-sub">代码作者 / Reviewer / 研发经理 / 平台管理员 · GitHub / GitLab PR 应用 + Web 工作台 + CLI / REST · MVP v1.0</p>
+
+<h2>📋 项目信息</h2>
+<table class="meta-table"><tbody>
+<tr><td>项目名称</td><td>可信代码审查 Agent（Code Review Agent）</td></tr>
+<tr><td>版本号</td><td>MVP v1.0（P0 范围）</td></tr>
+<tr><td>文档负责人</td><td>产品负责人</td></tr>
+<tr><td>需求状态</td><td>评审中（P0 范围与「差距关闭表」待研发确认）</td></tr>
+<tr><td>目标用户</td><td>代码作者、Reviewer / Tech Lead、研发经理、安全 / 平台管理员</td></tr>
+<tr><td>涉及端</td><td>GitHub / GitLab PR 应用（待建设）、Web 工作台、CLI、REST API</td></tr>
+<tr><td>功能入口</td><td>PR 内评论与检查项；工作台任务页与趋势页；CLI <code>cra-cli</code> / <code>cra-multi</code>；REST <code>/analyze</code> 等接口</td></tr>
+<tr><td>交付阶段</td><td>MVP v0.1（P0）；P1 / P2 / P3 见「九、上线计划与灰度策略」后的路线图</td></tr>
+<tr><td>关联文件</td><td>docs/architecture.md、docs/agent-evaluation-plan.md、docs/industrial-gaps.md、docs/current-remediation-plan.md、reports/、docs/product-manager/00～07</td></tr>
+<tr><td>事实边界</td><td>本仓库当前是本地 / 自托管技术原型。「已具备」均有代码证据；「待建设」属产品化规划，不代表已实现</td></tr>
+</tbody></table>
+
+<h2>📝 版本记录</h2>
+<table class="version-table"><colgroup><col style="width:90px"><col style="width:120px"><col style="width:120px"><col></colgroup>
+<thead><tr><th>版本</th><th>日期</th><th>修订人</th><th>修订说明</th></tr></thead>
+<tbody>
+<tr><td>v1.0</td><td>2026-09-28</td><td>产品负责人</td><td>由 v0.1 大纲扩写为完整 PRD：新增项目信息、版本记录、需求目标量化表、范围块、逐功能规格与【边界说明】、数据埋点、时序图、非功能需求、发布门槛与灰度、追溯矩阵；P0 功能重排为 FR-1～FR-6（新增「变更集缓存与额度保护」）；新增「差距关闭表」区分已具备与待建设。影响：研发评估、测试用例与试点验收口径</td></tr>
+<tr><td>v0.1</td><td>2026-09-20</td><td>产品负责人</td><td>首版 MVP 范围与 12 周路线图大纲，确立只读优先、审批后修复的产品边界</td></tr>
+</tbody></table>
+
+<h2>一、需求背景</h2>
+<p>使用 GitHub / GitLab PR 流程的研发团队，在合入主干前的审查环节依赖人工 Reviewer：代码作者提交变更后等待人工审查，Reviewer 需要在有限时间内判断变更是否可合入。该环节存在三个结构性问题：审查时间与开发节奏错位（作者被阻塞、Reviewer 被打断）、重复性低风险问题持续消耗高级工程师注意力、评论缺少可复现证据导致作者不信任结论。</p>
+<p>对代码作者，反馈到达晚、来回沟通多，等不到结论就无法推进；对 Reviewer，上下文切换成本高，大量时间花在确认低价值问题上；对研发管理者，审查投入无法量化，无法判断质量投入是否产生收益；对安全 / 平台人员，引入外部 AI 工具会带来代码外发、自动改写失控和结果不可追溯的合规风险。产品机会因此不是「再做一个能生成评论的模型入口」，而是把每个高风险问题转化为<strong>可核验、可处理、可回滚的决策单元</strong>。</p>
+<p class="source-note">事实来源：reports/eval_replay_20260927.md、docs/agent-evaluation-plan.md。标注集 124 条（108 条正例 + 16 条 FP 陷阱），2026-09-27 replay 扫描 124/124，运行口径 Precision 95.3%、Recall 38.0%、F1 0.54，其中 3 条 API 超时被当前脚本计入 FN；排除 API_ERROR 后 Precision 95.3%、Recall 39.0%、F1 0.55。这组数字说明误报已可控、漏报明显，直接决定两个产品选择：结果默认不阻塞合并、高危问题需要确定性规则兜底。口径必须并列说明：仓库内另有 data/eval_results.json 记录 TP=48 / FP=1 / FN=60 / TN=15（Precision 98.0%、Recall 44.4%、F1 0.61），两者来自不同运行，不得混用或取优。尚未完成真实客户访谈、真实 PR 试点与长期 ROI 证明。</p>
+
+<h2>二、需求目标</h2>
+<p><strong>总目标：让代码作者和 Reviewer 在一个 PR 内完成「发现问题 — 核验证据 — 决定处理 — 安全生成补丁」的闭环，并愿意把结果当作审查输入，而不是把它当作需要再次审查的噪音源。</strong></p>
+<table class="goal-table">
+<colgroup><col><col><col style="width:96px"><col style="width:150px"></colgroup>
+<thead><tr><th>用户结果</th><th>衡量指标</th><th>统计口径</th><th>预期方向</th><th>目标值</th></tr></thead>
+<tbody>
+<tr><td>作者在合并前就能拿到可用反馈，不再干等人工审查</td><td>首结果时延 P95</td><td>任务开始至第一条可判断结果的耗时 95 分位数</td><td>↓</td><td>≤ 5 分钟</td></tr>
+<tr><td>Reviewer 打开产品就能看到可信结论，不必自己再核一遍</td><td>有帮助率</td><td>标记「有帮助」的发现数 ÷ 有明确反馈的发现数</td><td>↑</td><td>≥ 60%</td></tr>
+<tr><td>结果被真正用起来，而不只是被看过</td><td>采纳率</td><td>已采纳或已修复的确认问题数 ÷ 确认问题数</td><td>↑</td><td>待基线确认</td></tr>
+<tr><td>用户不被错误结论误导</td><td>误报率</td><td>被标记为误报的发现数 ÷ 有反馈的发现数</td><td>↓</td><td>≤ 20%</td></tr>
+<tr><td>高危问题不漏，安全事故不发生</td><td>高危问题召回率</td><td>被检出的高危标注问题数 ÷ 标注集中高危问题数</td><td>↑</td><td>待基线确认</td></tr>
+<tr><td>重复审查不再重复付费与等待</td><td>缓存命中率</td><td>命中缓存的审查任务数 ÷ 审查任务总数</td><td>↑</td><td>待基线确认</td></tr>
+<tr><td>修复动作不制造新故障</td><td>Verify 通过率</td><td>通过验证的应用补丁数 ÷ 已执行验证的补丁数</td><td>↑</td><td>≥ 90%</td></tr>
+<tr><td>修复动作可放心授权</td><td>回归引入率</td><td>修复后新增失败的补丁数 ÷ 已应用且完成回归检查的补丁数</td><td>↓</td><td>趋近 0</td></tr>
+<tr><td>单位成本可承受、可解释</td><td>成本 / PR</td><td>模型与基础设施成本 ÷ 完成审查的 PR 数</td><td>↓</td><td>待基线确认</td></tr>
+</tbody></table>
+<p class="source-note">口径细则、切片维度与分母定义以 docs/product-manager/05_指标体系与实验方案.md §3.1 为准。没有真实基线前一律写「待基线确认」，不编造增幅。Precision 95.3% / Recall 38.0% 是单次、单数据集的离线评测观察值，不能当作真实用户价值或跨仓库泛化能力的证明。</p>
+
+<h2>三、需求概述（功能清单）</h2>
+<div class="scope-card"><b>本期范围</b>
+  <ul>
+    <li>以变更集为中心的只读审查：以 PR / Commit 为输入，只读取变更文件与必要上下文，不做全仓库默认扫描。</li>
+    <li>可核验的发现卡片：每条发现可回到文件、行号、上下文与验证动作；三类验证结论视觉可区分。</li>
+    <li>任务状态与失败可恢复：阶段可见，失败可归因、可重试，刷新后可恢复。</li>
+    <li>补丁预览 + 人工审批：针对已确认问题生成完整 diff，未经审批不写入；写入可回滚。</li>
+    <li>有边界的 Verify：只能执行允许列表内的校验命令，结果如实回传。</li>
+    <li>变更集缓存与额度保护：同一 commit 重复审查复用缓存，不重复消耗模型额度。</li>
+    <li>反馈沉淀：采纳 / 忽略 / 误报标签与理由进入反馈事件与回归样本。</li>
+  </ul>
+</div>
+<div class="risk-card"><b>本期不做什么 / 暂不展开</b>
+  <ul>
+    <li>不替代人工安全审计、架构评审与发布审批——产品定位是审查输入，不是质量责任的转移。</li>
+    <li>不做 IDE 内联实时补全与全仓库聊天——偏离「合并前决策」这一高频高价值场景。</li>
+    <li>不做自动合并、不做强制阻塞合并——当前漏报明显，强阻塞会伤害研发流程，先建立基线。</li>
+    <li>不做复杂 RBAC 与组织级策略编排——依赖企业身份体系，属 P2，MVP 只做固定权限矩阵。</li>
+    <li>不把用户反馈直接当标注真值——反馈含噪音，直接当标签会污染评测集。</li>
+    <li>不默认保存完整源代码与密钥——数据最小化是安全前提。</li>
+  </ul>
+</div>
+<table class="overview-table"><thead><tr><th>模块</th><th>一级功能</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>FR-1 变更集接入与上下文边界</td><td>授权仓库后选择 PR / Commit，只读取变更文件与必要上下文；读取范围在任务开始前可见</td></tr>
+<tr><td>2</td><td>FR-2 审查任务状态与失败恢复</td><td>展示排队、读取上下文、分析、验证、生成报告、失败、完成；失败可归因可重试</td></tr>
+<tr><td>3</td><td>FR-3 发现卡片与证据链</td><td>类别、严重度、位置、描述、证据、影响、建议、验证状态、处理状态；可跳转、可筛选、可反馈</td></tr>
+<tr><td>4</td><td>FR-4 补丁预览与人工审批</td><td>生成完整 diff 并展示影响面；审批后写入，全程审计与可回滚</td></tr>
+<tr><td>5</td><td>FR-5 Verify 结果与降级</td><td>执行语法检查与允许列表内的校验命令，如实回传通过 / 失败 / 未配置</td></tr>
+<tr><td>6</td><td>FR-6 变更集缓存与额度保护</td><td>同一 commit 复用结果；重试与并发不失控，成本可见</td></tr>
+</tbody></table>
+
+<h3>3.1 权限矩阵</h3>
+<table class="rule-table"><thead><tr><th>动作</th><th>代码作者</th><th>Reviewer</th><th>平台管理员</th><th>默认策略</th></tr></thead>
+<tbody>
+<tr><td>查看审查结果</td><td>✓</td><td>✓</td><td>✓</td><td>仅授权仓库成员</td></tr>
+<tr><td>标记采纳 / 忽略 / 误报</td><td>✓</td><td>✓</td><td>✓</td><td>写入反馈事件，保留操作者与时间</td></tr>
+<tr><td>生成补丁</td><td>✓</td><td>✓</td><td>✓</td><td>只生成，不写入</td></tr>
+<tr><td>批准写入</td><td>−</td><td>✓</td><td>✓</td><td>明确确认 + 审计记录</td></tr>
+<tr><td>修改仓库规则</td><td>−</td><td>−</td><td>✓</td><td>组织级权限</td></tr>
+<tr><td>查看成本与遥测</td><td>部分</td><td>部分</td><td>✓</td><td>脱敏后按角色展示</td></tr>
+<tr><td>查看审计记录</td><td>−</td><td>部分</td><td>✓</td><td>只读，不可删改</td></tr>
+</tbody></table>
+
+<h3>3.2 严重度与优先级口径</h3>
+<table class="rule-table"><thead><tr><th>严重度</th><th>判定依据</th><th>是否允许阻塞合并（MVP）</th></tr></thead>
+<tbody>
+<tr><td>High</td><td>可导致安全漏洞、数据错误、崩溃或资金 / 权限损失</td><td>否（只软提醒，人工判断）</td></tr>
+<tr><td>Medium</td><td>可导致逻辑错误、性能退化或可维护性显著下降</td><td>否</td></tr>
+<tr><td>Low</td><td>风格、命名、注释、轻微可读性问题</td><td>否</td></tr>
+</tbody></table>
+
+<h3>3.3 验证结论与处理状态口径</h3>
+<table class="rule-table"><thead><tr><th>验证结论</th><th>含义</th><th>处理状态取值</th></tr></thead>
+<tbody>
+<tr><td>CONFIRMED</td><td>已取得证据支持，问题成立；强提示，默认进入修复候选</td><td>OPEN / ACCEPTED / FIXED / FAILED</td></tr>
+<tr><td>FALSE_POSITIVE</td><td>已验证为误报；弱化展示，仍可追溯原因</td><td>IGNORED</td></tr>
+<tr><td>UNCERTAIN</td><td>证据不足，无法确认；明确标注不确定，不进入默认修复候选</td><td>OPEN / IGNORED</td></tr>
+</tbody></table>
+
+<h3>3.4 风险分级与授权口径</h3>
+<table class="rule-table"><thead><tr><th>等级</th><th>覆盖动作</th><th>授权要求</th></tr></thead>
+<tbody>
+<tr><td>SAFE（只读）</td><td>读取文件、列目录、检索、取 diff、克隆授权仓库</td><td>默认自动放行</td></tr>
+<tr><td>MODERATE（受控写入 / 受控执行）</td><td>写入文件、执行允许列表内命令、创建分支或提交</td><td>需明确审批；写前自动备份</td></tr>
+<tr><td>DANGEROUS（危险动作）</td><td>递归删除、磁盘格式化、关机、系统级设备写入等</td><td>一律拒绝，不提供自助放行入口</td></tr>
+</tbody></table>
+<p class="alert"><strong>当前实现差距：</strong>现有人工审批守卫在未注入外部审批回调时，会把「受控写入 / 受控执行」级动作自动放行；并且有入口根本不注入该守卫。因此当前并不存在「任何写入均需人工审批」的保证。上表描述的是 MVP 目标行为，不是现状。</p>
+
+<h3>3.5 缓存与额度口径</h3>
+<table class="rule-table"><thead><tr><th>规则</th><th>口径</th></tr></thead>
+<tbody>
+<tr><td>缓存键</td><td>仓库标识 + commit SHA + 上下文策略版本 + 模型 / 提示词版本</td></tr>
+<tr><td>命中缓存</td><td>直接复用既有结果，任务标记「命中缓存」，不重复计费</td></tr>
+<tr><td>未命中但要复用</td><td>必须明确告知用户为何重新计算（如上下文策略或模型版本已变更）</td></tr>
+<tr><td>单任务额度保护</td><td>单任务 Token 与工具轮次有上限，触顶后转为「部分完成 + 明确说明」</td></tr>
+<tr><td>重试</td><td>有限次退避重试，重试不叠加重复计费；超过上限进入失败态</td></tr>
+</tbody></table>
+<p class="alert"><strong>当前实现差距：</strong>现有缓存是进程内的模型响应缓存（内存 + 过期时间，进程重启即失效），没有变更集粒度的审查结果缓存；也没有任何 Token / 成本上限与数据保留策略。</p>
+
+<h3>3.6 差距关闭表（已具备 → MVP 需建设）</h3>
+<table class="rule-table"><thead><tr><th>编号</th><th>能力</th><th>已具备的现状</th><th>MVP 需建设</th></tr></thead>
+<tbody>
+<tr><td>G-1</td><td>PR / Commit 原生接入</td><td>仅本地路径与本地 git 仓库操作</td><td>GitHub / GitLab 授权、变更集列表、行内评论回写</td></tr>
+<tr><td>G-2</td><td>任务状态机</td><td>无任务状态枚举，会话模式是自由字符串</td><td>状态持久化、阶段可见、刷新后恢复</td></tr>
+<tr><td>G-3</td><td>发现字段规格</td><td>现有单值行号、验证结论含中间态、布尔型已验证标记</td><td>行号区间、处理状态、结构化证据、验证状态、追踪标识</td></tr>
+<tr><td>G-4</td><td>写入人工审批</td><td>风险分级已实现，但默认自动放行中度风险，且部分入口未注入守卫</td><td>所有入口强制注入审批；未获批准不得写入；审计留痕</td></tr>
+<tr><td>G-5</td><td>命令允许列表</td><td>沙箱支持白名单参数但默认为空；容器级沙箱已实现却从未被实例化</td><td>默认允许列表 + 超时；按需启用容器级隔离</td></tr>
+<tr><td>G-6</td><td>变更集缓存</td><td>仅进程内模型响应缓存</td><td>按缓存键的持久缓存与命中说明</td></tr>
+<tr><td>G-7</td><td>额度与预算控制</td><td>无 Token / 成本上限、无预算阈值、无保留策略</td><td>单任务上限、超限转「部分完成」、成本可查</td></tr>
+<tr><td>G-8</td><td>追踪标识</td><td>无统一追踪标识，日志会话标识与数据库会话标识不互通</td><td>统一可关联的追踪标识</td></tr>
+<tr><td>G-9</td><td>审计不可篡改</td><td>追加写日志文件与日志表，无防篡改、无保留期</td><td>审计记录只读、可追溯、按策略保留</td></tr>
+<tr><td>G-10</td><td>用户隔离</td><td>依赖会话所有人标识过滤，有已知入口未做该隔离</td><td>全部入口统一隔离校验</td></tr>
+</tbody></table>
+
+<h2>四、业务流程图</h2>
+<pre class="seq-code"><code>flowchart TD
+    A[用户授权仓库并选择 PR / Commit] --&gt; B{权限与参数校验}
+    B --&gt;|不通过| B1[明确提示缺失权限并可切换仓库]
+    B --&gt;|通过| C{缓存是否命中}
+    C --&gt;|命中| C1[复用既有结果并标记命中]
+    C --&gt;|未命中| D[读取变更文件与必要上下文]
+    D --&gt; E[发现候选问题]
+    E --&gt; F[逐条验证证据并给出验证结论]
+    F --&gt; G[去重合并、分级并生成报告]
+    G --&gt; H[展示发现卡片与证据链]
+    C1 --&gt; H
+    H --&gt; I{用户如何处理}
+    I --&gt;|采纳 / 忽略 / 误报| J[记录反馈并沉淀回归样本]
+    I --&gt;|需要修复| K[生成补丁并展示完整 diff]
+    K --&gt; L{是否批准写入}
+    L --&gt;|拒绝| M[仓库保持不变，保留 diff 供后续处理]
+    L --&gt;|批准| N[写入分支 / 创建提交]
+    N --&gt; O[执行允许列表内的 Verify]
+    O --&gt; P{验证是否通过}
+    P --&gt;|通过| Q[标记已验证并写审计记录]
+    P --&gt;|失败| R[标记失败，保留 diff 与命令输出，可回滚]
+    Q --&gt; J
+    R --&gt; J
+    M --&gt; J
+    J --&gt; S[反馈进入评测集与趋势面板]</code></pre>
+<p class="flow-note">以上为可复制的 Mermaid 源码。交互式流程图文件（[需求名]-flow.html）在流程图步骤产出后替换本块；本次先行保留源码文本，避免 iframe 指向不存在的文件。</p>
+
+<h2>五、交互流程图</h2>
+<pre class="seq-code"><code>flowchart LR
+    A[S1 任务列表页] --&gt;|新建审查| B[S2 接入与范围确认页]
+    B --&gt;|启动| C[S3 任务进度页]
+    C --&gt;|完成| D[S4 发现列表页]
+    C --&gt;|失败| C1[失败详情与重试]
+    C1 --&gt;|重试| C
+    B --&gt;|取消| A
+    D --&gt;|点击某条发现| E[S5 发现详情 / 证据链]
+    D --&gt;|批量筛选与反馈| D
+    E --&gt;|采纳并修复| F[S6 补丁预览与审批页]
+    E --&gt;|标记忽略 / 误报| D
+    F --&gt;|拒绝| D
+    F --&gt;|批准写入| G[S7 Verify 结果页]
+    G --&gt;|通过| H[S8 审查报告页]
+    G --&gt;|失败或未配置| G1[失败 / 未配置处理]
+    G1 --&gt; H
+    H --&gt;|查看趋势| I[S9 指标与成本面板]
+    D --&gt;|导出 / 分享| H
+    H --&gt;|回写 PR 评论| J[S10 PR 内评论与检查项]</code></pre>
+<p class="flow-note">以上为可复制的 Mermaid 源码；交互流程图文件（[需求名]-screenflow.html）产出后替换本块。</p>
+
+<h2>六、详细方案</h2>
+<p class="alert"><strong>原型列素材说明：</strong>本需求尚无界面设计稿与截图素材，原型列当前放的是<strong>占位线框图</strong>（原型截图/wireframe-S*.svg，由 scripts/gen_prd_wireframes.py 生成），不是最终视觉设计。素材补齐后按同名替换为真实截图即可。每一行 = 一个界面或一个状态变体。</p>
+<table class="scheme-table">
+<colgroup><col class="c-mod" style="width:100px"><col class="c-fn" style="width:120px"><col class="c-proto" style="width:360px"><col></colgroup>
+<thead><tr><th>一级模块</th><th>二级功能</th><th>原型</th><th>描述</th></tr></thead><tbody>
+
+<tr data-preview="s1">
+  <td class="mod" rowspan="1">1<br>接入与任务管理</td>
+  <td class="fn">1.1 任务列表页</td>
+  <td class="proto"><img class="proto-shot" src="../原型截图/wireframe-S1.svg" alt="任务列表页占位线框图" width="1672" height="941"><p class="asset-note">占位线框图 · 待替换为真实截图</p></td>
+  <td class="desc">
+    <div class="desc-block"><b>【页面元素】</b>
+      <p>1、顶部标题栏：标题「审查任务」+ 右侧「新建审查」主按钮</p>
+      <p>2、筛选栏：仓库下拉、状态下拉、时间范围下拉、「仅看失败」勾选项</p>
+      <p>3、任务表格：任务编号、仓库与变更集、状态、发现数、首结果时延、操作入口</p>
+    </div>
+    <div class="desc-block"><b>【交互说明】</b>
+      <p>1、点击某行任务 → 按任务所处阶段进入任务进度页、发现列表页或审查报告页</p>
+      <p>2、点击「重试」→ 复用原任务输入重新排队，生成新任务编号并保留与原任务的关联</p>
+      <p>3、切换筛选条件 → 列表即时刷新，筛选状态写入地址栏以便分享与刷新恢复</p>
+    </div>
+    <div class="desc-block"><b>【数据与内容规则】</b>
+      <p>1、仅展示当前用户有权访问的仓库任务</p>
+      <p>2、默认按创建时间倒序，支持按状态与严重度筛选</p>
+    </div>
+    <div class="desc-block"><b>【边界说明】</b>
+      <p>1、无任何任务 → 空态引导「新建一次只读审查」，并给出一条示例任务说明</p>
+      <p>2、任务列表加载失败 → 展示重试入口，不显示假数据</p>
+      <p>3、任务量超出单页 → 分页或游标加载，不通过截断隐藏旧任务</p>
+    </div>
+  </td>
+</tr>
+
+<tr data-preview="s2">
+  <td class="fn">1.2 接入与范围确认页</td>
+  <td class="proto"><img class="proto-shot" src="../原型截图/wireframe-S2.svg" alt="接入与范围确认页占位线框图" width="1672" height="941"><p class="asset-note">占位线框图 · 待替换为真实截图</p></td>
+  <td class="desc">
+    <div class="desc-block"><b>【页面元素】</b>
+      <p>1、仓库选择区：已授权仓库下拉，未授权仓库不可选并提供「申请权限」入口</p>
+      <p>2、变更集选择区：单选「Pull Request / Commit」，分别对应 PR 编号或列表、commit SHA 输入框</p>
+      <p>3、变更集摘要卡片：PR 标题、作者、目标分支、变更文件数、增删行数</p>
+      <p>4、上下文范围区块：以「读取 / 不读取」两行说明边界，并提供「展开查看将读取的文件清单」</p>
+      <p>5、权限与影响提示区：只读声明、预计消耗、预计耗时区间</p>
+      <p>6、底部操作区：「启动审查」主按钮、「取消」次按钮</p>
+    </div>
+    <div class="desc-block"><b>【交互说明】</b>
+      <p>1、选择仓库 → 加载该仓库可选 PR / Commit 列表；无权限仓库不进入下一步</p>
+      <p>2、切换「Pull Request / Commit」→ 变更集输入控件随之切换，两种模式各自保留已填内容</p>
+      <p>3、点击「展开查看将读取的文件清单」→ 展开文件路径列表，清单过长时分页展示</p>
+      <p>4、点击「启动审查」→ 校验权限与参数，通过则跳转任务进度页，不通过则就地提示原因与修复入口</p>
+      <p>5、点击「取消」→ 放弃本次配置并返回任务列表页，不产生任何读取与计费</p>
+    </div>
+    <div class="desc-block"><b>【功能逻辑】</b>
+      <p>1、上下文读取范围在任务开始前确定并展示，任务启动后不再静默扩大；确需扩大时必须回到本页重新确认</p>
+    </div>
+    <div class="desc-block"><b>【边界说明】</b>
+      <p>1、仓库未授权 → 「启动审查」置灰，点击提示所需权限项与申请入口，不读取任何代码</p>
+      <p>2、变更集不存在或已被强制推送覆盖 → 提示该变更集已不可用，并提供重新选择入口</p>
+      <p>3、无变更文件 → 允许启动但明确提示「未检测到变更」，任务完成后不产生发现</p>
+      <p>4、变更文件数或 diff 体量超出上下文上限 → 提示缩小范围或改为仅审查指定目录，不静默截断文件</p>
+      <p>5、同一 commit 命中缓存 → 启动前即提示将复用结果，用户可选择复用或强制重新计算</p>
+    </div>
+  </td>
+</tr>
+
+<tr data-preview="s3">
+  <td class="fn">1.3 任务进度页</td>
+  <td class="proto"><img class="proto-shot" src="../原型截图/wireframe-S3.svg" alt="任务进度页占位线框图" width="1672" height="941"><p class="asset-note">占位线框图 · 待替换为真实截图</p></td>
+  <td class="desc">
+    <div class="desc-block"><b>【页面元素】</b>
+      <p>1、任务头部：任务编号、仓库、变更集、取消入口</p>
+      <p>2、阶段清单：权限校验、读取上下文、分析变更、验证证据、生成报告，各自状态图标与补充信息</p>
+      <p>3、进度信息行：预计剩余、已用时间、当前消耗</p>
+      <p>4、增量结果入口：「查看已确认的发现」，出现第一条结果后即可点击</p>
+    </div>
+    <div class="desc-block"><b>【交互说明】</b>
+      <p>1、任务进行中刷新页面 → 恢复当前阶段与已产出结果，不重头开始</p>
+      <p>2、点击「取消」→ 停止后续阶段并保留已产生结果，任务标记为已取消</p>
+      <p>3、出现第一条可判断结果 → 展开增量入口并提示首结果时延</p>
+      <p>4、阶段失败 → 就地展开失败原因与「重试」入口，不隐藏原始错误类别</p>
+    </div>
+    <div class="desc-block"><b>【功能逻辑】</b>
+      <p>1、只展示用户可理解的阶段名，不展示内部 Agent 日志与调试细节</p>
+      <p>2、「读取上下文」完成后展示实际读取的文件数与行数，与接入页的承诺范围一致</p>
+    </div>
+    <div class="desc-block"><b>【边界说明】</b>
+      <p>1、权限校验失败 → 阶段一标红，提示缺失权限项与申请入口，不进入后续阶段</p>
+      <p>2、上下文读取超时 → 标记为可重试失败，保留已读取部分，重试时优先复用已完成工作</p>
+      <p>3、结构化结果无法解析 → 不产生正式发现，标记失败类别为结果解析失败并允许重试</p>
+      <p>4、模型限流或服务错误 → 有限次退避重试，显示等待与重试次数，不重复计费失控</p>
+      <p>5、单任务消耗触顶 → 转为部分完成，明确说明已覆盖与未覆盖范围，不静默截断</p>
+      <p>6、页面长时间未刷新后回到本页 → 从服务端恢复最新状态，不依赖前端本地计时</p>
+    </div>
+  </td>
+</tr>
+
+<tr data-preview="s4">
+  <td class="mod" rowspan="2">2<br>审查结果</td>
+  <td class="fn">2.1 发现列表页</td>
+  <td class="proto"><img class="proto-shot" src="../原型截图/wireframe-S4.svg" alt="发现列表页占位线框图" width="1672" height="941"><p class="asset-note">占位线框图 · 待替换为真实截图</p></td>
+  <td class="desc">
+    <div class="desc-block"><b>【页面元素】</b>
+      <p>1、任务摘要栏：仓库、变更集、状态、发现总数与严重度分布、验证结论分布</p>
+      <p>2、排序与筛选栏：排序维度、验证结论 / 严重度 / 类别 / 文件筛选、关键词搜索</p>
+      <p>3、发现卡片列表：严重度标签、验证结论标签、标题、文件与行号、证据条数、行内反馈按钮、「详情」入口</p>
+    </div>
+    <div class="desc-block"><b>【交互说明】</b>
+      <p>1、点击卡片或「详情」→ 进入发现详情页并定位该条发现</p>
+      <p>2、点击卡片上的文件与行号 → 在代码 diff 视图中定位到对应行并高亮</p>
+      <p>3、点击「采纳 / 忽略 / 误报」→ 就地更新处理状态并写入反馈事件，已标记项可撤销</p>
+      <p>4、批量选择后执行同一操作 → 统一写入反馈事件，逐条保留操作者与时间</p>
+    </div>
+    <div class="desc-block"><b>【功能逻辑】</b>
+      <p>1、默认按风险排序，依次比较严重度、验证结论置信度、影响面</p>
+      <p>2、三类验证结论在颜色、图标与文案上均可区分，不能只靠颜色</p>
+      <p>3、每条展示的发现必须带文件与行号，行号越界时降级为文件级并明确标注</p>
+    </div>
+    <div class="desc-block"><b>【边界说明】</b>
+      <p>1、无发现 → 空态明确说明本次未发现可展示问题，并说明覆盖与未覆盖范围</p>
+      <p>2、筛选结果为空 → 提示当前筛选条件与「清除筛选」入口，不显示空列表</p>
+      <p>3、行号越界或文件已变更 → 降级为文件级定位并提示行号基于历史版本</p>
+      <p>4、同一位置多条发现 → 合并为一张卡片，内部分条列出，避免重复刷屏</p>
+      <p>5、大变更集 → 分页并默认只展开高与中严重度，低严重度折叠</p>
+    </div>
+  </td>
+</tr>
+
+<tr data-preview="s5">
+  <td class="fn">2.2 发现详情 / 证据链页</td>
+  <td class="proto"><img class="proto-shot" src="../原型截图/wireframe-S5.svg" alt="发现详情与证据链页占位线框图" width="1672" height="941"><p class="asset-note">占位线框图 · 待替换为真实截图</p></td>
+  <td class="desc">
+    <div class="desc-block"><b>【页面元素】</b>
+      <p>1、顶部导航与操作区：返回入口、严重度与验证结论标签、「采纳并修复」主按钮</p>
+      <p>2、问题描述区：现象与位置</p>
+      <p>3、影响区：后果与严重度判定依据</p>
+      <p>4、证据链区：逐项列出代码片段、调用关系、验证动作、验证结论与证据条数</p>
+      <p>5、建议区：最小可行修复方向</p>
+      <p>6、处理区：采纳、忽略、误报三个动作，忽略与误报需填写原因</p>
+    </div>
+    <div class="desc-block"><b>【交互说明】</b>
+      <p>1、点击证据项中的代码位置 → 展开对应代码片段或跳转 diff 对应行</p>
+      <p>2、点击「采纳并生成补丁」→ 进入补丁预览页并携带该发现标识</p>
+      <p>3、选择「忽略 / 标记误报」→ 弹出原因输入，提交后返回发现列表并更新状态</p>
+      <p>4、对证据不足的发现点击采纳 → 提示证据不足，需人工确认后再生成补丁</p>
+    </div>
+    <div class="desc-block"><b>【功能逻辑】</b>
+      <p>1、证据链每一项都必须可追溯到真实读取内容，不允许展示未经证据支持的因果结论</p>
+      <p>2、严重度由模型建议、规则校准后定档，用户可见判定依据</p>
+    </div>
+    <div class="desc-block"><b>【边界说明】</b>
+      <p>1、证据缺失 → 降级为不确定并说明证据不完整，不给出确定结论</p>
+      <p>2、代码在该发现生成后已被修改 → 提示证据可能过期，提供基于最新版本重跑入口</p>
+      <p>3、未填原因即提交忽略或误报 → 阻止提交并提示原因必填</p>
+      <p>4、同一发现被多人标记为不同状态 → 保留全部反馈事件，以最新一次为当前状态并展示历史</p>
+    </div>
+  </td>
+</tr>
+
+<tr data-preview="s6">
+  <td class="mod" rowspan="3">3<br>安全修复</td>
+  <td class="fn">3.1 补丁预览与审批页</td>
+  <td class="proto"><img class="proto-shot" src="../原型截图/wireframe-S6.svg" alt="补丁预览与审批页占位线框图" width="1672" height="941"><p class="asset-note">占位线框图 · 待替换为真实截图</p></td>
+  <td class="desc">
+    <div class="desc-block"><b>【页面元素】</b>
+      <p>1、顶部信息栏：目标文件、「返回发现」入口</p>
+      <p>2、变更摘要：变更文件数、增删行数、基于的 commit、影响面说明</p>
+      <p>3、完整 diff 视图：逐行展示增删内容，保留上下文行</p>
+      <p>4、确认勾选项：确认改动符合仓库约定</p>
+      <p>5、操作区：「批准并要求写入」主按钮、「拒绝」、「复制 diff」</p>
+    </div>
+    <div class="desc-block"><b>【交互说明】</b>
+      <p>1、点击「批准并要求写入」→ 勾选项已确认时提交审批，进入写入与验证流程，未勾选则提示先确认</p>
+      <p>2、点击「拒绝」→ 不写入任何文件，保留该 diff 供后续处理，返回发现列表并记录拒绝反馈</p>
+      <p>3、点击「复制 diff」→ 复制完整 diff 到剪贴板，便于在 PR 中讨论或手动应用</p>
+      <p>4、批准后 → 跳转验证结果页并展示实时验证状态</p>
+    </div>
+    <div class="desc-block"><b>【功能逻辑】</b>
+      <p>1、写入前必须展示变更文件、增删行数与影响面</p>
+      <p>2、任何写入都必须记录操作者、时间、任务标识与回滚信息</p>
+      <p>3、写前自动保留可回滚的原文件副本</p>
+    </div>
+    <div class="desc-block"><b>【边界说明】</b>
+      <p>1、补丁生成失败 → 明确提示失败原因，不写入任何文件，发现状态保持为可重试的待处理</p>
+      <p>2、目标文件在生成补丁后被他人修改 → 阻止直接写入，提示冲突并提供重新生成补丁入口</p>
+      <p>3、用户拒绝 → 仓库原文件保持不变，拒绝行为进入反馈事件</p>
+      <p>4、审批过程中关闭页面 → 不产生写入，重新进入时恢复待审批状态</p>
+      <p>5、目标分支受保护或用户无写入权限 → 在审批前即提示，只保留复制 diff 路径</p>
+      <p>6、单次补丁影响文件数超出上限 → 阻止批量写入，要求拆分为多次审批</p>
+    </div>
+  </td>
+</tr>
+
+<tr data-preview="s7">
+  <td class="fn">3.2 Verify 结果页（通过 / 失败 / 未配置三态）</td>
+  <td class="proto"><img class="proto-shot" src="../原型截图/wireframe-S7.svg" alt="验证结果页占位线框图" width="1672" height="941"><p class="asset-note">占位线框图 · 待替换为真实截图</p></td>
+  <td class="desc">
+    <div class="desc-block"><b>【页面元素】</b>
+      <p>1、结果标题与图标：验证通过、验证失败、未配置验证三态之一</p>
+      <p>2、执行信息：执行的命令名称与来源、耗时，失败时含退出码</p>
+      <p>3、输出摘要：失败数与通过数等关键行，失败态提供「查看完整输出」</p>
+      <p>4、回滚说明：失败态明确说明原文件已回滚</p>
+      <p>5、操作区：查看最终 diff、返回发现列表、重新生成补丁、手动处理、配置验证命令</p>
+    </div>
+    <div class="desc-block"><b>【交互说明】</b>
+      <p>1、点击「查看完整输出」→ 展开完整命令输出，含标准输出与错误输出</p>
+      <p>2、点击「重新生成补丁」→ 回到补丁预览页并携带上一次失败输出作为新输入</p>
+      <p>3、点击「配置验证命令」→ 进入仓库规则配置，需平台管理员权限</p>
+      <p>4、未配置态选择「仍标记为已验证」→ 需填写原因，并在报告与审计中保留该标注</p>
+    </div>
+    <div class="desc-block"><b>【功能逻辑】</b>
+      <p>1、验证命令只能来自允许列表，模型不得自行扩大命令范围或权限</p>
+      <p>2、每个修复必须显示三种状态之一，不允许留空</p>
+      <p>3、验证失败即为修复失败，不进入已验证统计</p>
+    </div>
+    <div class="desc-block"><b>【边界说明】</b>
+      <p>1、验证命令超时 → 标记验证失败并保留已捕获输出与超时说明</p>
+      <p>2、允许列表内无可用命令 → 进入未配置验证态，不得默认宣称成功</p>
+      <p>3、验证过程修改了无关文件 → 拒绝写入并提示异常，保留原始输出供排查</p>
+      <p>4、回滚失败 → 明确告警并给出人工恢复指引，不静默吞掉</p>
+      <p>5、用户对同一发现重复批准 → 幂等处理，不产生重复提交</p>
+    </div>
+  </td>
+</tr>
+
+<tr data-preview="s8">
+  <td class="fn">3.3 审查报告页</td>
+  <td class="proto"><img class="proto-shot" src="../原型截图/wireframe-S8.svg" alt="审查报告页占位线框图" width="1672" height="941"><p class="asset-note">占位线框图 · 待替换为真实截图</p></td>
+  <td class="desc">
+    <div class="desc-block"><b>【页面元素】</b>
+      <p>1、报告摘要：任务标识、仓库与变更集、发现总数与严重度分布</p>
+      <p>2、覆盖范围说明：已读取文件数与行数、明确未覆盖的范围</p>
+      <p>3、发现清单：按风险排序，可跳转 diff 对应行</p>
+      <p>4、反馈汇总：采纳、忽略、误报数量</p>
+      <p>5、修复汇总：已应用、已验证、回滚数量</p>
+      <p>6、操作区：导出、分享、回写 PR 评论</p>
+    </div>
+    <div class="desc-block"><b>【交互说明】</b>
+      <p>1、点击发现清单中的条目 → 跳转该发现的证据链</p>
+      <p>2、点击「导出」→ 生成可分享的报告文件，内容与页面一致</p>
+      <p>3、点击「回写 PR 评论」→ 将摘要与发现写回 PR，单条失败不影响其余</p>
+    </div>
+    <div class="desc-block"><b>【边界说明】</b>
+      <p>1、无发现 → 说明覆盖范围与未覆盖范围，不使用代码很干净这类过度承诺</p>
+      <p>2、部分阶段失败 → 报告标注为部分完成，明确哪些阶段未执行</p>
+      <p>3、回写 PR 失败 → 提示失败原因并保留本地报告，不丢失结果</p>
+    </div>
+  </td>
+</tr>
+
+<tr data-preview="s9">
+  <td class="mod" rowspan="2">4<br>效率与成本</td>
+  <td class="fn">4.1 指标与成本面板</td>
+  <td class="proto"><img class="proto-shot" src="../原型截图/wireframe-S9.svg" alt="指标与成本面板占位线框图" width="1672" height="941"><p class="asset-note">占位线框图 · 待替换为真实截图</p></td>
+  <td class="desc">
+    <div class="desc-block"><b>【页面元素】</b>
+      <p>1、时间范围与维度切换</p>
+      <p>2、任务量卡片：任务数、完成、失败、取消</p>
+      <p>3、体验卡片：首结果 P50 与 P95、缓存命中数</p>
+      <p>4、用户价值卡片：有帮助率、误报率、采纳率，均标注样本量</p>
+      <p>5、修复安全卡片：验证通过数、回归引入数、回滚数</p>
+      <p>6、成本卡片：总成本、每 PR 成本、Token 用量</p>
+      <p>7、质量卡片：离线评测 Precision 与 Recall，标注离线口径非线上效果</p>
+    </div>
+    <div class="desc-block"><b>【交互说明】</b>
+      <p>1、切换时间范围或维度 → 面板即时刷新，所有比率同步更新时间窗口与样本量</p>
+      <p>2、点击任一指标 → 展开该指标的口径说明，含分子、分母与切片维度</p>
+    </div>
+    <div class="desc-block"><b>【功能逻辑】</b>
+      <p>1、每个比率指标旁必须展示样本量，样本不足时标注仅供参考</p>
+      <p>2、离线评测指标与线上行为指标分开呈现，不使用同一视觉权重混淆二者</p>
+    </div>
+    <div class="desc-block"><b>【边界说明】</b>
+      <p>1、时间范围内无数据 → 展示空态与调整时间范围入口，不显示零值或占位假值</p>
+      <p>2、样本量低于阈值 → 展示观察值但标注不可用于决策</p>
+      <p>3、成本数据缺失 → 明确显示成本数据未接入，不按估算值填充</p>
+    </div>
+  </td>
+</tr>
+
+<tr data-preview="s10">
+  <td class="fn">4.2 PR 内评论与检查项</td>
+  <td class="proto"><img class="proto-shot" src="../原型截图/wireframe-S10.svg" alt="PR 内评论与检查项占位线框图" width="1672" height="941"><p class="asset-note">占位线框图 · 待替换为真实截图</p></td>
+  <td class="desc">
+    <div class="desc-block"><b>【页面元素】</b>
+      <p>1、检查项摘要行：审查状态、发现总数与严重度分布、「查看完整报告」入口、只读声明</p>
+      <p>2、行内评论：严重度标签、问题描述、证据摘要、建议、三个反馈按钮与「打开证据链」入口</p>
+    </div>
+    <div class="desc-block"><b>【交互说明】</b>
+      <p>1、点击「查看完整报告」→ 在浏览器打开审查报告页</p>
+      <p>2、点击「打开证据链」→ 打开发现详情页并定位到该条发现</p>
+      <p>3、点击「采纳 / 忽略 / 标记误报」→ 写入反馈事件并在评论上回显当前处理状态</p>
+    </div>
+    <div class="desc-block"><b>【功能逻辑】</b>
+      <p>1、评论默认不阻塞合并，MVP 不产生任何必须解决级别的检查结论</p>
+    </div>
+    <div class="desc-block"><b>【边界说明】</b>
+      <p>1、审查任务未完成 → 检查项显示进行中状态，不产生部分评论</p>
+      <p>2、任务失败 → 检查项显示失败与可操作原因，不产生评论</p>
+      <p>3、同一行有多条发现 → 合并为一条评论，内部按严重度排序，避免刷屏</p>
+      <p>4、PR 更新产生新 commit → 旧评论标记为基于历史 commit，新结果另行展示，不静默覆盖</p>
+    </div>
+  </td>
+</tr>
+
+</tbody></table>
+
+<h3>6.1 任务状态机与用户可见状态</h3>
+<pre class="seq-code"><code>stateDiagram-v2
+    [*] --&gt; QUEUED
+    QUEUED --&gt; LOADING_CONTEXT: 权限校验通过
+    QUEUED --&gt; FAILED: 权限/参数错误
+    LOADING_CONTEXT --&gt; PLANNING: 上下文准备完成
+    LOADING_CONTEXT --&gt; RETRYABLE_FAILED: 超时/临时 API 错误
+    RETRYABLE_FAILED --&gt; QUEUED: 用户重试
+    PLANNING --&gt; VERIFYING: 产生候选发现
+    PLANNING --&gt; COMPLETED: 没有可展示发现
+    VERIFYING --&gt; REVIEWING: 取得验证结论
+    VERIFYING --&gt; RETRYABLE_FAILED: 工具/API 临时错误
+    REVIEWING --&gt; COMPLETED: 报告生成
+    REVIEWING --&gt; FAILED: 结构化输出无法解析
+    COMPLETED --&gt; PATCH_PREVIEW: 用户选择修复
+    PATCH_PREVIEW --&gt; WAITING_APPROVAL: 补丁生成成功
+    PATCH_PREVIEW --&gt; FAILED: 补丁生成失败
+    WAITING_APPROVAL --&gt; VERIFY_FIX: 用户批准
+    WAITING_APPROVAL --&gt; COMPLETED: 用户拒绝
+    VERIFY_FIX --&gt; APPLIED: Verify 通过
+    VERIFY_FIX --&gt; FAILED: Verify 失败
+    APPLIED --&gt; [*]
+    FAILED --&gt; [*]
+    COMPLETED --&gt; [*]</code></pre>
+<table class="rule-table"><thead><tr><th>用户可见状态</th><th>内部状态</th><th>默认落地界面</th><th>允许的操作</th></tr></thead>
+<tbody>
+<tr><td>待确认</td><td>QUEUED / LOADING_CONTEXT / PLANNING / VERIFYING</td><td>任务进度页</td><td>取消、查看增量发现、失败后重试</td></tr>
+<tr><td>已确认</td><td>COMPLETED（且有可展示发现）</td><td>发现列表页</td><td>筛选、反馈、进入证据链、发起修复</td></tr>
+<tr><td>修复中</td><td>PATCH_PREVIEW / WAITING_APPROVAL / VERIFY_FIX</td><td>补丁预览页</td><td>批准、拒绝、复制 diff</td></tr>
+<tr><td>已验证</td><td>APPLIED</td><td>验证结果页</td><td>查看最终 diff、重新生成补丁、手动处理</td></tr>
+</tbody></table>
+<p class="alert"><strong>当前实现差距：</strong>代码中没有任务状态枚举，会话模式是自由字符串，且编排状态没有持久化检查点，因此「刷新后恢复」需新建（见 3.6 的 G-2）。</p>
+
+<h3>6.2 非功能需求</h3>
+<table class="rule-table"><thead><tr><th>编号</th><th>类别</th><th>要求</th><th>验收方式</th></tr></thead>
+<tbody>
+<tr><td>NFR-1</td><td>性能</td><td>只读审查首结果 P95 ≤ 5 分钟；命中缓存的重复审查 ≤ 30 秒</td><td>灰度期埋点统计</td></tr>
+<tr><td>NFR-2</td><td>可靠性</td><td>任务失败可归因、可重试；刷新可恢复任务与报告</td><td>端到端验收用例</td></tr>
+<tr><td>NFR-3</td><td>安全（最小权限）</td><td>默认只读；写入与命令执行需审批；命令受允许列表约束并有超时</td><td>权限矩阵 + 审计抽查</td></tr>
+<tr><td>NFR-4</td><td>安全（隔离）</td><td>命令执行在隔离目录中进行；MVP 的隔离是进程级，用于防止误污染宿主，不等同于安全隔离</td><td>文档与界面提示口径核对</td></tr>
+<tr><td>NFR-5</td><td>数据最小化</td><td>不保存完整源代码与密钥；日志与评测结果脱敏；工具输出按保留策略过期</td><td>隐私检查清单</td></tr>
+<tr><td>NFR-6</td><td>审计</td><td>写入动作可回答谁在何时批准了什么 diff、执行了什么命令、结果如何，记录不可被普通用户删改</td><td>审计记录抽查</td></tr>
+<tr><td>NFR-7</td><td>可观测</td><td>结果层、轨迹层、效率成本层、稳定性层指标可观测、可归因</td><td>指标体系文档核对</td></tr>
+<tr><td>NFR-8</td><td>可维护</td><td>模型、提示词、评测集与价格版本可追溯，变更时生成新基线</td><td>版本记录与评测报告</td></tr>
+<tr><td>NFR-9</td><td>成本</td><td>单任务 Token 与工具轮次有上限；成本可按仓库与任务维度查看</td><td>指标面板与预算阈值</td></tr>
+<tr><td>NFR-10</td><td>兼容</td><td>支持空目录、大文件、CJK 文件名与内容、二进制文件、深层目录</td><td>边界集回归</td></tr>
+</tbody></table>
+<p class="alert"><strong>NFR-4 的口径必须如实：</strong>现有命令隔离的实现说明自身已声明「不是安全隔离，无法防御恶意代码」。MVP 对外表述只能是「防止命令意外污染宿主目录」，不能表述为「安全的代码执行环境」。</p>
+
+<h3>6.3 发布门槛与灰度</h3>
+<table class="rule-table"><thead><tr><th>阶段</th><th>范围</th><th>进入条件</th><th>退出条件</th></tr></thead>
+<tbody>
+<tr><td>内部验证</td><td>自有仓库、只读</td><td>端到端只读流程可用</td><td>评测门禁无关键回归</td></tr>
+<tr><td>灰度 A</td><td>1～2 个试点团队、只读、不阻塞合并</td><td>内部验证通过 + 完成安全与隐私检查清单</td><td>首结果 P95 ≤ 5 分钟，失败可自行重试</td></tr>
+<tr><td>灰度 B</td><td>扩大到 5 个团队，开放反馈与筛选</td><td>灰度 A 的有帮助率与误报率达到目标</td><td>连续使用两周，无高危安全事件</td></tr>
+<tr><td>灰度 C</td><td>开放审批式修复</td><td>灰度 B 达标且修复质量集可用</td><td>验证通过率 ≥ 90%，回归引入率趋近 0</td></tr>
+<tr><td>GA</td><td>团队版能力（含 CI 提醒，不阻塞）</td><td>至少 3 个团队持续使用且愿意扩大范围</td><td>进入 P1 开发</td></tr>
+</tbody></table>
+<p>发布前必须同时满足四层条件，任一层关键回归都不允许发布：结果层要求关键评测集 Precision 达标且无高危安全回归；轨迹层要求工具错误、参数非法、解析失败、死循环、额度触顶与写入失败均可观测可归因；体验层要求新用户可在 5 分钟内完成一次只读审查且失败可自行重试；安全层要求默认只读、敏感字段脱敏、写入与命令执行有审批与审计、验证失败不被记为成功。</p>
+
+<h3>6.4 端到端验收用例</h3>
+<table class="rule-table"><thead><tr><th>编号</th><th>用例</th><th>操作</th><th>预期结果</th></tr></thead>
+<tbody>
+<tr><td>C1</td><td>正常只读审查</td><td>启动审查并等待完成</td><td>任务完成，发现可跳转到 diff 对应行，报告可刷新恢复</td></tr>
+<tr><td>C2</td><td>无权限</td><td>选择无读取权限仓库的 PR</td><td>不读取代码，展示所需权限与申请入口</td></tr>
+<tr><td>C3</td><td>结果解析失败</td><td>注入畸形结构化输出后启动审查</td><td>不产生正式发现，记录失败类别，可重试且不重复计费</td></tr>
+<tr><td>C4</td><td>模型临时错误</td><td>模拟限流与 5xx 后启动审查</td><td>有限退避重试、状态可见、额度不被重复消耗失控</td></tr>
+<tr><td>C5</td><td>上下文超限</td><td>用超大变更集启动审查</td><td>明确提示缩小范围，不静默截断文件</td></tr>
+<tr><td>C6</td><td>修复验证失败</td><td>审批并应用导致测试失败的补丁</td><td>标记失败，回滚且不保留改动，diff 与命令输出保留</td></tr>
+<tr><td>C7</td><td>未配置验证</td><td>在无允许列表命令的仓库应用补丁</td><td>显示未配置验证，不得标记为验证通过</td></tr>
+<tr><td>C8</td><td>无写入权限</td><td>用只读账号批准补丁写入</td><td>审批前即提示无权限，仅保留复制 diff 路径</td></tr>
+<tr><td>C9</td><td>重复提交</td><td>对同一 commit 再次启动审查</td><td>命中缓存；未命中时明确说明重新计算的原因</td></tr>
+<tr><td>C10</td><td>补丁冲突</td><td>补丁生成后修改目标文件再批准写入</td><td>阻止直接写入，提示冲突并提供重新生成补丁</td></tr>
+<tr><td>C11</td><td>忽略与误报可撤销</td><td>撤销已标记发现的标记</td><td>状态回退并保留两次反馈事件</td></tr>
+<tr><td>C12</td><td>审计可追溯</td><td>查询一次写入与验证的审计记录</td><td>可回答操作者、时间、任务、diff 摘要、验证命令与结果</td></tr>
+<tr><td>C13</td><td>写入必须经审批</td><td>不提供审批直接触发写入</td><td>写入被拒绝，不产生任何文件改动，事件记录为已阻止</td></tr>
+</tbody></table>
+<p class="alert"><strong>C13 是 G-4 的验收口径：当前实现尚未满足，属于 MVP 必须关闭项。</strong></p>
+
+<h2>七、数据埋点</h2>
+<p>埋点用于支撑 docs/product-manager/05_指标体系与实验方案.md 的指标口径。事件名沿用现有英文 snake_case 命名约定；参数暂缺的标记待确认，不留空。仓库已有 session_start、turn_end、tool_call_end、parse_result、node_stats 等工程事件用于轨迹层归因，与下表的产品层口径并存、不互相替代。</p>
+<table class="tracking-table">
+<colgroup><col style="width:65px"><col style="width:145px"><col style="width:150px"><col style="width:90px"><col><col></colgroup>
+<thead><tr><th>序号</th><th>埋点名</th><th>埋点中文名</th><th>埋点类型</th><th>埋点参数</th><th>参数值</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>review_started</td><td>审查任务启动</td><td>点击</td><td>task_id、repo_id、pr_id、commit_sha、permission_scope、cache_hit</td><td>cache_hit：true / false</td></tr>
+<tr><td>2</td><td>context_loaded</td><td>上下文读取完成</td><td>结果</td><td>task_id、file_count、line_count、latency_ms</td><td>数值型，无枚举</td></tr>
+<tr><td>3</td><td>finding_presented</td><td>发现卡片曝光</td><td>曝光</td><td>task_id、finding_id、severity、category、verdict、agent_role</td><td>severity：High / Medium / Low；category：BUG / SECURITY / PERF / STYLE；verdict：CONFIRMED / FALSE_POSITIVE / UNCERTAIN</td></tr>
+<tr><td>4</td><td>finding_feedback</td><td>发现反馈提交</td><td>提交结果</td><td>task_id、finding_id、user_role、reason_code</td><td>reason_code：ACCEPTED / IGNORED / FALSE_POSITIVE</td></tr>
+<tr><td>5</td><td>patch_previewed</td><td>补丁预览查看</td><td>曝光</td><td>task_id、finding_id、file_count、added_lines、removed_lines</td><td>数值型，无枚举</td></tr>
+<tr><td>6</td><td>patch_approved</td><td>补丁审批结果</td><td>提交结果</td><td>task_id、finding_id、approver_role、decision</td><td>decision：APPROVED / REJECTED</td></tr>
+<tr><td>7</td><td>verify_finished</td><td>验证执行完成</td><td>结果</td><td>task_id、patch_id、verify_status、exit_code、latency_ms</td><td>verify_status：PASSED / FAILED / NOT_CONFIGURED</td></tr>
+<tr><td>8</td><td>review_completed</td><td>审查任务完成</td><td>结果</td><td>task_id、finding_count、latency_ms、token_usage、model</td><td>数值型，无枚举</td></tr>
+<tr><td>9</td><td>review_failed</td><td>审查任务失败</td><td>结果</td><td>task_id、failure_category、agent_role、retry_count</td><td>failure_category：PERMISSION / PARSE_ERROR / RATE_LIMIT / TIMEOUT / BUDGET_EXCEEDED</td></tr>
+<tr><td>10</td><td>rollback_executed</td><td>回滚执行</td><td>结果</td><td>task_id、patch_id、rollback_reason</td><td>rollback_reason：VERIFY_FAILED / WRITE_CONFLICT / USER_REVERT</td></tr>
+</tbody></table>
+<p class="source-note">公共字段（所有事件必带）：task_id、repo_id、pr_id、commit_sha、model、agent_role、risk_level、latency_ms、token_usage、permission_scope、failure_category。数据最小化要求：不记录完整源代码与密钥；日志中使用仓库或文件哈希等脱敏标识；原始工具输出按保留策略过期清理。</p>
+
+<h2>八、时序图</h2>
+<h3>8.1 只读审查主链路</h3>
+<pre class="seq-code"><code>sequenceDiagram
+  autonumber
+  participant U as 用户
+  participant W as 工作台 / PR 应用
+  participant A as 审查服务
+  participant O as Agent 编排
+  participant T as 代码与工具
+  participant M as 模型服务
+  participant D as 结果存储
+
+  U-&gt;&gt;W: 选择仓库与变更集，确认上下文范围
+  W-&gt;&gt;A: 提交审查请求（含权限范围）
+  A-&gt;&gt;A: 校验权限与参数
+  alt 权限不足
+    A--&gt;&gt;W: 返回缺失权限项
+    W--&gt;&gt;U: 提示申请权限，不读取代码
+  else 权限通过
+    A-&gt;&gt;D: 查询变更集缓存
+    alt 命中缓存
+      D--&gt;&gt;A: 返回既有结果
+      A--&gt;&gt;W: 标记命中缓存，不重复计费
+    else 未命中
+      A-&gt;&gt;O: 启动编排
+      O-&gt;&gt;T: 读取变更文件与必要上下文
+      T--&gt;&gt;O: 返回文件内容与 diff
+      O-&gt;&gt;M: 请求候选问题
+      M--&gt;&gt;O: 返回候选发现
+      O-&gt;&gt;T: 验证证据（检索、调用关系）
+      T--&gt;&gt;O: 返回验证结果
+      O-&gt;&gt;M: 请求验证结论与汇总
+      M--&gt;&gt;O: 返回结构化结果
+      alt 结构化解析失败
+        O--&gt;&gt;A: 标记解析失败类别
+        A--&gt;&gt;W: 不产生正式发现，提供重试
+      else 解析成功
+        O-&gt;&gt;D: 持久化发现与报告
+      end
+    end
+    A--&gt;&gt;W: 流式返回阶段状态与增量发现
+    W--&gt;&gt;U: 展示发现卡片与证据链
+  end</code></pre>
+
+<h3>8.2 补丁审批、写入与验证</h3>
+<pre class="seq-code"><code>sequenceDiagram
+  autonumber
+  participant U as 用户（Reviewer）
+  participant W as 工作台
+  participant A as 审查服务
+  participant F as 修复编排
+  participant R as 目标仓库
+  participant V as 验证执行器
+
+  U-&gt;&gt;W: 在发现详情点击「采纳并生成补丁」
+  W-&gt;&gt;A: 请求生成补丁
+  A-&gt;&gt;F: 生成完整 diff
+  F--&gt;&gt;A: 返回 diff 与影响面
+  A--&gt;&gt;W: 返回补丁预览
+  W--&gt;&gt;U: 展示变更文件、增删行与影响面
+  U-&gt;&gt;W: 确认并点击「批准并要求写入」
+  W-&gt;&gt;A: 提交审批（操作者、时间、任务标识）
+  A-&gt;&gt;R: 写入前备份原文件
+  R--&gt;&gt;A: 备份完成
+  A-&gt;&gt;R: 写入改动
+  A-&gt;&gt;V: 执行允许列表内的验证命令
+  alt 验证通过
+    V--&gt;&gt;A: 退出码 0 与输出
+    A-&gt;&gt;A: 记录审计（谁批准、改了什么、执行了什么命令、结果）
+    A--&gt;&gt;W: 标记已验证
+    W--&gt;&gt;U: 展示验证通过与最终 diff
+  else 验证失败
+    V--&gt;&gt;A: 非零退出码与输出
+    A-&gt;&gt;R: 回滚到备份
+    A-&gt;&gt;A: 记录审计与失败类别
+    A--&gt;&gt;W: 标记失败，保留 diff 与命令输出
+    W--&gt;&gt;U: 展示失败原因，提供重新生成补丁
+  else 未配置验证
+    V--&gt;&gt;A: 无允许列表内命令
+    A-&gt;&gt;A: 记录未配置状态
+    A--&gt;&gt;W: 标记未配置验证
+    W--&gt;&gt;U: 提示配置验证命令或标注原因
+  end</code></pre>
+
+<h3>8.3 路线图与交付依赖</h3>
+<pre class="seq-code"><code>gantt
+    title MVP 12 周交付路线图
+    dateFormat  YYYY-MM-DD
+    axisFormat  %m/%d
+    section 研究与定义
+    访谈与竞品实测           :a1, 2026-10-01, 14d
+    PR 原型与可用性测试       :a2, after a1, 10d
+    section 核心只读链路
+    PR/Commit 接入            :b1, after a2, 14d
+    任务状态与结果卡片        :b2, after b1, 10d
+    反馈、筛选与持久化        :b3, after b2, 10d
+    section 安全修复
+    补丁预览与人工审批        :c1, after b3, 10d
+    Verify 与回滚             :c2, after c1, 10d
+    section 试点与决策
+    评测门禁与成本面板        :d1, after c2, 7d
+    5 个团队试点              :d2, after d1, 14d</code></pre>
+<table class="rule-table"><thead><tr><th>依赖项</th><th>影响</th><th>风险与应对</th></tr></thead>
+<tbody>
+<tr><td>GitHub / GitLab 应用权限审批</td><td>决定 PR 接入与行内评论能否按期交付</td><td>提前提交申请；以 CLI 与 API 旁路保证只读链路可独立演示</td></tr>
+<tr><td>评测集与故障集的重复运行基线</td><td>决定发布门槛能否判定</td><td>先锁定模型、提示词与数据集版本，再比对新基线</td></tr>
+<tr><td>修复质量评测集</td><td>决定是否开放审批式修复</td><td>该集未就绪不进入灰度 C</td></tr>
+<tr><td>模型服务稳定性与限流策略</td><td>影响首结果时延与成本</td><td>退避重试、模型降级、预算阈值</td></tr>
+<tr><td>试点团队与脱敏仓库</td><td>决定真实价值证据能否取得</td><td>至少锁定 3 个团队与授权仓库</td></tr>
+</tbody></table>
+<p class="source-note">路线图中的日期是规划示例，不是项目已承诺的排期；真正排期要结合工程人数、GitHub / GitLab 权限审批和模型服务稳定性重新估算。版本范围：MVP 交付 FR-1～FR-6 并关闭 G-1～G-10；P1 进入团队工作流（PR 应用与 Webhook、CI 软提醒、仓库规则、团队反馈、趋势看板）；P2 企业化（SSO / SCIM、私有化、组织审计、保留策略、多模型路由、预算控制）；P3 平台化（自定义技能、规则市场、跨仓库知识库、开放 API）。</p>
+
+<h3>8.4 需求追溯矩阵</h3>
+<table class="rule-table"><thead><tr><th>编号</th><th>用户故事</th><th>优先级</th><th>对应需求</th><th>对应验收用例</th><th>责任指标</th></tr></thead>
+<tbody>
+<tr><td>US-01</td><td>作为代码作者，我希望只审查本次 PR 变更，避免等待全仓库扫描</td><td>P0</td><td>FR-1</td><td>C1、C2、C5</td><td>首结果时延 P95、缓存命中率</td></tr>
+<tr><td>US-02</td><td>作为 Reviewer，我希望按风险和证据快速筛选发现</td><td>P0</td><td>FR-3</td><td>C1、C11</td><td>有帮助率、误报率</td></tr>
+<tr><td>US-03</td><td>作为代码作者，我希望知道为什么这条发现可信</td><td>P0</td><td>FR-3</td><td>C1、C3</td><td>有帮助率、结果可追溯率</td></tr>
+<tr><td>US-04</td><td>作为 Reviewer，我希望先看到补丁再决定是否写入</td><td>P0</td><td>FR-4、FR-5</td><td>C6、C7、C10、C12</td><td>验证通过率、回归引入率</td></tr>
+<tr><td>US-05</td><td>作为平台管理员，我希望限制模型和工具权限</td><td>P0</td><td>FR-4、FR-5</td><td>C8、C12、C13</td><td>数据外发事件、回归引入率</td></tr>
+<tr><td>US-06</td><td>作为研发经理，我希望知道工具是否真的减少返工</td><td>P1</td><td>FR-6</td><td>C9</td><td>采纳率、成本 / PR</td></tr>
+</tbody></table>
+
+<h3>8.5 发现字段规格</h3>
+<table class="rule-table"><thead><tr><th>字段</th><th>类型</th><th>必填</th><th>说明与约束</th><th>当前状态</th></tr></thead>
+<tbody>
+<tr><td>finding_id</td><td>字符串</td><td>是</td><td>全局唯一，跨重试保持不变</td><td>已具备</td></tr>
+<tr><td>task_id</td><td>字符串</td><td>是</td><td>关联一次审查任务</td><td>已具备（语义待统一）</td></tr>
+<tr><td>file_path</td><td>字符串</td><td>是</td><td>必须位于用户授权仓库范围内</td><td>已具备</td></tr>
+<tr><td>line_start / line_end</td><td>整数</td><td>是</td><td>指向变更或必要上下文，越界时降级为文件级并标注</td><td>部分具备</td></tr>
+<tr><td>category</td><td>枚举</td><td>是</td><td>BUG / SECURITY / PERF / STYLE，可扩展但需版本化</td><td>已具备（未做校验）</td></tr>
+<tr><td>severity</td><td>枚举</td><td>是</td><td>High / Medium / Low，由模型建议、规则校准</td><td>已具备（未做校验）</td></tr>
+<tr><td>evidence</td><td>列表</td><td>是</td><td>代码片段、调用关系、验证动作或失败输出，逐项可追溯</td><td>待建设</td></tr>
+<tr><td>suggestion</td><td>文本</td><td>是</td><td>给出最小可行修复方向，不承诺一定适用</td><td>已具备</td></tr>
+<tr><td>verdict</td><td>枚举</td><td>是</td><td>CONFIRMED / FALSE_POSITIVE / UNCERTAIN</td><td>已具备</td></tr>
+<tr><td>status</td><td>枚举</td><td>是</td><td>OPEN / ACCEPTED / IGNORED / FIXED / FAILED</td><td>待建设</td></tr>
+<tr><td>verify_status</td><td>枚举</td><td>是</td><td>PASSED / FAILED / NOT_CONFIGURED</td><td>待建设</td></tr>
+<tr><td>trace_id</td><td>字符串</td><td>是</td><td>关联一次审查任务的遥测事件，不暴露内部密钥</td><td>待建设</td></tr>
+</tbody></table>
+
+<h3>8.6 术语表</h3>
+<table class="rule-table"><thead><tr><th>术语</th><th>含义</th></tr></thead>
+<tbody>
+<tr><td>变更集</td><td>一次 PR 或一个 commit 所包含的代码变更及其必要上下文</td></tr>
+<tr><td>发现</td><td>系统提出的一个候选问题单元，含位置、描述、证据、建议与验证结论</td></tr>
+<tr><td>验证结论</td><td>对一条发现的判断：已确认 / 误报 / 不确定</td></tr>
+<tr><td>Verify</td><td>对补丁执行的校验动作（语法检查或允许列表内的命令）</td></tr>
+<tr><td>允许列表</td><td>允许被执行的验证命令白名单，模型不能自行扩大</td></tr>
+<tr><td>首结果</td><td>用户可判断的第一条结果出现的时间点</td></tr>
+<tr><td>命中缓存</td><td>同一变更集复用既有审查结果，不重复消耗额度</td></tr>
+<tr><td>HITL</td><td>Human-in-the-loop，危险动作前的人工审批</td></tr>
+</tbody></table>
+
+<h3>待后续确认的产品口径</h3>
+<ul>
+  <li>有帮助率、误报率、采纳率、高危召回率的真实基线 —— 卡在：试点团队与评测运行；影响：目标值只能写待基线确认，无法判定发布是否达标</li>
+  <li>两份评测产物口径的并列引用方式（2026-09-27 replay 与 data/eval_results.json）—— 卡在：研发 / 评测维护者；影响：对外引用数字的可信度与可比性</li>
+  <li>审查结果默认展示强度（软提醒的具体形态）—— 卡在：试点团队 Reviewer；影响：PR 检查项语义与 P1 的 CI 门禁设计</li>
+  <li>上下文读取范围默认值（是否包含被引用符号所在文件）—— 卡在：研发与平台管理员；影响：上下文超限概率、首结果时延与成本</li>
+  <li>单任务 Token 与工具轮次上限的具体数值 —— 卡在：研发与成本测算；影响：部分完成触发频率与成本 / PR</li>
+  <li>验证命令允许列表的默认集合 —— 卡在：平台管理员；影响：未配置验证态占比</li>
+  <li>忽略与误报的原因选项枚举 —— 卡在：试点团队；影响：反馈质量与回归样本可用性</li>
+  <li>PR 评论合并策略（同行多条如何分组）—— 卡在：研发与可用性测试；影响：PR 评论的刷屏风险</li>
+  <li>仓库内明文密钥与过期默认管理员口令描述的清理 —— 卡在：平台与安全；影响：对外可信度，需与整改计划同步</li>
+  <li>企业版数据保留周期与跨境路径 —— 卡在：安全与合规；影响：属 P2，但会影响早期客户承诺口径</li>
+  <li>文档目录内编号重复（存在两个 06_ 开头文件）—— 卡在：文档维护者；影响：引用与导航一致性</li>
+</ul>
+
+</main>
+
+<!-- ===== 右侧交互原型预览（默认关闭；本次无活原型，按静态线框图预览） ===== -->
+<aside class="prototype-sidebar" id="prototypeSidebar">
+  <div class="prototype-sidebar-inner" style="display:flex;flex-direction:column;height:100%">
+    <div class="sidebar-header">交互原型预览
+      <button type="button" onclick="toggleDualPane()">✕ 关闭</button>
+    </div>
+    <div class="preview-context">本需求尚无可交互原型。此处按「详细方案」的占位线框图预览界面结构与元素排布，供评审对照阅读。素材补齐后可把 CATALOG 的 url 指向 ../原型/可信代码审查Agent-prototype.html#page-id。</div>
+    <div class="page-selector"><select id="pageSelect" onchange="switchPage(this.value)"></select></div>
+    <div class="preview-zoom">
+      <button type="button" onclick="zoomPreview(-1)" title="缩小">－</button>
+      <span id="previewZoomLabel">100%</span>
+      <button type="button" onclick="zoomPreview(1)" title="放大">＋</button>
+      <button type="button" onclick="fitPreview()" title="适配面板宽度">适配</button>
+    </div>
+    <div class="device-shell">
+      <div class="device-wrapper" id="deviceWrapper"><img id="prototypeFrame" alt="界面线框图预览"></div>
+    </div>
+    <div class="prototype-resizer" id="prototypeResizer"></div>
+  </div>
+</aside>
+
+<div class="fab-group">
+  <button type="button" id="dualPaneToggle" onclick="toggleDualPane()">双栏预览</button>
+  <button type="button" class="save-btn" id="saveBtn">💾 保存并通知AI</button>
+</div>
+<button type="button" class="copy-btn" id="copyBtn">📋 一键复制全文</button>
+
+<script>
+/* ===== 1. 预览面板：目录 / 缩放 / 双栏 / 滚动联动 ===== */
+const CATALOG = [
+  { value:'s1',  label:'S1 · 任务列表页',              url:'../原型截图/wireframe-S1.svg',  w:1672, h:941 },
+  { value:'s2',  label:'S2 · 接入与范围确认页',        url:'../原型截图/wireframe-S2.svg',  w:1672, h:941 },
+  { value:'s3',  label:'S3 · 任务进度页',              url:'../原型截图/wireframe-S3.svg',  w:1672, h:941 },
+  { value:'s4',  label:'S4 · 发现列表页',              url:'../原型截图/wireframe-S4.svg',  w:1672, h:941 },
+  { value:'s5',  label:'S5 · 发现详情 / 证据链页',     url:'../原型截图/wireframe-S5.svg',  w:1672, h:941 },
+  { value:'s6',  label:'S6 · 补丁预览与审批页',        url:'../原型截图/wireframe-S6.svg',  w:1672, h:941 },
+  { value:'s7',  label:'S7 · Verify 结果页',           url:'../原型截图/wireframe-S7.svg',  w:1672, h:941 },
+  { value:'s8',  label:'S8 · 审查报告页',              url:'../原型截图/wireframe-S8.svg',  w:1672, h:941 },
+  { value:'s9',  label:'S9 · 指标与成本面板',          url:'../原型截图/wireframe-S9.svg',  w:1672, h:941 },
+  { value:'s10', label:'S10 · PR 内评论与检查项',      url:'../原型截图/wireframe-S10.svg', w:1672, h:941 }
+];
+let previewPage = CATALOG[0].value;
+let previewZoom = null;   // null = 适配宽度；数字 = 手动缩放倍率
+
+function currentCfg(){ return CATALOG.find(o => o.value === previewPage) || CATALOG[0]; }
+
+function renderSelect(){
+  const sel = document.getElementById('pageSelect');
+  if (!sel) return;
+  sel.innerHTML = '';
+  CATALOG.forEach(function(o){
+    const opt = document.createElement('option');
+    opt.value = o.value; opt.textContent = o.label;
+    sel.appendChild(opt);
+  });
+  sel.value = previewPage;
+}
+
+function scalePreview(){
+  const shell = document.querySelector('.device-shell'),
+        wrap  = document.getElementById('deviceWrapper'),
+        frame = document.getElementById('prototypeFrame');
+  if (!shell || !wrap || !frame) return;
+  const cfg = currentCfg(), innerW = Math.max(120, shell.clientWidth - 40);
+  const fit = innerW / cfg.w, scale = (previewZoom == null) ? fit : previewZoom;
+  frame.style.width = cfg.w + 'px';
+  frame.style.height = cfg.h + 'px';
+  frame.style.transform = 'scale(' + scale + ')';
+  wrap.style.width = Math.round(cfg.w * scale) + 'px';
+  wrap.style.height = Math.round(cfg.h * scale) + 'px';
+  const lab = document.getElementById('previewZoomLabel');
+  if (lab) lab.textContent = Math.round(scale * 100) + '%' + (previewZoom == null ? ' · 适配' : '');
+}
+
+function switchPage(v){
+  previewPage = v;
+  const sel = document.getElementById('pageSelect');
+  if (sel) sel.value = v;
+  if (!document.body.classList.contains('dual-pane')) return;   // 关闭态只记状态，不加载素材
+  const f = document.getElementById('prototypeFrame');
+  if (f) f.src = currentCfg().url;
+  requestAnimationFrame(scalePreview);
+  setTimeout(scalePreview, 350);
+}
+
+function toggleDualPane(){
+  const on = document.body.classList.toggle('dual-pane');
+  const btn = document.getElementById('dualPaneToggle');
+  if (btn) btn.textContent = on ? '收起预览' : '双栏预览';
+  if (on){
+    const f = document.getElementById('prototypeFrame');
+    if (f && !f.getAttribute('src')) f.src = currentCfg().url;   // 首次打开才加载
+    requestAnimationFrame(scalePreview);
+    setTimeout(scalePreview, 350);
+  }
+}
+
+const ZOOM_STEPS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3];
+function currentPreviewScale(){
+  if (previewZoom != null) return previewZoom;
+  const shell = document.querySelector('.device-shell');
+  if (!shell) return 1;
+  return Math.max(120, shell.clientWidth - 40) / currentCfg().w;
+}
+function zoomPreview(dir){
+  const now = currentPreviewScale();
+  let next;
+  if (dir > 0) next = ZOOM_STEPS.find(function(s){ return s > now + 1e-4; });
+  else next = ZOOM_STEPS.slice().reverse().find(function(s){ return s < now - 1e-4; });
+  previewZoom = (next == null) ? Math.min(3, Math.max(0.25, now)) : next;
+  scalePreview();
+}
+function fitPreview(){ previewZoom = null; scalePreview(); }
+
+function initPreviewScrollSync(){
+  const nodes = Array.prototype.slice.call(document.querySelectorAll('.scheme-table [data-preview]'));
+  if (!nodes.length) return;
+  let lockUntil = 0;
+  const sel = document.getElementById('pageSelect');
+  if (sel) sel.addEventListener('change', function(){ lockUntil = Date.now() + 4000; });
+  function pickActive(){
+    if (!document.body.classList.contains('dual-pane') || Date.now() < lockUntil) return;
+    const line = window.innerHeight * 0.35;
+    let current = null;
+    for (let i = 0; i < nodes.length; i++){ if (nodes[i].getBoundingClientRect().top <= line) current = nodes[i]; }
+    if (!current) current = nodes[0];
+    const v = current.getAttribute('data-preview');
+    if (v && v !== previewPage) switchPage(v);
+  }
+  let ticking = false;
+  function onScroll(){
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(function(){ pickActive(); ticking = false; });
+  }
+  window.addEventListener('scroll', onScroll, { passive: true });
+  window.addEventListener('resize', onScroll);
+  pickActive();
+}
+
+// 面板宽度拖拽
+(function(){
+  const rz = document.getElementById('prototypeResizer');
+  if (!rz) return;
+  rz.addEventListener('mousedown', function(e){
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--panel-w'), 10) || 520;
+    function mv(ev){
+      const w = Math.min(Math.max(380, startW + (startX - ev.clientX)), Math.min(900, window.innerWidth - 360));
+      document.documentElement.style.setProperty('--panel-w', w + 'px');
+      scalePreview();
+    }
+    function up(){ document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); }
+    document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up);
+  });
+})();
+
+/* ===== 2. 全文档可编辑 · 表格增删行 · 列宽行高拖拽 · 撤销重做 ===== */
+(function () {
+  var EDITABLE_BLOCK_SELECTOR = 'td, th, p, li, h1, h2, h3, h4, .alert, blockquote, dd, dt';
+  var EXCLUDE_SELECTOR = '.prototype-sidebar, .fab-group, .save-btn, .save-btn-container, .dual-pane-toggle, ' +
+    '.copy-btn, .col-resizer, .row-resizer, .row-ctrl, .pm-anchor, .editable-table-remove, .pm-undo-toast, script, style, iframe, button';
+  var SKIP_CELL_CONTENT = 'table, iframe, video, canvas, img';
+  var origMap = new WeakMap(), rowDone = new WeakSet();
+
+  var undoStack = [], redoStack = [], MAX_STEPS = 200, applying = false;
+  function pushStep(step){
+    if (applying) return;
+    undoStack.push(step);
+    if (undoStack.length > MAX_STEPS) undoStack.shift();
+    redoStack.length = 0;
+  }
+  function reinsert(node, parent, next){
+    if (!parent) return;
+    if (next && next.parentNode === parent) parent.insertBefore(node, next); else parent.appendChild(node);
+  }
+  var toastEl = null, toastTimer = null;
+  function toast(msg){
+    if (!toastEl){
+      toastEl = document.createElement('div'); toastEl.className = 'pm-undo-toast';
+      toastEl.setAttribute('contenteditable', 'false'); document.body.appendChild(toastEl);
+    }
+    toastEl.textContent = msg;
+    requestAnimationFrame(function(){ if (toastEl) toastEl.classList.add('show'); });
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ if (toastEl){ toastEl.remove(); toastEl = null; } }, 1300);
+  }
+  function runStep(s, dir){ applying = true; try { s[dir](); } finally { applying = false; } }
+  function undo(){
+    commitPending();
+    var s = undoStack.pop(); if (!s){ toast('没有可撤销的操作'); return; }
+    runStep(s, 'undo'); redoStack.push(s); toast('已撤销');
+  }
+  function redo(){
+    commitPending();
+    var s = redoStack.pop(); if (!s){ toast('没有可重做的操作'); return; }
+    runStep(s, 'redo'); undoStack.push(s); toast('已重做');
+  }
+  function isFormField(t){ return !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT'); }
+  document.addEventListener('keydown', function(e){
+    if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
+    if (isFormField(e.target)) return;
+    var k = (e.key || '').toLowerCase();
+    if (k === 'z' && !e.shiftKey){ e.preventDefault(); undo(); }
+    else if (k === 'y' || (k === 'z' && e.shiftKey)){ e.preventDefault(); redo(); }
+  }, true);
+
+  var pending = null, pendTimer = null, PEND_MS = 600;
+  function flagState(el){ return { changed: el.getAttribute('data-changed'), cls: el.classList.contains('edited-cell') }; }
+  function applyFlag(el, s){
+    if (s.changed) el.setAttribute('data-changed', s.changed); else el.removeAttribute('data-changed');
+    if (s.cls) el.classList.add('edited-cell'); else el.classList.remove('edited-cell');
+  }
+  function syncChangedFlag(el){ if (el.innerHTML !== origMap.get(el)) markEditableCellChanged(el); }
+  function reveal(el){ if (el && el.isConnected && el.scrollIntoView) el.scrollIntoView({ block: 'nearest' }); }
+  function seed(el){ pending = { el: el, before: el.innerHTML, flag: flagState(el) }; }
+  function commitPending(){
+    if (pendTimer){ clearTimeout(pendTimer); pendTimer = null; }
+    var p = pending; pending = null;
+    if (!p) return;
+    var el = p.el, before = p.before, beforeFlag = p.flag, after = el.innerHTML;
+    if (after === before) return;
+    syncChangedFlag(el);
+    var afterFlag = flagState(el);
+    pushStep({
+      undo: function(){ el.innerHTML = before; applyFlag(el, beforeFlag); reveal(el); },
+      redo: function(){ el.innerHTML = after;  applyFlag(el, afterFlag);  reveal(el); }
+    });
+  }
+  function onEditFocus(){ if (pending && pending.el !== this) commitPending(); if (!pending) seed(this); }
+  function onEditInput(){
+    var el = this;
+    if (!pending || pending.el !== el){ commitPending(); seed(el); }
+    if (pendTimer) clearTimeout(pendTimer);
+    pendTimer = setTimeout(function(){
+      var still = pending && pending.el;
+      commitPending();
+      if (still && document.activeElement === still) seed(still);
+    }, PEND_MS);
+  }
+  function onEditBlur(){ if (pending && pending.el === this) commitPending(); syncChangedFlag(this); }
+
+  function isExcluded(el){ return !!(el.closest && el.closest(EXCLUDE_SELECTOR)); }
+  function isHeaderRow(tr){ return tr.cells.length > 0 && Array.prototype.every.call(tr.cells, function(c){ return c.tagName === 'TH'; }); }
+  function headerRowOf(table){
+    if (table.tHead && table.tHead.rows[0]) return table.tHead.rows[0];
+    for (var i = 0; i < table.rows.length; i++) if (isHeaderRow(table.rows[i])) return table.rows[i];
+    return table.rows[0] || null;
+  }
+  function markEditableCellChanged(el){ if (!el) return; el.setAttribute('data-changed', 'true'); el.classList.add('edited-cell'); }
+  function trackEditable(el){
+    if (origMap.has(el)) return; origMap.set(el, el.innerHTML);
+    el.setAttribute('contenteditable', 'true'); el.style.outline = 'none';
+    el.addEventListener('focus', onEditFocus);
+    el.addEventListener('input', onEditInput);
+    el.addEventListener('blur', onEditBlur);
+  }
+  function makeDocumentEditable(root){
+    (root || document).querySelectorAll(EDITABLE_BLOCK_SELECTOR).forEach(function(el){
+      if (isExcluded(el)) return;
+      if (el.querySelector(SKIP_CELL_CONTENT)) return;
+      trackEditable(el);
+    });
+  }
+  function wrapTable(table){
+    if (table.closest('.editable-table-wrap')) return table.closest('.editable-table-wrap');
+    var wrap = document.createElement('div'); wrap.className = 'editable-table-wrap'; wrap.setAttribute('contenteditable', 'false');
+    table.parentNode.insertBefore(wrap, table); wrap.appendChild(table);
+    var rm = document.createElement('button'); rm.type = 'button'; rm.className = 'editable-table-remove'; rm.textContent = '删除表格';
+    rm.addEventListener('click', function(e){
+      e.preventDefault();
+      var parent = wrap.parentNode, next = wrap.nextSibling;
+      wrap.remove();
+      pushStep({ undo: function(){ reinsert(wrap, parent, next); reveal(wrap); }, redo: function(){ wrap.remove(); } });
+    });
+    wrap.appendChild(rm); return wrap;
+  }
+  function blankRowFrom(tr){
+    var clone = tr.cloneNode(true); clone.style.height = ''; clone.removeAttribute('id');
+    Array.prototype.forEach.call(clone.cells, function(c){
+      c.removeAttribute('rowspan'); c.removeAttribute('colspan'); c.removeAttribute('id');
+      c.removeAttribute('data-changed'); c.classList.remove('edited-cell');
+      c.querySelectorAll('.row-ctrl, .col-resizer, .row-resizer, .pm-anchor').forEach(function(n){
+        if (n.classList.contains('pm-anchor')){ while (n.firstChild) n.parentNode.insertBefore(n.firstChild, n); n.remove(); } else n.remove();
+      });
+      if (!c.querySelector('iframe, img, video, canvas')) c.innerHTML = '<br>';
+      c.removeAttribute('contenteditable');
+    });
+    return clone;
+  }
+  function installRowControls(tr){
+    var first = tr.cells[0]; if (!first || first.querySelector(':scope > .pm-anchor > .row-ctrl')) return;
+    first.style.position = 'relative';
+    var anchor = document.createElement('span'); anchor.className = 'pm-anchor'; anchor.setAttribute('contenteditable', 'false');
+    var ctrl = document.createElement('span'); ctrl.className = 'row-ctrl';
+    var add = document.createElement('button'); add.type = 'button'; add.className = 'row-add'; add.textContent = '+'; add.title = '在下方插入一行';
+    var del = document.createElement('button'); del.type = 'button'; del.className = 'row-del'; del.textContent = '−'; del.title = '删除本行';
+    add.addEventListener('click', function(e){
+      e.preventDefault();
+      var nr = blankRowFrom(tr), parent = tr.parentNode, next = tr.nextSibling;
+      parent.insertBefore(nr, next); decorateRow(nr); makeDocumentEditable(nr);
+      pushStep({
+        undo: function(){ nr.remove(); },
+        redo: function(){ if (tr.parentNode) tr.parentNode.insertBefore(nr, tr.nextSibling); else reinsert(nr, parent, next); reveal(nr); }
+      });
+    });
+    del.addEventListener('click', function(e){
+      e.preventDefault();
+      var body = tr.parentNode;
+      var dataRows = Array.prototype.filter.call(body.rows, function(r){ return !isHeaderRow(r); });
+      if (dataRows.length <= 1) return;
+      var next = tr.nextSibling;
+      tr.remove();
+      pushStep({ undo: function(){ reinsert(tr, body, next); reveal(tr); }, redo: function(){ tr.remove(); } });
+    });
+    ctrl.appendChild(add); ctrl.appendChild(del); anchor.appendChild(ctrl); first.insertBefore(anchor, first.firstChild);
+  }
+  function ensureCols(table){
+    if (table.querySelector('colgroup')) return table.querySelector('colgroup');
+    var headRow = headerRowOf(table); if (!headRow) return null;
+    var cg = document.createElement('colgroup');
+    for (var i = 0; i < headRow.cells.length; i++){ var col = document.createElement('col'); col.style.width = headRow.cells[i].offsetWidth + 'px'; cg.appendChild(col); }
+    table.insertBefore(cg, table.firstChild); return cg;
+  }
+  function installColResizers(table){
+    var cg = ensureCols(table); if (!cg) return;
+    var cols = cg.querySelectorAll('col');
+    var headRow = headerRowOf(table); if (!headRow) return;
+    Array.prototype.forEach.call(headRow.cells, function(th, idx){
+      if (idx >= cols.length) return; if (th.querySelector(':scope > .col-resizer')) return;
+      th.style.position = 'relative';
+      var h = document.createElement('span'); h.className = 'col-resizer'; h.setAttribute('contenteditable', 'false');
+      var col = cols[idx];
+      h.addEventListener('mousedown', function(e){
+        e.preventDefault(); e.stopPropagation();
+        var startX = e.clientX, startW = col.offsetWidth || th.offsetWidth, beforeW = col.style.width;
+        h.classList.add('active'); document.body.classList.add('col-resizing');
+        function mv(ev){ col.style.width = Math.max(48, startW + (ev.clientX - startX)) + 'px'; }
+        function up(){
+          document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up);
+          h.classList.remove('active'); document.body.classList.remove('col-resizing');
+          var afterW = col.style.width;
+          if (afterW !== beforeW) pushStep({ undo: function(){ col.style.width = beforeW; }, redo: function(){ col.style.width = afterW; } });
+        }
+        document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up);
+      });
+      th.appendChild(h);
+    });
+  }
+  function installRowResizer(tr){
+    var first = tr.cells[0]; if (!first || first.querySelector(':scope > .row-resizer')) return;
+    first.style.position = 'relative';
+    var h = document.createElement('span'); h.className = 'row-resizer'; h.setAttribute('contenteditable', 'false');
+    h.addEventListener('mousedown', function(e){
+      e.preventDefault(); e.stopPropagation();
+      var startY = e.clientY, startH = tr.offsetHeight, beforeH = tr.style.height;
+      h.classList.add('active'); document.body.classList.add('row-resizing');
+      function mv(ev){ tr.style.height = Math.max(24, startH + (ev.clientY - startY)) + 'px'; }
+      function up(){
+        document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up);
+        h.classList.remove('active'); document.body.classList.remove('row-resizing');
+        var afterH = tr.style.height;
+        if (afterH !== beforeH) pushStep({ undo: function(){ tr.style.height = beforeH; }, redo: function(){ tr.style.height = afterH; } });
+      }
+      document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up);
+    });
+    first.appendChild(h);
+  }
+  function decorateRow(tr){ if (rowDone.has(tr) || isHeaderRow(tr) || tr.closest('thead')) return; rowDone.add(tr); installRowControls(tr); installRowResizer(tr); }
+  function installTableControls(root){
+    (root || document).querySelectorAll('table').forEach(function(table){
+      if (isExcluded(table) || table.closest('.no-edit')) return;
+      wrapTable(table); installColResizers(table);
+      Array.prototype.forEach.call(table.rows, decorateRow);
+    });
+  }
+  function init(root){ installTableControls(root); makeDocumentEditable(root); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function(){ init(document); }); else init(document);
+  window.PMEdit = { init: init, makeDocumentEditable: makeDocumentEditable, installTableControls: installTableControls,
+                    undo: undo, redo: redo, canUndo: function(){ return undoStack.length > 0; }, canRedo: function(){ return redoStack.length > 0; } };
+})();
+
+/* ===== 3. 一键复制全文 / 保存并通知AI ===== */
+(function(){
+  const copyBtn = document.getElementById('copyBtn');
+  if (copyBtn) copyBtn.addEventListener('click', async function(){
+    const node = document.getElementById('prdContent');
+    const html = node ? node.outerHTML : '';
+    try {
+      if (window.ClipboardItem && navigator.clipboard && navigator.clipboard.write) {
+        await navigator.clipboard.write([new ClipboardItem({
+          'text/html': new Blob([html], { type: 'text/html' }),
+          'text/plain': new Blob([node ? node.innerText : ''], { type: 'text/plain' })
+        })]);
+      } else if (navigator.clipboard) {
+        await navigator.clipboard.writeText(node ? node.innerText : '');
+      }
+      copyBtn.textContent = '✅ 已复制全文';
+    } catch (err) {
+      copyBtn.textContent = '⚠️ 复制失败，请手动选择';
+    }
+    setTimeout(function(){ copyBtn.textContent = '📋 一键复制全文'; }, 2000);
+  });
+
+  const saveBtn = document.getElementById('saveBtn');
+  if (saveBtn) saveBtn.addEventListener('click', async function(){
+    const html = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+    const name = '可信代码审查Agent-PRD.html';
+    try {
+      if (window.showSaveFilePicker) {
+        const handle = await window.showSaveFilePicker({
+          suggestedName: name,
+          types: [{ description: 'HTML 文档', accept: { 'text/html': ['.html'] } }]
+        });
+        const w = await handle.createWritable();
+        await w.write(html); await w.close();
+        saveBtn.textContent = '✅ 已保存';
+      } else {
+        const blob = new Blob([html], { type: 'text/html' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob); a.download = name;
+        document.body.appendChild(a); a.click(); a.remove();
+        saveBtn.textContent = '✅ 已下载';
+      }
+    } catch (err) {
+      saveBtn.textContent = '⚠️ 未保存';
+    }
+    setTimeout(function(){ saveBtn.textContent = '💾 保存并通知AI'; }, 2000);
+  });
+
+  // 初始化预览
+  renderSelect(); initPreviewScrollSync(); scalePreview();
+  window.addEventListener('resize', scalePreview);
+  const m = location.hash.match(/preview=([\w-]+)/);
+  if (m) { previewPage = m[1]; renderSelect(); toggleDualPane(); }
+})();
+</script>
+</body>
+</html>

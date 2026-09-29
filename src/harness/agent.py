@@ -1,6 +1,7 @@
 """Agent Harness core: Execution Loop + Tool Calling + Context Management"""
 from __future__ import annotations
 import json
+import time
 from dataclasses import dataclass
 from typing import Any, Callable
 
@@ -37,7 +38,10 @@ class AgentHarness:
         self._reset(user_query)
         for turn in range(self.max_turns):
             self._pre_turn(turn)
-            response = self.model.chat(messages=self.messages, tools=self._get_tool_schemas())
+            try:
+                response = self.model.chat(messages=self.messages, tools=self._get_tool_schemas())
+            except Exception as exc:
+                return self._model_failure(turn + 1, exc)
             self._accumulate_usage(response)  # ← 累计 token
             result = self._process_turn_response(response, turn)
             if result is not None:
@@ -99,11 +103,12 @@ class AgentHarness:
                 self.logger.turn_end(turn + 1, has_tools)
             return None  # 继续循环
         else:
-            self.messages.append({"role":"assistant","content":response.content})
+            content = response.content or "Agent returned an empty final answer."
+            self.messages.append({"role":"assistant","content":content})
             if self.logger:
                 self.logger.turn_end(turn + 1, has_tools, getattr(response, 'usage', None))
                 self.logger.finish(self.get_stats())
-            return response.content  # 最终答案
+            return content  # 最终答案
 
     def _reset(self, user_query: str):
         self.messages = [{"role":"system","content":self.system_prompt},
@@ -111,7 +116,25 @@ class AgentHarness:
         self.turns_taken = 0; self.tools_called = 0
 
     def _execute_tool_calls(self, tool_calls: list):
-        normalized = [ToolCall(**tc) if isinstance(tc, dict) else tc for tc in tool_calls]
+        normalized = []
+        for raw in tool_calls:
+            try:
+                tc = ToolCall(**raw) if isinstance(raw, dict) else raw
+                if not isinstance(tc, ToolCall) or not isinstance(tc.args, dict):
+                    raise TypeError("tool_call 必须包含 id、name 与对象类型 args")
+            except (TypeError, KeyError) as exc:
+                # LLM 的工具调用协议不能信任；丢弃坏条目并留下可归因事件，避免整轮崩溃。
+                result = f"Malformed tool call ignored: {exc}"
+                if self.logger:
+                    self.logger.tool_call_start(self.turns_taken, "<malformed>", {}, args_ok=False,
+                                                args_error=str(exc))
+                    self.logger.error(self.turns_taken, type(exc).__name__, result)
+                self._log_tool_end("<malformed>", result, time.time(), error=True,
+                                   failure_kind="malformed_tool_call")
+                continue
+            normalized.append(tc)
+        if not normalized:
+            return
         self.messages.append({
             "role":"assistant","content":None,
             "tool_calls":[{"id":tc.id,"type":"function",
@@ -123,20 +146,36 @@ class AgentHarness:
             self.messages.append({"role":"tool","tool_call_id":tc.id,"content":str(result)})
             self.tools_called += 1
 
+    def _model_failure(self, turn: int, exc: Exception) -> str:
+        """把模型层异常降级为可读终态，保证日志与端到端指标都有明确分母。"""
+        result = f"Model error: {type(exc).__name__}: {exc}"
+        if self.logger:
+            self.logger.error(turn, type(exc).__name__, str(exc))
+            self.logger.turn_end(turn, False)
+            self.logger.finish({**self.get_stats(), "complete": False})
+        return result
+
     def _execute_single_tool(self, tc: ToolCall) -> str:
         import time
         start = time.time()
+        tool = self.tools.get(tc.name)
+        args_ok, args_error = (None, None) if tool is None else self._validate_args(tool, tc.args)
+        if self.logger:
+            # 观测埋点：此前该事件从未被发出（轨迹指标全链路缺口）
+            self.logger.tool_call_start(self.turns_taken, tc.name, tc.args,
+                                        args_ok=args_ok, args_error=args_error)
         try:
-            tool = self.tools.get(tc.name)
             if tool is None:
                 result = f"Tool '{tc.name}' not found."
-                if self.logger:
-                    self.logger.tool_call_end(self.turns_taken, tc.name, result, (time.time()-start)*1000, error=True)
+                self._log_tool_end(tc.name, result, start, error=True, failure_kind="unknown_tool")
                 return result
             # HITL check
             if hasattr(self, 'hitl') and self.hitl and self.hitl.needs_approval(tc.name, tc.args):
                 if not self.hitl.request_approval(tc.name, tc.args):
-                    return f"Tool '{tc.name}' blocked by Human-in-the-Loop guard."
+                    result = f"Tool '{tc.name}' blocked by Human-in-the-Loop guard."
+                    # 拦截路径此前完全静默 —— 补记，便于统计"被人工/策略拦下的动作"
+                    self._log_tool_end(tc.name, result, start, error=True, failure_kind="hitl_blocked")
+                    return result
             # Sandbox: run_command 类工具在沙箱中执行
             if hasattr(self, 'sandbox') and self.sandbox and tc.name == 'run_command':
                 cmd = tc.args.get('command', '')
@@ -147,15 +186,40 @@ class AgentHarness:
                 result = sb_result.summary()
             else:
                 result = str(tool.fn(**tc.args))
-            if self.logger:
-                self.logger.tool_call_end(self.turns_taken, tc.name, result, (time.time()-start)*1000)
+            self._log_tool_end(tc.name, result, start)
             return result
         except Exception as e:
             result = f"Tool error: {type(e).__name__}: {e}"
+            kind = "args_invalid" if args_ok is False else "tool_exception"
             if self.logger:
                 self.logger.error(self.turns_taken, type(e).__name__, str(e))
-                self.logger.tool_call_end(self.turns_taken, tc.name, result, (time.time()-start)*1000, error=True)
+            self._log_tool_end(tc.name, result, start, error=True, failure_kind=kind)
             return result
+
+    def _log_tool_end(self, tool_name: str, result: str, start: float,
+                      error: bool = False, failure_kind: str | None = None) -> None:
+        """工具结束落盘（统一出口，保证每条 tool_call_start 都有对应 end）"""
+        import time
+        if not self.logger:
+            return
+        self.logger.tool_call_end(self.turns_taken, tool_name, result,
+                                  (time.time() - start) * 1000, error=error,
+                                  failure_kind=failure_kind)
+
+    @staticmethod
+    def _validate_args(tool: ToolDefinition, args: dict) -> tuple[bool | None, str | None]:
+        """轻量参数校验：参数是否为对象 + required 字段是否齐全。
+
+        纯观测（参数合法率指标），不拦截调用 —— 与既有宽松工具调用行为一致。
+        """
+        if not isinstance(args, dict):
+            return False, f"args 非对象: {type(args).__name__}"
+        schema = tool.parameters if isinstance(tool.parameters, dict) else {}
+        required = schema.get("required") or []
+        missing = [str(k) for k in required if k not in args]
+        if missing:
+            return False, "缺少必填参数: " + ", ".join(missing)
+        return True, None
 
     def _get_tool_schemas(self) -> list[dict]:
         return [{"type":"function","function":{"name":t.name,"description":t.description,"parameters":t.parameters}}
@@ -169,6 +233,10 @@ class AgentHarness:
                                        "content":"Not executed (max turns reached)."})
         self.messages.append({"role":"user","content":"Max turns reached. Give your best answer now. No more tools."})
         resp = self.model.chat(messages=self.messages, tools=[])
+        if self.logger:
+            self.logger.forced_finish(self.turns_taken, self.max_turns)
+            # 达到预算后虽有兜底答案，但该 run 已发生质量降级，不能记作正常成功。
+            self.logger.finish({**self.get_stats(), "complete": False, "forced_finish": True})
         return resp.content or "Agent stopped."
 
     def get_stats(self) -> dict:

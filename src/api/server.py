@@ -123,7 +123,7 @@ async def get_current_user(
     ② 检查 exp 过期时间（自动由 python-jose 处理）
     ③ 检查 jti 是否在吊销列表中（支持服务端主动吊销）
 
-    面试话术："每个请求到达时，FastAPI 依赖注入系统自动调用
+    设计说明："每个请求到达时，FastAPI 依赖注入系统自动调用
     get_current_user → jwt.decode 验证签名+过期 → 吊销列表 O(1) 检查。
     任何一步失败都返回 401，攻击面极小。"
     """
@@ -369,7 +369,7 @@ async def login(req: LoginRequest, request: Request):
     """
     用户登录 → 返回 JWT access + refresh token 对。
 
-    面试话术："登录接口单独限流 10次/分钟——暴力破解攻击者
+    设计说明："登录接口单独限流 10次/分钟——暴力破解攻击者
     最多尝试 10 个密码就被封堵 1 分钟，同时配合 bcrypt 的
     慢哈希（~100ms/次）让离线破解也不划算。"
     """
@@ -398,7 +398,7 @@ async def refresh_token(req: RefreshRequest, request: Request):
     """
     用 refresh token 换取新的 access token（轮换机制）。
 
-    面试话术："refresh token 只能用于此端点——不能访问业务 API。
+    设计说明："refresh token 只能用于此端点——不能访问业务 API。
     每次刷新都签发新 token 对（token rotation），旧的 refresh token
     可选择性作废——如果检测到已作废 token 被重用，说明泄露，
     立即吊销该用户所有 token。"
@@ -424,7 +424,7 @@ async def get_me(current_user: User = Depends(get_current_user)):
     """
     获取当前登录用户信息（需 Bearer token）。
 
-    面试话术："前端 SPA 刷新页面后，用存储的 access token 调 /auth/me
+    设计说明："前端 SPA 刷新页面后，用存储的 access token 调 /auth/me
     恢复用户会话——不依赖 cookie/session，完全无状态。"
     """
     return {"user": current_user.to_dict()}
@@ -436,7 +436,7 @@ async def logout(current_user: User = Depends(get_current_user),
     """
     登出：将当前 access token 的 jti 加入吊销列表。
 
-    面试话术："JWT 本身是无状态的——签发的 token 在过期前无法'取消'。
+    设计说明："JWT 本身是无状态的——签发的 token 在过期前无法'取消'。
     解决方案：维护一个 Redis/内存吊销列表（基于 jti），
     登出时将 token ID 加入黑名单，验证时 O(1) 查询。
     生产环境用 Redis Set + TTL 对齐 token 过期时间。"
@@ -472,7 +472,7 @@ async def analyze(req: AnalyzeRequest, current_user: User = Depends(get_current_
     is_multi = req.mode == "multi"
 
     if is_multi:
-        orch = create_langgraph_orchestrator(client, tools)
+        orch = create_langgraph_orchestrator(client, tools, logger=logger)
         langgraph_result = await asyncio.to_thread(
             orch.run, task=target, project_path=str(project_path)
         )

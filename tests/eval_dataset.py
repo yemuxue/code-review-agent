@@ -2,7 +2,7 @@
 Eval Dataset / 评估数据集
 用于量化 Agent 代码分析准确率
 
-面试话术：'标注了 50 条真实 bug，用精确率/召回率/F1 量化 Agent 效果'
+设计说明：'标注了 50 条真实 bug，用精确率/召回率/F1 量化 Agent 效果'
 """
 
 EVAL_SAMPLES = [
