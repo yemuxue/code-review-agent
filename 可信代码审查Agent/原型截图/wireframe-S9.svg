@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1672" height="941" viewBox="0 0 1672 941" role="img" aria-label="指标与成本面板">
+<rect width="1672" height="941" fill="#ffffff"/>
+<rect x="0" y="0" width="1672" height="74" fill="#f1f5f9"/>
+<text x="48" y="47" font-family="Microsoft YaHei, 微软雅黑, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="26" font-weight="700" fill="#1e293b">S9 · 指标与成本面板</text>
+<line x1="0" y1="74" x2="1672" y2="74" stroke="#cbd5e1" stroke-width="2"/>
+<rect x="48" y="92" width="1576" height="46" rx="8" fill="#eef2ff" stroke="#c7d2fe"/>
+<text x="66" y="122" font-family="Microsoft YaHei, 微软雅黑, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="19" fill="#3730a3">时间范围：近 7 天 ▾ · 维度：任务数 ▾ · 所有比率标注样本量</text>
+<rect x="48" y="164" width="1576" height="46" fill="#ffffff" stroke="#e2e8f0"/>
+<text x="66" y="194" font-family="Microsoft YaHei, 微软雅黑, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="19" fill="#0f172a">任务量</text>
+<text x="518" y="194" font-family="Consolas, Menlo, monospace" font-size="18" fill="#475569">任务 42 · 完成 39 · 失败 2 · 取消 1</text>
+<rect x="48" y="210" width="1576" height="46" fill="#f8fafc" stroke="#e2e8f0"/>
+<text x="66" y="240" font-family="Microsoft YaHei, 微软雅黑, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="19" fill="#0f172a">体验</text>
+<text x="518" y="240" font-family="Consolas, Menlo, monospace" font-size="18" fill="#475569">首结果 P50 1m10s · P95 4m20s · 缓存命中 12 / 42</text>
+<rect x="48" y="256" width="1576" height="46" fill="#ffffff" stroke="#e2e8f0"/>
+<text x="66" y="286" font-family="Microsoft YaHei, 微软雅黑, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="19" fill="#0f172a">用户价值</text>
+<text x="518" y="286" font-family="Consolas, Menlo, monospace" font-size="18" fill="#475569">有帮助率 63% (N=31) · 误报率 13% · 采纳率 48%</text>
+<rect x="48" y="302" width="1576" height="46" fill="#f8fafc" stroke="#e2e8f0"/>
+<text x="66" y="332" font-family="Microsoft YaHei, 微软雅黑, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="19" fill="#0f172a">修复安全</text>
+<text x="518" y="332" font-family="Consolas, Menlo, monospace" font-size="18" fill="#475569">Verify 通过 9 / 12 · 回归引入 0 · 回滚 1</text>
+<rect x="48" y="348" width="1576" height="46" fill="#ffffff" stroke="#e2e8f0"/>
+<text x="66" y="378" font-family="Microsoft YaHei, 微软雅黑, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="19" fill="#0f172a">成本</text>
+<text x="518" y="378" font-family="Consolas, Menlo, monospace" font-size="18" fill="#475569">总 18.7 美元 · 每 PR 0.45 美元 · Token 1.24M</text>
+<rect x="48" y="394" width="1576" height="46" fill="#f8fafc" stroke="#e2e8f0"/>
+<text x="66" y="424" font-family="Microsoft YaHei, 微软雅黑, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="19" fill="#0f172a">质量（离线口径）</text>
+<text x="518" y="424" font-family="Consolas, Menlo, monospace" font-size="18" fill="#475569">Precision 95.3% · Recall 38.0% · 非线上效果</text>
+<rect x="48" y="440" width="1576" height="46" fill="#ffffff" stroke="#e2e8f0"/>
+<text x="66" y="470" font-family="Microsoft YaHei, 微软雅黑, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="19" fill="#0f172a">边界</text>
+<text x="518" y="470" font-family="Consolas, Menlo, monospace" font-size="18" fill="#475569">无数据展示空态；样本不足标注不可用于决策；成本缺失不填估算值</text>
+<text x="48" y="508" font-family="Microsoft YaHei, 微软雅黑, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="16" fill="#94a3b8">占位线框图 · 非最终视觉设计 · 素材补齐后替换 ../原型截图/S9.png</text>
+</svg>
