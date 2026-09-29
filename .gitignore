@@ -13,3 +13,7 @@ sessions/
 .worktrees/
 .eval-runs/
 *.bak
+/.pm-workflow/
+/scripts/pm-runtime-config.js
+/scripts/.venv/
+/.handoff/
