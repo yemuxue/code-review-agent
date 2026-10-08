@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>可信代码审查 Agent 可用性测试报告</title>
+  <style>
+    :root{--ink:#172033;--muted:#667387;--line:#e5eaf1;--bg:#f6f8fb;--blue:#2e6bff;--green:#147d70;--amber:#a16b0b;--red:#ae3549}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,"Microsoft YaHei","PingFang SC",sans-serif;line-height:1.65}
+    main{max-width:1120px;margin:0 auto;padding:42px 32px 80px}h1{font-size:30px;line-height:1.25;margin:0 0 8px}h2{font-size:19px;margin:34px 0 12px;padding-left:10px;border-left:4px solid var(--blue)}h3{font-size:14px;margin:0 0 5px}.eyebrow{color:var(--blue);font-size:11px;font-weight:800;letter-spacing:.08em}.muted{color:var(--muted);font-size:13px}.note{padding:13px 15px;background:#fff8e5;border:1px solid #f1dda4;border-radius:8px;color:#76570e;font-size:13px}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.card{background:#fff;border:1px solid var(--line);border-radius:9px;padding:16px}.num{font-size:25px;font-weight:800;line-height:1.2;margin-top:5px}.green{color:var(--green)}.amber{color:var(--amber)}.red{color:var(--red)}table{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--line);border-radius:9px;overflow:hidden}th,td{padding:12px 13px;border-bottom:1px solid var(--line);font-size:12px;text-align:left;vertical-align:top}th{font-size:11px;color:#738095;background:#fafbfc}tr:last-child td{border-bottom:0}.tag{display:inline-block;padding:2px 7px;border-radius:999px;font-size:10px;font-weight:700}.p0{background:#fff0f2;color:var(--red)}.p1{background:#fff6df;color:var(--amber)}.p2{background:#edf4ff;color:#446a9b}.shots{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}.shot{background:#fff;border:1px solid var(--line);border-radius:9px;padding:10px}.shot img{width:100%;height:auto;border:1px solid #e7ebf1;border-radius:6px;display:block}.shot figcaption{font-size:11px;color:#586679;padding:8px 2px 0}.bar{height:8px;border-radius:10px;background:#e9edf3;overflow:hidden;margin:8px 0}.bar span{display:block;height:100%;background:var(--blue)}ul{margin:7px 0 0;padding-left:21px;font-size:13px;color:#4d5a6c}@media(max-width:760px){main{padding:28px 16px 60px}.grid{grid-template-columns:repeat(2,1fr)}.shots{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">PRODUCT VALIDATION / USABILITY TEST</div>
+  <h1>可信代码审查 Agent 可用性测试报告</h1>
+  <p class="muted">测试版本：可信代码审查Agent-prototype.html · 测试日期：2026-10-08 · 浏览器视口：1440 × 960</p>
+  <div class="note"><strong>测试性质：</strong>本报告是基于可点击原型的角色模拟测试，不等同于真实外部用户访谈或线上试点。它用于提前发现交互阻塞点，下一步仍需要邀请真实研发人员完成同一组任务。</div>
+
+  <h2>一、测试目标</h2>
+  <div class="grid"><div class="card"><div class="muted">模拟角色</div><div class="num">3</div><div class="muted">Reviewer、代码作者、平台管理员</div></div><div class="card"><div class="muted">任务完成</div><div class="num green">9 / 9</div><div class="muted">每个角色 3 项任务</div></div><div class="card"><div class="muted">关键链路</div><div class="num">1</div><div class="muted">发现 → 反馈 → 审批 → Verify</div></div><div class="card"><div class="muted">测试记录</div><div class="num">14</div><div class="muted">页面操作与状态事件</div></div></div>
+
+  <h2>二、测试任务与结果</h2>
+  <table><thead><tr><th>角色</th><th>任务</th><th>完成标准</th><th>结果</th><th>观察</th></tr></thead><tbody>
+    <tr><td>Reviewer / Tech Lead</td><td>找到最高风险发现</td><td>从任务列表进入 PR #1842，打开高风险证据</td><td><span class="tag p0">完成</span></td><td>任务状态、风险等级和打开入口易于识别。</td></tr>
+    <tr><td>Reviewer / Tech Lead</td><td>判断处理动作</td><td>查看证据，忽略中风险问题，打开补丁预览</td><td><span class="tag p1">完成</span></td><td>证据卡支持决策，但“忽略”和“误报”需要拆分。</td></tr>
+    <tr><td>Reviewer / Tech Lead</td><td>完成审批验证</td><td>勾选已查看 diff，批准写入，查看 Verify 结果</td><td><span class="tag p0">完成</span></td><td>审批确认门槛清晰，Verify 结果能说明是否可继续。</td></tr>
+    <tr><td>代码作者</td><td>理解问题位置</td><td>确认文件、行号、问题描述和影响</td><td><span class="tag p1">完成</span></td><td>位置和证据集中在同一页面，减少跳转。</td></tr>
+    <tr><td>代码作者</td><td>查看修复建议</td><td>进入补丁预览，检查修改范围</td><td><span class="tag p1">完成</span></td><td>diff 对比直观，但应增加“为什么这样修”的简短解释。</td></tr>
+    <tr><td>代码作者</td><td>反馈结果</td><td>对中风险问题给出忽略或误报反馈</td><td><span class="tag p1">完成</span></td><td>反馈动作存在，反馈原因和后续影响还需明确。</td></tr>
+    <tr><td>平台管理员</td><td>检查任务健康度</td><td>查看质量报告中的成功率、延迟和失败原因</td><td><span class="tag p2">完成</span></td><td>报告能看趋势，但失败样本还不能直接下钻。</td></tr>
+    <tr><td>平台管理员</td><td>判断风险边界</td><td>确认高风险发现默认不直接阻塞合并</td><td><span class="tag p2">完成</span></td><td>只读和审批边界在工作台中表达清楚。</td></tr>
+    <tr><td>平台管理员</td><td>定位治理缺口</td><td>查看审批、命令白名单和企业治理状态</td><td><span class="tag p2">完成</span></td><td>策略设置能暴露规划项，但缺少责任人和截止时间。</td></tr>
+  </tbody></table>
+
+  <h2>三、自动化操作时延</h2>
+  <p class="muted">以下是浏览器自动化从动作触发到页面状态可见的耗时，不代表真实用户完成任务所需时间。</p>
+  <table><thead><tr><th>动作</th><th>耗时</th><th>解释</th></tr></thead><tbody>
+    <tr><td>从任务列表进入审查</td><td>52 ms</td><td>页面状态切换，无后端请求。</td></tr>
+    <tr><td>找到高风险问题并查看证据</td><td>20 ms</td><td>发现卡和证据面板同屏展示。</td></tr>
+    <tr><td>查看 diff 并提交审批</td><td>49 ms</td><td>审批按钮依赖确认勾选，状态切换成功。</td></tr>
+  </tbody></table>
+
+  <h2>四、问题清单与改进建议</h2>
+  <table><thead><tr><th>优先级</th><th>问题</th><th>影响</th><th>建议</th></tr></thead><tbody>
+    <tr><td><span class="tag p0">P0</span></td><td>当前测试是模拟角色，缺少真实研发用户证据</td><td>无法证明真实用户是否理解风险等级和审批边界</td><td>招募 5～8 名代码作者、Reviewer 和平台人员完成同样任务，记录任务成功率、完成时长和误操作。</td></tr>
+    <tr><td><span class="tag p1">P1</span></td><td>“忽略”同时承接误报和暂不处理</td><td>反馈数据会污染后续评测集，无法区分模型问题和优先级选择</td><td>拆成“误报”“暂不处理”“已修复”，并要求误报填写原因。</td></tr>
+    <tr><td><span class="tag p1">P1</span></td><td>质量报告缺少失败样本下钻</td><td>管理员看到指标异常后仍需人工查日志</td><td>点击失败率或延迟指标，直接进入任务列表并按 failure_category、角色和模型筛选。</td></tr>
+    <tr><td><span class="tag p1">P1</span></td><td>补丁解释不足</td><td>作者能看到改了什么，但不一定理解为什么改</td><td>在 diff 上方增加“问题证据 → 修改原因 → 预期验证”的三段式说明。</td></tr>
+    <tr><td><span class="tag p2">P2</span></td><td>策略规划项没有责任人和交付时间</td><td>治理缺口只能被看到，不能被推进</td><td>补充 owner、状态、目标版本和阻塞依赖，形成产品化 backlog。</td></tr>
+  </tbody></table>
+
+  <h2>五、截图证据</h2>
+  <div class="shots">
+    <figure class="shot"><img src="../原型截图/01-任务列表.png" alt="任务列表"><figcaption>图 1：Reviewer 从任务列表开始，状态与高风险任务可扫描。</figcaption></figure>
+    <figure class="shot"><img src="../原型截图/03-高风险证据.png" alt="高风险证据"><figcaption>图 2：发现列表与证据面板同屏，支持快速判断。</figcaption></figure>
+    <figure class="shot"><img src="../原型截图/05-补丁预览.png" alt="补丁预览"><figcaption>图 3：审批前展示完整 diff，并用勾选确认控制写入。</figcaption></figure>
+    <figure class="shot"><img src="../原型截图/06-验证结果.png" alt="Verify 结果"><figcaption>图 4：Verify 结果保留通过、失败和回滚语义。</figcaption></figure>
+    <figure class="shot"><img src="../原型截图/08-模拟用户测试面板.png" alt="模拟用户测试面板"><figcaption>图 5：原型内置角色任务面板，可重复执行同一测试任务。</figcaption></figure>
+  </div>
+
+  <h2>六、下一轮真实用户测试方案</h2>
+  <ul><li>招募 5～8 名参与者：3 名代码作者、2 名 Reviewer / Tech Lead、1～2 名平台或安全人员。</li><li>每人完成 3 个任务：找到高风险问题、判断补丁是否可信、完成反馈或审批。</li><li>主要指标：任务成功率、完成时间、错误点击次数、主动询问次数、信心评分。</li><li>护栏指标：未经查看 diff 就点击审批、无法找到失败原因、把“忽略”理解成“误报”的比例。</li><li>测试后把每条观察转成“保留、修改、降级、删除”决策，并更新 PRD 的功能说明与验收用例。</li></ul>
+  <p class="muted" style="margin-top:28px">关联原型：../原型/可信代码审查Agent-prototype.html · 自动化记录：可信代码审查Agent-usability-run.json</p>
+</main>
+</body>
+</html>

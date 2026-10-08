@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>可信代码审查 Agent 原型</title>
+  <link rel="icon" href="data:,">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <style>
+    :root { --ink:#172033; --muted:#6f7b8d; --line:#e6eaf0; --panel:#ffffff; --canvas:#f5f7fb; --nav:#111a2e; --accent:#2e6bff; --teal:#008f83; --amber:#c77b08; --red:#c94d5d; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--canvas); color:var(--ink); font-family:Inter, "Microsoft YaHei", "PingFang SC", sans-serif; }
+    button, select { font:inherit; }
+    button { cursor:pointer; }
+    .app { min-height:100vh; display:flex; }
+    .sidebar { width:242px; background:var(--nav); color:#d9e1f3; padding:22px 14px; display:flex; flex-direction:column; gap:25px; }
+    .brand { display:flex; gap:11px; align-items:center; padding:0 10px; }
+    .brand-mark { width:32px; height:32px; background:#eaf1ff; color:#1c57da; border-radius:9px; display:grid; place-items:center; font-weight:800; }
+    .brand-title { font-size:15px; font-weight:800; letter-spacing:.1px; color:#fff; }
+    .brand-sub { font-size:11px; color:#95a8ca; margin-top:2px; }
+    .nav-title { font-size:11px; color:#7182a5; padding:0 10px; text-transform:uppercase; letter-spacing:.08em; }
+    .nav { display:flex; flex-direction:column; gap:5px; }
+    .nav button { border:0; background:transparent; color:#b7c4dc; width:100%; padding:11px 12px; border-radius:9px; display:flex; align-items:center; gap:10px; text-align:left; font-size:13px; }
+    .nav button:hover, .nav button.active { background:#263653; color:#fff; }
+    .nav button i { width:17px; text-align:center; color:#8fa3c7; }
+    .nav button.active i { color:#8fb4ff; }
+    .sidebar-bottom { margin-top:auto; border-top:1px solid #293753; padding:16px 10px 0; font-size:11px; color:#8fa0bc; line-height:1.6; }
+    .main { flex:1; min-width:0; }
+    .topbar { height:70px; background:#fff; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; padding:0 31px; }
+    .crumb { color:var(--muted); font-size:12px; display:flex; align-items:center; gap:8px; }
+    .crumb strong { color:var(--ink); }
+    .top-actions { display:flex; align-items:center; gap:12px; }
+    .role-select { border:1px solid var(--line); border-radius:7px; padding:8px 10px; color:#344054; background:#fff; font-size:12px; }
+    .avatar { width:32px; height:32px; border-radius:50%; background:#dbe7ff; color:#1e56ca; display:grid; place-items:center; font-size:12px; font-weight:700; }
+    .content { padding:28px 31px 42px; max-width:1440px; margin:auto; }
+    .page-head { display:flex; justify-content:space-between; gap:20px; align-items:flex-start; margin-bottom:24px; }
+    .eyebrow { color:var(--accent); font-size:12px; font-weight:700; letter-spacing:.03em; margin-bottom:8px; }
+    h1 { font-size:26px; line-height:1.2; margin:0; letter-spacing:-.02em; }
+    h2 { font-size:17px; margin:0; }
+    .subtitle { color:var(--muted); font-size:13px; margin-top:8px; }
+    .btn { border:1px solid var(--line); background:#fff; color:#334155; border-radius:7px; padding:9px 13px; font-size:12px; display:inline-flex; align-items:center; gap:7px; }
+    .btn:hover { border-color:#b8c6dd; background:#f9fbff; }
+    .btn-primary { color:#fff; background:var(--accent); border-color:var(--accent); }
+    .btn-primary:hover { background:#245be0; }
+    .btn-danger { color:#9f3041; border-color:#f2c9d0; background:#fff7f8; }
+    .btn-quiet { border-color:transparent; background:transparent; }
+    .metrics { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:13px; margin-bottom:22px; }
+    .metric, .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; box-shadow:0 2px 7px rgba(22,34,58,.025); }
+    .metric { padding:15px 17px; }
+    .metric-label { color:var(--muted); font-size:11px; }
+    .metric-value { font-size:23px; font-weight:750; margin-top:6px; letter-spacing:-.02em; }
+    .metric-meta { margin-top:7px; font-size:11px; color:var(--teal); }
+    .metric-meta.warn { color:var(--amber); }
+    .workspace-grid { display:grid; grid-template-columns:minmax(0,1.4fr) minmax(360px,.8fr); gap:16px; align-items:start; }
+    .card-head { padding:17px 18px 13px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--line); }
+    .card-title { font-size:14px; font-weight:750; }
+    .card-note { color:var(--muted); font-size:11px; }
+    .filters { display:flex; gap:8px; align-items:center; padding:13px 17px; border-bottom:1px solid var(--line); }
+    .filters select, .search { border:1px solid var(--line); border-radius:6px; background:#fff; padding:8px 9px; font-size:12px; color:#4a5568; }
+    .search { flex:1; }
+    .table-wrap { overflow:auto; }
+    table { border-collapse:collapse; width:100%; }
+    th { color:#8a95a6; font-size:11px; font-weight:600; text-align:left; background:#fafbfc; }
+    td { font-size:12px; border-top:1px solid #edf0f4; padding:14px 17px; vertical-align:top; }
+    th { padding:10px 17px; }
+    tr.task-row { cursor:pointer; }
+    tr.task-row:hover { background:#f7faff; }
+    .repo { font-weight:700; color:#243148; }
+    .pr { color:var(--muted); margin-top:5px; font-size:11px; }
+    .status { display:inline-flex; align-items:center; gap:5px; border-radius:999px; padding:4px 8px; font-size:10px; font-weight:700; white-space:nowrap; }
+    .status.done { color:#14796d; background:#e9faf6; }
+    .status.running { color:#92610f; background:#fff5df; }
+    .status.fail { color:#ad3549; background:#fff0f2; }
+    .status.pending { color:#536173; background:#eff2f6; }
+    .right-card { min-height:240px; }
+    .risk-list { padding:10px 17px 14px; }
+    .risk-item { display:flex; justify-content:space-between; gap:10px; padding:12px 0; border-bottom:1px solid #edf0f4; }
+    .risk-item:last-child { border-bottom:0; }
+    .risk-name { font-size:12px; font-weight:650; }
+    .risk-meta { color:var(--muted); font-size:11px; margin-top:4px; }
+    .severity { font-size:10px; font-weight:750; border-radius:5px; padding:4px 7px; height:max-content; }
+    .severity.high { color:#ab3045; background:#fff0f2; }
+    .severity.medium { color:#9b680c; background:#fff7e4; }
+    .severity.low { color:#4470aa; background:#edf4ff; }
+    .progress { height:7px; background:#ecf0f5; border-radius:20px; overflow:hidden; }
+    .progress > span { display:block; height:100%; background:var(--accent); border-radius:20px; }
+    .mini-progress { padding:17px; }
+    .mini-progress-row { display:flex; justify-content:space-between; font-size:11px; margin:12px 0 7px; }
+    .mini-progress-row span:last-child { color:#334155; font-weight:700; }
+    .review-layout { display:grid; grid-template-columns:minmax(0,1fr) 350px; gap:16px; align-items:start; }
+    .review-header { display:flex; align-items:flex-start; justify-content:space-between; gap:20px; padding-bottom:18px; border-bottom:1px solid var(--line); margin-bottom:18px; }
+    .review-title { font-size:20px; font-weight:800; }
+    .review-meta { color:var(--muted); font-size:12px; margin-top:7px; }
+    .review-actions { display:flex; gap:8px; }
+    .tabs { display:flex; gap:24px; border-bottom:1px solid var(--line); margin-bottom:14px; }
+    .tab { padding:10px 0; font-size:12px; color:var(--muted); border:0; background:none; position:relative; }
+    .tab.active { color:var(--accent); font-weight:700; }
+    .tab.active:after { content:""; height:2px; background:var(--accent); position:absolute; bottom:-1px; left:0; right:0; }
+    .finding { padding:16px 18px; border-bottom:1px solid var(--line); display:flex; gap:12px; cursor:pointer; }
+    .finding:hover, .finding.selected { background:#f8fbff; }
+    .finding:last-child { border-bottom:0; }
+    .finding-main { flex:1; min-width:0; }
+    .finding-title { font-weight:750; font-size:13px; }
+    .finding-desc { color:#566274; font-size:12px; line-height:1.6; margin-top:7px; }
+    .finding-location { color:#1f5ece; font-size:11px; margin-top:8px; }
+    .finding-status { color:#7b8798; font-size:10px; white-space:nowrap; }
+    .evidence { padding:18px; }
+    .evidence-label { color:#7e899a; font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
+    .evidence h3 { font-size:15px; margin:7px 0 8px; }
+    .evidence p { color:#596577; font-size:12px; line-height:1.65; margin:0 0 14px; }
+    .code { background:#101827; color:#d6e2f5; border-radius:8px; padding:14px; font-family:Consolas, monospace; font-size:11px; line-height:1.65; white-space:pre-wrap; }
+    .code .line { display:block; }
+    .code .hot { background:#4b2632; margin:0 -14px; padding:0 14px; display:block; }
+    .evidence-actions { display:flex; gap:8px; margin-top:16px; }
+    .drawer { position:fixed; top:0; right:-450px; height:100vh; width:430px; background:#fff; border-left:1px solid var(--line); box-shadow:-15px 0 40px rgba(30,42,66,.12); transition:right .22s ease; z-index:20; display:flex; flex-direction:column; }
+    .drawer.open { right:0; }
+    .drawer-head { padding:20px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:flex-start; }
+    .drawer-body { overflow:auto; padding:19px 20px 30px; }
+    .drawer-close { border:0; background:transparent; color:#7d8796; font-size:18px; }
+    .diff { margin:15px 0; background:#101827; border-radius:8px; padding:15px; color:#dce7f5; font-family:Consolas, monospace; font-size:11px; line-height:1.7; }
+    .diff .add { color:#95e6ae; background:#173a2a; display:block; }
+    .diff .del { color:#ff9f9f; background:#44232c; display:block; }
+    .check { display:flex; gap:8px; align-items:flex-start; color:#4d596b; font-size:12px; line-height:1.5; }
+    .check input { margin-top:2px; accent-color:var(--accent); }
+    .verify-grid { display:grid; grid-template-columns:1.15fr .85fr; gap:16px; }
+    .verify-step { padding:16px 18px; border-bottom:1px solid var(--line); display:flex; gap:12px; align-items:flex-start; }
+    .step-icon { width:25px; height:25px; border-radius:50%; display:grid; place-items:center; font-size:11px; background:#e9edf3; color:#6d7787; flex:0 0 auto; }
+    .step-icon.ok { color:#13786e; background:#e4f8f1; }
+    .step-icon.run { color:#9b680c; background:#fff2d4; }
+    .step-title { font-size:12px; font-weight:700; }
+    .step-sub { font-size:11px; color:var(--muted); margin-top:4px; }
+    .report-grid { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:13px; margin-bottom:17px; }
+    .report-card { padding:16px; }
+    .chart { height:170px; display:flex; align-items:flex-end; gap:12px; padding:18px 20px 20px; }
+    .bar { flex:1; background:#bfd1ff; border-radius:4px 4px 0 0; position:relative; min-width:22px; }
+    .bar strong { position:absolute; top:-18px; width:100%; text-align:center; color:#47607e; font-size:10px; }
+    .bar small { position:absolute; bottom:-18px; width:100%; text-align:center; color:#8c96a5; font-size:10px; }
+    .feedback-overlay { position:fixed; inset:0; background:rgba(20,29,47,.35); z-index:30; display:none; }
+    .feedback-overlay.open { display:block; }
+    .feedback-panel { position:absolute; right:0; top:0; bottom:0; width:min(470px,100%); background:#fff; padding:24px; overflow:auto; }
+    .persona-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:15px 0 19px; }
+    .persona { border:1px solid var(--line); background:#fff; border-radius:8px; padding:11px 8px; text-align:center; color:#566274; font-size:11px; }
+    .persona.active { border-color:#8db0ff; background:#eff4ff; color:#2456c6; font-weight:700; }
+    .test-task { border:1px solid var(--line); border-radius:9px; padding:14px; margin:10px 0; }
+    .test-task.done { border-color:#b9e8db; background:#f2fcf8; }
+    .test-task-title { display:flex; gap:8px; font-weight:700; font-size:12px; }
+    .test-task small { display:block; color:var(--muted); line-height:1.5; margin:7px 0 0 22px; }
+    .feedback-note { background:#fff8e8; color:#7d5b15; border:1px solid #f5dfaa; border-radius:8px; padding:12px; font-size:11px; line-height:1.6; margin:14px 0; }
+    .toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(16px); opacity:0; pointer-events:none; background:#172033; color:#fff; border-radius:7px; padding:10px 15px; font-size:12px; z-index:50; transition:all .2s ease; }
+    .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+    .empty { color:var(--muted); text-align:center; padding:35px 20px; font-size:12px; }
+    @media (max-width: 1000px) { .sidebar { width:202px; } .workspace-grid, .review-layout, .verify-grid { grid-template-columns:1fr; } .right-card { min-height:0; } }
+    @media (max-width: 720px) { .sidebar { display:none; } .topbar { padding:0 16px; } .content { padding:22px 16px 35px; } .metrics, .report-grid { grid-template-columns:repeat(2,1fr); } .page-head, .review-header { flex-direction:column; } .review-actions { width:100%; } .review-actions .btn { flex:1; justify-content:center; } .drawer { width:100%; } }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand"><div class="brand-mark"><i class="fa-solid fa-shield-halved"></i></div><div><div class="brand-title">可信代码审查</div><div class="brand-sub">Agent Workbench</div></div></div>
+      <div><div class="nav-title">工作台</div><nav class="nav" id="nav"><button data-view="tasks" class="active"><i class="fa-solid fa-inbox"></i>审查任务</button><button data-view="review"><i class="fa-solid fa-code-branch"></i>发现与证据</button><button data-view="report"><i class="fa-solid fa-chart-line"></i>质量报告</button><button data-view="settings"><i class="fa-solid fa-sliders"></i>策略设置</button></nav></div>
+      <div><div class="nav-title">验证</div><nav class="nav"><button id="openTest"><i class="fa-solid fa-user-check"></i>模拟用户测试</button></nav></div>
+      <div class="sidebar-bottom">本地自托管原型<br>数据为演示样例，操作结果仅保存在当前页面。</div>
+    </aside>
+    <main class="main">
+      <header class="topbar"><div class="crumb"><span>工作台</span><i class="fa-solid fa-chevron-right" style="font-size:9px"></i><strong id="crumbText">审查任务</strong></div><div class="top-actions"><select id="roleSelect" class="role-select" aria-label="模拟角色"><option value="reviewer">Reviewer / Tech Lead</option><option value="author">代码作者</option><option value="admin">平台管理员</option></select><div class="avatar" id="avatar">R</div></div></header>
+      <section class="content" id="content"></section>
+    </main>
+  </div>
+
+  <aside class="drawer" id="findingDrawer" aria-label="发现详情"><div class="drawer-head"><div><div class="evidence-label">F-1024 · 发现详情</div><h3 id="drawerTitle" style="margin:7px 0 0;font-size:16px"></h3></div><button class="drawer-close" id="drawerClose" aria-label="关闭"><i class="fa-solid fa-xmark"></i></button></div><div class="drawer-body" id="drawerBody"></div></aside>
+
+  <div class="feedback-overlay" id="feedbackOverlay"><section class="feedback-panel"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div><div class="eyebrow">USABILITY TEST</div><h2>模拟用户测试</h2><p class="subtitle">用任务完成情况记录原型的可理解性和阻塞点。</p></div><button class="drawer-close" id="testClose"><i class="fa-solid fa-xmark"></i></button></div><div class="persona-grid" id="personaGrid"><button class="persona active" data-persona="reviewer">Reviewer<br><small>判断是否放行</small></button><button class="persona" data-persona="author">代码作者<br><small>处理发现</small></button><button class="persona" data-persona="admin">平台管理员<br><small>查看质量</small></button></div><div class="feedback-note" id="testBrief">任务：找到高风险问题，查看证据，判断是否需要修复，并完成一次审批验证。</div><div id="testTasks"></div><div style="display:flex;gap:8px;margin-top:18px"><button class="btn btn-primary" id="completeTest"><i class="fa-solid fa-flag-checkered"></i>完成本轮测试</button><button class="btn" id="resetTest">重置任务</button></div><div id="testResult" style="margin-top:16px"></div></section></div>
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const state = { view:'tasks', role:'reviewer', selectedFinding:'high', findingState:{high:'待处理', medium:'待处理', low:'已忽略'}, approved:false, verified:false, testPersona:'reviewer', testDone:{}, events:[] };
+    const findings = {
+      high:{severity:'高风险', cls:'high', title:'鉴权中间件未覆盖管理端点', desc:'新增管理端点绕过了统一鉴权依赖，未登录请求可以访问仓库配置。建议复用现有 require_user 依赖并补充权限测试。', location:'src/api/server.py · L184-L192', evidence:'路由在 app.include_router(admin_router) 处挂载，但 router 内没有声明 dependencies=[Depends(require_user)]。对比 /analyze 端点可见鉴权依赖只在单个 handler 上声明。', code:'181  @admin_router.get("/repositories")\n182  async def list_repositories():\n183      return await repo_store.list_all()\n184  \n185  # 该端点当前未经过统一鉴权', impact:'未授权用户可读取仓库元数据，属于合并前需要优先处理的问题。'},
+      medium:{severity:'中风险', cls:'medium', title:'重试路径没有复用请求级超时', desc:'LLM 重试会重新创建客户端默认超时，可能让单次审查等待时间超过任务预算。建议沿用 request_timeout。', location:'src/llm/client.py · L72-L89', evidence:'retry() 中调用 create_client() 时没有传入 request_timeout；在网络波动下会出现长尾等待。', code:'72  for attempt in range(max_retries):\n73      client = create_client()\n74      response = await client.complete(prompt)', impact:'影响任务时延和成本，建议进入本次迭代但不阻塞合并。'},
+      low:{severity:'低风险', cls:'low', title:'审查报告缺少缓存命中提示', desc:'用户无法区分本次结果来自实时分析还是重复审查缓存，可能误判结果新鲜度。', location:'src/app/report.py · L42-L49', evidence:'报告只展示任务完成时间，没有展示 cache_hit 和 commit_sha。', code:'42  report = build_report(findings)\n43  return render_report(report)', impact:'影响可解释性和重复审查体验，可在后续体验优化中处理。'}
+    };
+    const taskData = [
+      {repo:'acme/payment-service', pr:'#1842 · 修复退款回调鉴权', status:'已完成', cls:'done', findings:'3 条发现', time:'2 分钟前', author:'林晓'},
+      {repo:'acme/checkout-web', pr:'#922 · 更新支付按钮状态', status:'分析中', cls:'running', findings:'等待结果', time:'8 分钟前', author:'周宁'},
+      {repo:'acme/internal-tools', pr:'#311 · 重构审计日志查询', status:'失败可重试', cls:'fail', findings:'上下文超限', time:'昨天 18:42', author:'陈默'}
+    ];
+    const personas = {
+      reviewer:[['t1','找到最高风险发现','从任务列表进入 #1842，找到高风险问题并打开证据。'],['t2','判断处理动作','标记中风险问题为忽略，并查看高风险问题的补丁预览。'],['t3','完成审批验证','确认 diff 后批准写入，查看 Verify 结果。']],
+      author:[['t1','理解问题位置','打开高风险发现，确认文件、行号和影响。'],['t2','查看修复建议','进入补丁预览，检查修改范围是否超出问题位置。'],['t3','反馈结果','返回发现列表，将中风险问题标记为误报或忽略。']],
+      admin:[['t1','检查任务健康度','打开质量报告，查看成功率、延迟和失败原因。'],['t2','判断风险边界','确认高风险发现默认不会直接阻塞合并。'],['t3','定位治理缺口','打开策略设置，查看写入审批和命令白名单状态。']]
+    };
+    const el = (id)=>document.getElementById(id);
+    function toast(msg){ const t=el('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2300); }
+    function logEvent(type, detail){ state.events.push({type, detail, at:new Date().toISOString()}); }
+    function setView(view){ state.view=view; if(view==='review') state.selectedFinding='high'; render(); logEvent('view_change',view); }
+    function statusPill(text, cls){ return `<span class="status ${cls}"><i class="fa-solid fa-circle" style="font-size:7px"></i>${text}</span>`; }
+    function render(){
+      document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===state.view));
+      el('crumbText').textContent={tasks:'审查任务',review:'发现与证据',report:'质量报告',settings:'策略设置'}[state.view]||'工作台';
+      const views={tasks:renderTasks,review:renderReview,patch:renderPatch,verify:renderVerify,report:renderReport,settings:renderSettings};
+      el('content').innerHTML=(views[state.view]||renderTasks)();
+      bindViewActions();
+    }
+    function renderTasks(){ return `<div class="page-head"><div><div class="eyebrow">CODE REVIEW WORKBENCH</div><h1>审查任务</h1><div class="subtitle">围绕变更集查看审查结果、证据链和可回滚修复。</div></div><div style="display:flex;gap:8px"><button class="btn" id="openTestInline"><i class="fa-solid fa-user-check"></i>模拟用户测试</button><button class="btn btn-primary" id="newReview"><i class="fa-solid fa-plus"></i>新建审查</button></div></div>
+      <div class="metrics"><div class="metric"><div class="metric-label">待处理发现</div><div class="metric-value">12</div><div class="metric-meta warn">↑ 3 条较昨日</div></div><div class="metric"><div class="metric-label">本周完成审查</div><div class="metric-value">48</div><div class="metric-meta">↑ 18.4%</div></div><div class="metric"><div class="metric-label">首结果 P95</div><div class="metric-value">2m 18s</div><div class="metric-meta">目标 ≤ 5 分钟</div></div><div class="metric"><div class="metric-label">有帮助率</div><div class="metric-value">68%</div><div class="metric-meta">样本 N=74</div></div></div>
+      <div class="workspace-grid"><div class="card"><div class="card-head"><div><div class="card-title">最近审查</div><div class="card-note" style="margin-top:4px">按最近更新时间排序</div></div><button class="btn btn-quiet" id="refreshTasks"><i class="fa-solid fa-rotate"></i>刷新</button></div><div class="filters"><input class="search" placeholder="搜索仓库、PR 标题或作者"><select><option>全部状态</option><option>已完成</option><option>分析中</option><option>失败可重试</option></select><select><option>全部仓库</option><option>payment-service</option><option>checkout-web</option></select></div><div class="table-wrap"><table><thead><tr><th>变更集</th><th>状态</th><th>发现</th><th>更新时间</th><th>操作</th></tr></thead><tbody>${taskData.map((x,i)=>`<tr class="task-row" data-task="${i}"><td><div class="repo">${x.repo}</div><div class="pr">${x.pr} · ${x.author}</div></td><td>${statusPill(x.status,x.cls)}</td><td>${x.findings}</td><td style="color:#798496">${x.time}</td><td><button class="btn btn-quiet open-task" data-task="${i}">打开 <i class="fa-solid fa-arrow-right"></i></button></td></tr>`).join('')}</tbody></table></div></div><div style="display:grid;gap:16px"><div class="card right-card"><div class="card-head"><div class="card-title">需要优先处理</div><span class="card-note">按风险排序</span></div><div class="risk-list"><div class="risk-item"><div><div class="risk-name">鉴权中间件未覆盖管理端点</div><div class="risk-meta">payment-service · L184-L192</div></div><span class="severity high">高风险</span></div><div class="risk-item"><div><div class="risk-name">重试路径没有复用超时</div><div class="risk-meta">checkout-web · L72-L89</div></div><span class="severity medium">中风险</span></div><div class="risk-item"><div><div class="risk-name">报告缺少缓存命中提示</div><div class="risk-meta">internal-tools · L42-L49</div></div><span class="severity low">低风险</span></div></div></div><div class="card"><div class="card-head"><div class="card-title">本周质量概览</div><button class="btn btn-quiet" id="goReport">查看报告</button></div><div class="mini-progress"><div class="mini-progress-row"><span>工具调用成功率</span><span>99.2%</span></div><div class="progress"><span style="width:99.2%"></span></div><div class="mini-progress-row"><span>高风险问题确认率</span><span>84%</span></div><div class="progress"><span style="width:84%;background:#12a28f"></span></div><div class="mini-progress-row"><span>Verify 通过率</span><span>92%</span></div><div class="progress"><span style="width:92%;background:#6d8ee8"></span></div></div></div></div></div></div>`; }
+    function renderReview(){ const selected=findings[state.selectedFinding]; return `<div class="page-head"><div><div class="eyebrow">REVIEW / acme/payment-service / PR #1842</div><h1>修复退款回调鉴权</h1><div class="subtitle">目标分支 main · 提交 7f3d1a2 · 作者 林晓 · 变更 8 个文件，+184 / -63 行</div></div><div style="display:flex;gap:8px"><button class="btn" id="backTasks"><i class="fa-solid fa-arrow-left"></i>返回任务</button><button class="btn" id="goReport"><i class="fa-solid fa-chart-line"></i>查看报告</button></div></div><div class="review-layout"><div class="card"><div class="card-head"><div><div class="card-title">发现列表</div><div class="card-note" style="margin-top:4px">已完成验证 · 3 条发现 · 最后更新 2 分钟前</div></div>${statusPill('只读审查完成','done')}</div><div class="tabs"><button class="tab active">发现（3）</button><button class="tab">执行轨迹</button><button class="tab">上下文范围</button></div><div>${Object.entries(findings).map(([key,x])=>`<div class="finding ${state.selectedFinding===key?'selected':''}" data-finding="${key}"><span class="severity ${x.cls}">${x.severity}</span><div class="finding-main"><div class="finding-title">${x.title}</div><div class="finding-desc">${x.desc}</div><div class="finding-location"><i class="fa-regular fa-file-code"></i> ${x.location}</div></div><div class="finding-status">${state.findingState[key]}</div></div>`).join('')}</div></div><div class="card"><div class="evidence"><div class="evidence-label">当前选中</div><h3>${selected.title}</h3><p>${selected.evidence}</p><div class="code">${selected.code.split('\n').map((line,i)=>`<span class="line ${i===2?'hot':''}">${line.replace(/</g,'&lt;')}</span>`).join('')}</div><div style="margin-top:13px"><div class="evidence-label">影响判断</div><p style="margin-top:6px">${selected.impact}</p></div><div class="evidence-actions"><button class="btn btn-primary" id="openPatch"><i class="fa-solid fa-wand-magic-sparkles"></i>查看修复补丁</button><button class="btn" id="ignoreFinding">${state.findingState[state.selectedFinding]==='已忽略'?'已忽略':'忽略'}</button></div></div></div></div>`; }
+    function renderPatch(){ return `<div class="page-head"><div><div class="eyebrow">REVIEW / PATCH PREVIEW</div><h1>补丁预览与审批</h1><div class="subtitle">仅展示针对 F-1024 的最小修改，审批前不会写入仓库。</div></div><button class="btn" id="backReview"><i class="fa-solid fa-arrow-left"></i>返回发现</button></div><div class="verify-grid"><div class="card"><div class="card-head"><div><div class="card-title">建议补丁</div><div class="card-note" style="margin-top:4px">src/api/server.py · 1 个文件 · +2 / -1 行</div></div>${statusPill('等待审批','pending')}</div><div class="evidence" style="padding-top:17px"><div class="diff"><span>@@ -181,5 +181,6 @@</span><span class="del">- @admin_router.get("/repositories")</span><span class="add">+ @admin_router.get("/repositories", dependencies=[Depends(require_user)])</span><span>  async def list_repositories():</span><span>      return await repo_store.list_all()</span></div><label class="check"><input type="checkbox" id="approveCheck">我已查看完整 diff，确认修改范围只覆盖当前发现，批准后将进入 Verify。</label><div style="display:flex;gap:8px;margin-top:18px"><button class="btn btn-primary" id="approvePatch" disabled><i class="fa-solid fa-check"></i>批准并要求写入</button><button class="btn" id="copyDiff"><i class="fa-regular fa-copy"></i>复制 diff</button></div></div></div><div class="card"><div class="card-head"><div class="card-title">审批边界</div></div><div class="evidence"><div class="risk-item"><div><div class="risk-name">写入权限</div><div class="risk-meta">需要 Reviewer 或管理员</div></div><span class="status done">已具备</span></div><div class="risk-item"><div><div class="risk-name">回滚点</div><div class="risk-meta">写入前自动生成 .bak</div></div><span class="status done">已具备</span></div><div class="risk-item"><div><div class="risk-name">验证命令</div><div class="risk-meta">仅允许 pytest / ruff</div></div><span class="status done">已限制</span></div><div class="feedback-note" style="margin-top:15px">审批后如果 Verify 失败，系统会保留失败证据并阻止标记为“修复成功”。</div></div></div></div>`; }
+    function renderVerify(){ return `<div class="page-head"><div><div class="eyebrow">REVIEW / VERIFY</div><h1>Verify 结果</h1><div class="subtitle">任务 F-1024 已完成受控写入，正在核验语法和回归测试。</div></div><button class="btn" id="backReview"><i class="fa-solid fa-arrow-left"></i>返回发现</button></div><div class="verify-grid"><div class="card"><div class="card-head"><div class="card-title">验证步骤</div>${statusPill(state.verified?'验证通过':'验证中',''+(state.verified?'done':'running'))}</div><div class="verify-step"><span class="step-icon ok"><i class="fa-solid fa-check"></i></span><div><div class="step-title">写入补丁</div><div class="step-sub">已创建回滚点 .bak · 1 个文件</div></div></div><div class="verify-step"><span class="step-icon ok"><i class="fa-solid fa-check"></i></span><div><div class="step-title">AST 语法校验</div><div class="step-sub">Python 语法通过</div></div></div><div class="verify-step"><span class="step-icon ${state.verified?'ok':'run'}"><i class="fa-solid ${state.verified?'fa-check':'fa-spinner fa-spin'}"></i></span><div><div class="step-title">允许列表测试</div><div class="step-sub">${state.verified?'pytest 42 passed · ruff 0 error':'pytest 正在运行，预计还需 18 秒'}</div></div></div><div class="verify-step"><span class="step-icon ${state.verified?'ok':'run'}"><i class="fa-solid ${state.verified?'fa-check':'fa-hourglass-half'}"></i></span><div><div class="step-title">回归检查</div><div class="step-sub">${state.verified?'未发现新增失败':'等待上一步完成'}</div></div></div><div style="padding:17px 18px"><button class="btn btn-primary" id="finishVerify" ${state.verified?'':'disabled'}>返回审查报告</button></div></div><div class="card"><div class="card-head"><div class="card-title">结果摘要</div></div><div class="evidence"><div class="metric" style="box-shadow:none;padding:0;border:0"><div class="metric-label">本次修复</div><div class="metric-value" style="font-size:25px">${state.verified?'通过':'进行中'}</div><div class="metric-meta">权限边界已补齐</div></div><div style="margin-top:22px"><div class="evidence-label">审计记录</div><p style="margin-top:7px">审批人：${state.role==='author'?'代码作者':'Reviewer / Tech Lead'}<br>任务：F-1024<br>时间：刚刚<br>回滚：可用</p></div></div></div></div>`; }
+    function renderReport(){ return `<div class="page-head"><div><div class="eyebrow">QUALITY REPORT</div><h1>质量报告</h1><div class="subtitle">过去 7 天 · 48 个审查任务 · 仅统计已完成任务</div></div><button class="btn" id="exportReport"><i class="fa-solid fa-download"></i>导出报告</button></div><div class="report-grid"><div class="card report-card"><div class="metric-label">发现总数</div><div class="metric-value">126</div><div class="metric-meta">高风险 18 · 中风险 67 · 低风险 41</div></div><div class="card report-card"><div class="metric-label">用户有帮助率</div><div class="metric-value">68%</div><div class="metric-meta">反馈样本 N=74</div></div><div class="card report-card"><div class="metric-label">Verify 通过率</div><div class="metric-value">92%</div><div class="metric-meta">应用补丁 N=25</div></div></div><div class="workspace-grid"><div class="card"><div class="card-head"><div><div class="card-title">每日审查量与完成率</div><div class="card-note" style="margin-top:4px">完成任务 / 发起任务</div></div></div><div class="chart"><div class="bar" style="height:44%"><strong>8</strong><small>周一</small></div><div class="bar" style="height:63%"><strong>12</strong><small>周二</small></div><div class="bar" style="height:55%"><strong>10</strong><small>周三</small></div><div class="bar" style="height:80%"><strong>15</strong><small>周四</small></div><div class="bar" style="height:73%"><strong>14</strong><small>周五</small></div><div class="bar" style="height:38%"><strong>7</strong><small>周六</small></div><div class="bar" style="height:52%"><strong>10</strong><small>周日</small></div></div></div><div class="card"><div class="card-head"><div class="card-title">用户反馈</div><span class="card-note">按标签</span></div><div class="risk-list"><div class="risk-item"><div><div class="risk-name">有帮助</div><div class="risk-meta">证据链清晰，能直接定位</div></div><strong style="color:#148477">50</strong></div><div class="risk-item"><div><div class="risk-name">误报</div><div class="risk-meta">需要更准确的上下文边界</div></div><strong style="color:#b2565f">14</strong></div><div class="risk-item"><div><div class="risk-name">忽略</div><div class="risk-meta">低风险问题暂不处理</div></div><strong style="color:#6c778a">10</strong></div></div></div></div>`; }
+    function renderSettings(){ return `<div class="page-head"><div><div class="eyebrow">POLICY & CONTROL</div><h1>策略设置</h1><div class="subtitle">定义审查范围、写入权限和验证边界。</div></div><button class="btn btn-primary" id="saveSettings"><i class="fa-solid fa-check"></i>保存策略</button></div><div class="card"><div class="card-head"><div><div class="card-title">默认安全策略</div><div class="card-note" style="margin-top:4px">适用于 acme 组织下的新任务</div></div></div><div class="evidence"><label class="check" style="margin-bottom:14px"><input type="checkbox" checked>默认只读审查，写入必须经过审批</label><label class="check" style="margin-bottom:14px"><input type="checkbox" checked>命令执行仅允许 pytest、ruff、mypy</label><label class="check" style="margin-bottom:14px"><input type="checkbox" checked>任务上下文超限时明确提示，不静默截断</label><label class="check"><input type="checkbox">允许低风险修复自动生成补丁（仍不自动写入）</label></div></div><div class="card" style="margin-top:16px"><div class="card-head"><div class="card-title">待补齐治理能力</div></div><div class="risk-list"><div class="risk-item"><div><div class="risk-name">组织级 SSO / SCIM</div><div class="risk-meta">影响企业版接入</div></div>${statusPill('规划中','pending')}</div><div class="risk-item"><div><div class="risk-name">不可篡改审计存储</div><div class="risk-meta">影响合规证明</div></div>${statusPill('规划中','pending')}</div></div></div>`; }
+    function bindViewActions(){
+      document.querySelectorAll('.open-task, .task-row').forEach(node=>node.addEventListener('click',(e)=>{ if(e.target.closest('button') || node.classList.contains('task-row')) { setView('review'); }}));
+      document.querySelectorAll('[data-finding]').forEach(n=>n.addEventListener('click',()=>{state.selectedFinding=n.dataset.finding; render();}));
+      ['backTasks','backReview'].forEach(id=>{ const n=el(id); if(n) n.addEventListener('click',()=>setView(id==='backTasks'?'tasks':'review')); });
+      ['goReport','reportLink'].forEach(id=>{ const n=el(id); if(n) n.addEventListener('click',()=>setView('report')); });
+      const patch=el('openPatch'); if(patch) patch.addEventListener('click',()=>setView('patch'));
+      const ignore=el('ignoreFinding'); if(ignore) ignore.addEventListener('click',()=>{state.findingState[state.selectedFinding]='已忽略'; logEvent('finding_feedback','ignored'); render(); toast('已记录为忽略，后续会进入反馈样本');});
+      const check=el('approveCheck'), approve=el('approvePatch'); if(check && approve) check.addEventListener('change',()=>approve.disabled=!check.checked);
+      if(approve) approve.addEventListener('click',()=>{state.approved=true; state.verified=false; setView('verify'); setTimeout(()=>{state.verified=true; render(); toast('Verify 已完成：42 passed，未发现新增失败');},900); logEvent('patch_approved','F-1024');});
+      const finish=el('finishVerify'); if(finish) finish.addEventListener('click',()=>setView('report'));
+      const copy=el('copyDiff'); if(copy) copy.addEventListener('click',()=>toast('diff 已复制到剪贴板（原型模拟）'));
+      const refresh=el('refreshTasks'); if(refresh) refresh.addEventListener('click',()=>toast('任务列表已刷新'));
+      const newReview=el('newReview'); if(newReview) newReview.addEventListener('click',()=>toast('原型中已预置演示任务，请从列表打开 #1842'));
+      const save=el('saveSettings'); if(save) save.addEventListener('click',()=>toast('策略已保存（原型模拟）'));
+      const exportReport=el('exportReport'); if(exportReport) exportReport.addEventListener('click',()=>toast('报告导出已加入队列（原型模拟）'));
+      const inline=el('openTestInline'); if(inline) inline.addEventListener('click',openTest);
+    }
+    function openTest(){ el('feedbackOverlay').classList.add('open'); renderTestTasks(); }
+    function renderTestTasks(){ const p=state.testPersona; const tasks=personas[p]; el('testBrief').textContent={reviewer:'任务：找到高风险问题，查看证据，判断是否需要修复，并完成一次审批验证。',author:'任务：确认问题位置，查看修复范围，并给出一条处理反馈。',admin:'任务：查看质量指标，确认风险边界，并定位治理能力缺口。'}[p]; el('testTasks').innerHTML=tasks.map(([id,title,desc])=>`<div class="test-task ${state.testDone[id]?'done':''}"><div class="test-task-title"><i class="fa-solid ${state.testDone[id]?'fa-circle-check':'fa-circle'}" style="color:${state.testDone[id]?'#15937e':'#a2adbb'}"></i>${title}</div><small>${desc}</small><button class="btn" style="margin:10px 0 0 22px" data-test-task="${id}">${state.testDone[id]?'已完成':'标记完成'}</button></div>`).join(''); document.querySelectorAll('[data-test-task]').forEach(b=>b.addEventListener('click',()=>{state.testDone[b.dataset.testTask]=true; logEvent('usability_task_complete',b.dataset.testTask); renderTestTasks();})); }
+    function completeTest(){ const count=Object.values(state.testDone).filter(Boolean).length; if(count<3){el('testResult').innerHTML=`<div class="feedback-note">还有 ${3-count} 个任务未完成。为了避免模拟结果偏乐观，请先走完任务再提交。</div>`; return;} el('testResult').innerHTML=`<div class="card" style="padding:15px;border-color:#b9e8db;background:#f3fcf8"><strong style="font-size:12px;color:#146f62">本轮测试已完成</strong><p style="font-size:11px;line-height:1.6;color:#4d6b67;margin:7px 0 0">完成率 3/3。原型记录了 ${state.events.filter(x=>x.type==='usability_task_complete').length} 次任务操作，可在测试报告中查看观察结论。</p></div>`; logEvent('usability_test_complete',state.testPersona); }
+    document.querySelectorAll('#nav button').forEach(b=>b.addEventListener('click',()=>setView(b.dataset.view)));
+    el('roleSelect').addEventListener('change',(e)=>{ state.role=e.target.value; el('avatar').textContent=e.target.value==='reviewer'?'R':e.target.value==='author'?'A':'P'; toast('已切换为'+(e.target.value==='reviewer'?' Reviewer / Tech Lead':e.target.value==='author'?' 代码作者':' 平台管理员')); });
+    el('openTest').addEventListener('click',openTest); el('testClose').addEventListener('click',()=>el('feedbackOverlay').classList.remove('open')); el('completeTest').addEventListener('click',completeTest); el('resetTest').addEventListener('click',()=>{state.testDone={};el('testResult').innerHTML='';renderTestTasks();});
+    document.querySelectorAll('.persona').forEach(b=>b.addEventListener('click',()=>{state.testPersona=b.dataset.persona;state.testDone={};document.querySelectorAll('.persona').forEach(x=>x.classList.toggle('active',x===b));el('testResult').innerHTML='';renderTestTasks();}));
+    el('drawerClose').addEventListener('click',()=>el('findingDrawer').classList.remove('open'));
+    render();
+  </script>
+  <script src="../../scripts/prototype-export-client.js?v=20261008"></script>
+</body>
+</html>
