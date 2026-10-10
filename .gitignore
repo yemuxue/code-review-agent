@@ -3,6 +3,11 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+.mypy_cache/
+.mypy-cache-retry*/
+.ruff_cache/
+.coverage
+/.streamlit-*.log
 data/
 logs/
 reports/
@@ -11,5 +16,9 @@ sessions/
 /dist/
 *.egg-info/
 .worktrees/
-面试*.md
+.eval-runs/
 *.bak
+/.pm-workflow/
+/scripts/pm-runtime-config.js
+/scripts/.venv/
+/.handoff/

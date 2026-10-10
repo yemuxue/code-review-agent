@@ -7,6 +7,8 @@ Eval Dataset / 评估数据集 — llm-agent-qa-system
 - is_real_bug=False: 假 bug（用于测试 FP 检测）
 """
 
+from __future__ import annotations
+
 EVAL_SAMPLES = [
     # ═══════════════════════════════════════════════════════════════
     # react_agent.py (12 samples)
@@ -478,6 +480,16 @@ EVAL_SAMPLES = [
 ]
 
 
+def _print_progress(message: str) -> None:
+    """进度文本不能因模型返回的 Unicode 字符而中断真实评测。"""
+    import sys
+    try:
+        print(message, flush=True)
+    except UnicodeEncodeError:
+        encoding = sys.stdout.encoding or "utf-8"
+        print(message.encode(encoding, errors="replace").decode(encoding), flush=True)
+
+
 def evaluate_agent(agent_fn, samples: list = None) -> dict:
     """
     评估 Agent 效果。
@@ -541,13 +553,13 @@ def print_summary(results: dict):
     print()
 
 
-def run_eval_with_agent(target_dir: str = "X:/VScode/llm-agent-qa-system",
+def run_eval_with_agent(target_dir: str | None = None,
                         samples: list = None, max_samples: int = None) -> dict:
     """废弃：自由扫描匹配方式不准确，请使用 run_per_sample_eval()"""
     pass
 
 
-def run_per_sample_eval(target_dir: str = "X:/VScode/llm-agent-qa-system",
+def run_per_sample_eval(target_dir: str | None = None,
                         samples: list = None, max_samples: int = None) -> dict:
     """
     逐样本评估：对每条标注，读取实际代码上下文，直接问 LLM 是否有 bug。
@@ -564,6 +576,8 @@ def run_per_sample_eval(target_dir: str = "X:/VScode/llm-agent-qa-system",
 
     from src.llm_client import AnthropicClient
 
+    # 不再绑定开发者机器路径；默认评测当前仓库，也允许 runner 指向任意项目副本。
+    target_dir = target_dir or str(_PROJ)
     samples = samples or EVAL_SAMPLES
     if max_samples:
         samples = samples[:max_samples]
@@ -630,6 +644,8 @@ Reply with exactly "YES" or "NO" followed by a one-sentence reason."""
             found = answer.startswith("YES")
         except Exception as e:
             found = False
+            # 单个真实 API 请求失败不能中断整批评测；保留可读错误供报告归因。
+            answer = f"API_ERROR: {type(e).__name__}: {e}"
 
         if is_bug and found:
             tp += 1
@@ -646,7 +662,7 @@ Reply with exactly "YES" or "NO" followed by a one-sentence reason."""
 
         details.append((file, line, is_bug, found, result, answer[:80]))
         status = {True:{True:'TP', False:'FN'}, False:{True:'FP', False:'TN'}}[is_bug][found]
-        print(f"  [{idx+1:3d}/{total}] {file}:{line} -> {status}  (LLM: {answer[:60]})")
+        _print_progress(f"  [{idx+1:3d}/{total}] {file}:{line} -> {status}  (LLM: {answer[:60]})")
 
     precision = tp / (tp + fp) if (tp + fp) > 0 else 0
     recall = tp / (tp + fn) if (tp + fn) > 0 else 0
@@ -674,7 +690,7 @@ if __name__ == "__main__":
 
     if "--real" in sys.argv:
         n = int(sys.argv[sys.argv.index("--real") + 1]) if "--real" in sys.argv and len(sys.argv) > sys.argv.index("--real") + 1 and sys.argv[sys.argv.index("--real") + 1].isdigit() else None
-        print(f"  逐样本真实评估 (每次独立LLM调用判断)...")
+        print("  逐样本真实评估 (每次独立LLM调用判断)...")
         if n:
             print(f"  限制: {n} 条样本")
         results = run_per_sample_eval(samples=None if not n else EVAL_SAMPLES[:n])
