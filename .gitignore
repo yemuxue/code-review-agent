@@ -3,6 +3,11 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+.mypy_cache/
+.mypy-cache-retry*/
+.ruff_cache/
+.coverage
+/.streamlit-*.log
 data/
 logs/
 reports/
