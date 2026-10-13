@@ -26,6 +26,8 @@ import threading
 from pathlib import Path
 from typing import Callable
 
+from src.harness.request_context import get_context
+
 
 class AgentLogger:
     """
@@ -43,7 +45,8 @@ class AgentLogger:
         # 内部：logger.for_role("planner") → 事件带 "role": "planner"
     """
 
-    def __init__(self, log_dir: str = "logs", role: str | None = None):
+    def __init__(self, log_dir: str = "logs", role: str | None = None,
+                 actor: str | None = None):
         self._log_dir = Path(log_dir)
         self._log_dir.mkdir(parents=True, exist_ok=True)
         self._session_id = _make_session_id()
@@ -53,6 +56,9 @@ class AgentLogger:
         self._event_count = 0
         self._role = role
         self._parent: AgentLogger | None = None
+        # 审计主体：未显式传入时取当前请求上下文。
+        # 这样既有调用点（CLI/测试）不传也不会报错，而 API 路径自动带上用户。
+        self._actor = actor if actor is not None else get_context().actor
 
         # 初始化写入
         self._write("session_start", {
@@ -77,6 +83,7 @@ class AgentLogger:
         view._lock = self._lock
         view._start_time = self._start_time
         view._event_count = 0  # 由主 logger 统一计数
+        view._actor = self._actor  # 角色视图继承审计主体
         return view
 
     # ─── 公开 API ────────────────────────────────────
@@ -120,7 +127,8 @@ class AgentLogger:
             "error": error,
         }
         if failure_kind:
-            # unknown_tool / tool_exception / args_invalid / hitl_blocked
+            # unknown_tool / tool_exception / args_invalid / hitl_blocked / no_sandbox
+            # （no_sandbox = run_command 因未配置沙箱被 fail-closed 拒绝）
             data["failure_kind"] = failure_kind
         self._write("tool_call_end", data)
 
@@ -197,6 +205,12 @@ class AgentLogger:
             "event": event,
             **data,
         }
+        # 审计字段：actor 来自构造参数或当前请求上下文；request_id/project_path
+        # 取自上下文。空值不写入 → 旧日志格式与既有测试的逐字段断言不受影响。
+        if self._actor and "actor" not in record:
+            record["actor"] = self._actor
+        for key, value in get_context().as_fields().items():
+            record.setdefault(key, value)
         with self._lock:
             with open(self._log_path, "a", encoding="utf-8") as f:
                 f.write(json.dumps(record, ensure_ascii=False) + "\n")

@@ -101,6 +101,8 @@ class RunLog:
             "has_session_end": bool(ends),
             "elapsed_s": end.get("elapsed_s"),
             "complete": end.get("complete"),
+            "degraded": end.get("degraded"),
+            "degraded_reason": end.get("degraded_reason"),
             "findings": end.get("findings"),
             "fixes": end.get("fixes"),
             "fix_status": end.get("fix_status"),

@@ -33,6 +33,11 @@ class AgentHarness:
         self.sandbox: Any = None
         self.hitl: Any = None
         self.memory: Any = None
+        # 降级标记：把"模型故障 / 预算耗尽"这类"有输出但不可信"的收尾
+        # 与正常完成区分开。调用方（API/CLI/前端）据此判断结果能不能当成功用。
+        # 之所以不靠解析返回文本：文本是给人看的，契约不能建立在措辞上。
+        self.degraded: bool = False
+        self.degraded_reason: str = ""
 
     def run(self, user_query: str) -> str:
         self._reset(user_query)
@@ -103,6 +108,12 @@ class AgentHarness:
                 self.logger.turn_end(turn + 1, has_tools)
             return None  # 继续循环
         else:
+            # 空回答是降级（模型没给出内容），不是有效分析结论。
+            # 旧实现的降级文案（"Agent returned an empty..."）会被当作正常终态，
+            # 调用方只看到 200 却拿不到任何结论。
+            if not (response.content or "").strip():
+                self.degraded = True
+                self.degraded_reason = "empty_final_answer"
             content = response.content or "Agent returned an empty final answer."
             self.messages.append({"role":"assistant","content":content})
             if self.logger:
@@ -114,6 +125,7 @@ class AgentHarness:
         self.messages = [{"role":"system","content":self.system_prompt},
                          {"role":"user","content":user_query}]
         self.turns_taken = 0; self.tools_called = 0
+        self.degraded = False; self.degraded_reason = ""
 
     def _execute_tool_calls(self, tool_calls: list):
         normalized = []
@@ -147,7 +159,13 @@ class AgentHarness:
             self.tools_called += 1
 
     def _model_failure(self, turn: int, exc: Exception) -> str:
-        """把模型层异常降级为可读终态，保证日志与端到端指标都有明确分母。"""
+        """把模型层异常降级为可读终态，保证日志与端到端指标都有明确分母。
+
+        同时置 degraded 标记：返回的是一段错误文案而不是分析结果，
+        调用方必须能区分这一点（旧实现以 HTTP 200 返回，调用方无从判断）。
+        """
+        self.degraded = True
+        self.degraded_reason = f"model_error:{type(exc).__name__}"
         result = f"Model error: {type(exc).__name__}: {exc}"
         if self.logger:
             self.logger.error(turn, type(exc).__name__, str(exc))
@@ -176,8 +194,18 @@ class AgentHarness:
                     # 拦截路径此前完全静默 —— 补记，便于统计"被人工/策略拦下的动作"
                     self._log_tool_end(tc.name, result, start, error=True, failure_kind="hitl_blocked")
                     return result
-            # Sandbox: run_command 类工具在沙箱中执行
-            if hasattr(self, 'sandbox') and self.sandbox and tc.name == 'run_command':
+            # Sandbox: run_command 类工具必须在沙箱中执行
+            #
+            # ⚠️ 这里必须 fail-closed：未配置沙箱时绝不能回退到
+            # `tool.fn(**args)`（那等于以宿主进程权限执行任意命令，
+            # 沙箱、HITL 白名单全部形同虚设）。没有沙箱就直接拒绝。
+            if tc.name == 'run_command' and not getattr(self, 'sandbox', None):
+                result = ("ERROR: REFUSED — run_command requires a configured sandbox. "
+                          "No sandbox is available, so the command was not executed.")
+                self._log_tool_end(tc.name, result, start, error=True,
+                                   failure_kind="no_sandbox")
+                return result
+            if getattr(self, 'sandbox', None) and tc.name == 'run_command':
                 cmd = tc.args.get('command', '')
                 if isinstance(cmd, str):
                     import shlex
@@ -232,7 +260,24 @@ class AgentHarness:
                 self.messages.append({"role":"tool","tool_call_id":tc.get("id","unknown"),
                                        "content":"Not executed (max turns reached)."})
         self.messages.append({"role":"user","content":"Max turns reached. Give your best answer now. No more tools."})
-        resp = self.model.chat(messages=self.messages, tools=[])
+        # 预算耗尽的兜底调用同样可能失败；此前没有兜底，异常会直接冒到调用方，
+        # 变成 500 而不是"已降级但可读"的结果。这里与正常轮次保持一致。
+        try:
+            resp = self.model.chat(messages=self.messages, tools=[])
+        except Exception as exc:
+            self.degraded = True
+            self.degraded_reason = "turn_budget_exhausted+model_error"
+            result = f"Model error during forced finish: {type(exc).__name__}: {exc}"
+            if self.logger:
+                self.logger.error(self.turns_taken, type(exc).__name__, str(exc))
+                self.logger.forced_finish(self.turns_taken, self.max_turns)
+                self.logger.finish({**self.get_stats(), "complete": False,
+                                    "forced_finish": True})
+            return result
+        # 用满 turn 预算意味着放弃了"继续查证"，产出质量已降级：
+        # 即使拿到了答案，也不能当作正常成功（与 telemetry 的 complete=False 一致）。
+        self.degraded = True
+        self.degraded_reason = "turn_budget_exhausted"
         if self.logger:
             self.logger.forced_finish(self.turns_taken, self.max_turns)
             # 达到预算后虽有兜底答案，但该 run 已发生质量降级，不能记作正常成功。
@@ -241,4 +286,5 @@ class AgentHarness:
 
     def get_stats(self) -> dict:
         return {"turns_taken":self.turns_taken,"tools_called":self.tools_called,
-                "total_tokens_used":self.total_tokens_used,"messages_count":len(self.messages)}
+                "total_tokens_used":self.total_tokens_used,"messages_count":len(self.messages),
+                "degraded": self.degraded, "degraded_reason": self.degraded_reason}

@@ -32,6 +32,40 @@ FAILURE_KINDS = {
     "F-09": "平台差异",
 }
 
+# 已实现归因规则的失败分类：报告必须明确区分"有规则但本批未命中"与
+# "尚未实现规则"。旧报告把 F-08/F-09 与其它分类并列成表头，读者会误以为
+# 它们是"本次为 0"，实际是**任何代码都不产生这两个桶**。
+IMPLEMENTED_FAILURE_KINDS = frozenset({"F-01", "F-02", "F-03", "F-04", "F-05", "F-06", "F-07"})
+
+# failure_kind（由 harness/agent.py 与 telemetry 写入）→ F 分类。
+#
+# 这张表是"防静默丢弃"的唯一依据：新增 failure_kind 时必须在这里登记，
+# 否则 classify_failures 会因为找不到映射而把它当作"待补归因规则"。
+# FAILURE_KINDS_EMITTED 是同一契约的显式清单，测试会断言两者一致，
+# 从机制上避免再次出现 hitl_blocked 那样"发出了但没人接"的丢失。
+FAILURE_KINDS_EMITTED: frozenset[str] = frozenset({
+    # AgentHarness._execute_single_tool
+    "unknown_tool", "args_invalid", "tool_exception", "hitl_blocked", "no_sandbox",
+    # 流式/工具超时与 LLM 客户端故障
+    "tool_timeout", "malformed_tool_call", "api_429", "api_error", "context_limit",
+    # 编排层循环检测
+    "loop",
+})
+
+FAILURE_KIND_TO_CODE = {
+    "malformed_tool_call": "F-01",
+    "unknown_tool": "F-02",
+    "args_invalid": "F-03",
+    "tool_exception": "F-04",
+    "tool_timeout": "F-04",
+    "api_429": "F-05",
+    "api_error": "F-05",
+    "context_limit": "F-07",
+    "loop": "F-06",
+    "hitl_blocked": "F-03",   # 被审批策略拦下的调用 = 未按预期参数/权限执行
+    "no_sandbox": "F-03",     # 因缺少沙箱被 fail-closed 拒绝，同属"未能执行"
+}
+
 # 显式的 API 故障文案（llm_client 修复后写入的 message）
 _API_FAILURE_MARKERS = ("API HTTP 429", "API HTTP 500", "API HTTP 502", "API HTTP 503",
                         "API HTTP 504", "API HTTP 529", "API connection error",
@@ -243,6 +277,36 @@ def e2e_success_rate(runs: list[RunLog]) -> Metric:
     return _ratio("端到端成功率", ok, len(runs))
 
 
+def degradation_rate(runs: list[RunLog]) -> Metric:
+    """降级率：产出文本但结果不可信的运行占比。
+
+    降级来源（由 AgentHarness / LangGraphOrchestrator 显式标记）：
+    模型故障、turn 预算耗尽、空最终回答、编排未到 review 节点。
+
+    为什么必须有这条指标：这些运行**会返回 HTTP 200 + 一段文本**，
+    只看"端到端成功率"会把它们算成成功，从而系统性高估质量。
+    分母只统计有 session_end 的运行（未收尾属采集缺口，另有 incomplete_run_rate 覆盖）。
+    """
+    considered = 0
+    degraded = 0
+    for run in runs:
+        summary = run.summary()
+        if not summary["has_session_end"]:
+            continue
+        considered += 1
+        if summary.get("degraded") is True or summary["complete"] is False:
+            degraded += 1
+    metric = _ratio("降级率", degraded, considered, note="无已收尾的运行")
+    if degraded:
+        reasons = Counter(str(r.summary().get("degraded_reason") or "complete=false")
+                          for r in runs
+                          if r.summary()["has_session_end"]
+                          and (r.summary().get("degraded") is True
+                               or r.summary()["complete"] is False))
+        metric.note = "降级构成: " + ", ".join(f"{k}×{v}" for k, v in reasons.most_common(3))
+    return metric
+
+
 # ═══ 效率与成本指标（§4.3） ═══
 
 def node_efficiency(runs: list[RunLog]) -> dict:
@@ -377,17 +441,13 @@ def classify_failures(runs: list[RunLog]) -> dict[str, list[dict]]:
             if not end or not end.get("error"):
                 continue
             kind = end.get("failure_kind")
-            if kind == "malformed_tool_call":
-                buckets["F-01"].append({"run": rid, "tool": end.get("tool"),
-                                         "detail": "畸形 tool_call"})
-            elif kind == "unknown_tool":
-                buckets["F-02"].append({"run": rid, "tool": end.get("tool")})
-            elif kind == "args_invalid":
-                buckets["F-03"].append({"run": rid, "tool": end.get("tool"),
-                                        "detail": end.get("result_preview", "")[:120]})
-            elif kind == "tool_exception":
-                buckets["F-04"].append({"run": rid, "tool": end.get("tool"),
-                                        "detail": end.get("result_preview", "")[:120]})
+            # 统一走映射表：新增 failure_kind 时只需改 FAILURE_KIND_TO_CODE，
+            # 不会再出现"发出来了但没人接"的静默丢弃（hitl_blocked 的旧问题）。
+            code = FAILURE_KIND_TO_CODE.get(kind) if kind else None
+            if code:
+                buckets[code].append({"run": rid, "tool": end.get("tool"),
+                                      "failure_kind": kind,
+                                      "detail": end.get("result_preview", "")[:120]})
             elif kind is None:
                 # P0 前的老日志：只有 error 布尔位，按结果文本粗分类
                 preview = str(end.get("result_preview", ""))
@@ -396,6 +456,12 @@ def classify_failures(runs: list[RunLog]) -> dict[str, list[dict]]:
                 else:
                     buckets["F-04"].append({"run": rid, "tool": end.get("tool"),
                                             "detail": preview[:120]})
+            else:
+                # 映射表未覆盖的新 failure_kind：归入 F-04 并显式标注，
+                # 让报告暴露"归因规则待补"而不是把失败丢掉。
+                buckets["F-04"].append({"run": rid, "tool": end.get("tool"),
+                                        "failure_kind": kind,
+                                        "detail": f"未映射的 failure_kind={kind}（需补归因规则）"})
 
         for entry in marker_parse_failures([run]):
             buckets["F-01"].append(entry)
@@ -475,6 +541,49 @@ class EvalReportData:
     cost: dict = field(default_factory=dict)
     parallel: dict = field(default_factory=dict)
     coverage: dict = field(default_factory=dict)
+    # 采集健康度：作为一等指标参与门禁，否则遥测退化永远不算回归
+    collection: list[Metric] = field(default_factory=list)
+
+
+def tool_pairing_rate(runs: list[RunLog]) -> Metric:
+    """tool_call_start/end 配对率。
+
+    未配对的 start 表示运行被中断、或遥测写入丢失——采集链路退化的直接信号。
+    旧日志（P0 前无 tool_call_start）分母为 0 → n/a，不计入门禁。
+    """
+    starts = ends = 0
+    for run in runs:
+        for start, end in run.tool_events():
+            if start is not None:
+                starts += 1
+            if end is not None:
+                ends += 1
+    return _ratio("工具事件配对率", min(starts, ends), max(starts, ends),
+                  note="需 P0 后新日志（tool_call_start）")
+
+
+def unknown_event_rate(runs: list[RunLog]) -> Metric:
+    """未知事件占比。
+
+    log_parser 已经统计了 unknown_events 却从未被消费：遥测新增事件而
+    解析层未登记时，这些事件会静默消失。这里把它提为一等指标。
+    """
+    unknown = sum(r.unknown_events for r in runs)
+    total = sum(len(r.events) + r.bad_lines for r in runs)
+    return _ratio("未知事件占比", unknown, total, note="分母为 0（无事件）")
+
+
+def bad_line_rate(runs: list[RunLog]) -> Metric:
+    """JSONL 坏行率（并发写入截断/磁盘问题）。"""
+    bad = sum(r.bad_lines for r in runs)
+    total = sum(len(r.events) + r.bad_lines for r in runs)
+    return _ratio("日志坏行率", bad, total, note="分母为 0（无事件）")
+
+
+def incomplete_run_rate(runs: list[RunLog]) -> Metric:
+    """未收尾运行占比（有事件但无 session_end）。"""
+    return _ratio("未收尾运行占比", len(incomplete_runs(runs)), len(runs),
+                  note="无运行日志")
 
 
 def compute_all(runs: list[RunLog], pass_groups: list[list[bool]] | None = None,
@@ -494,8 +603,15 @@ def compute_all(runs: list[RunLog], pass_groups: list[list[bool]] | None = None,
             fix_regression_rate(runs),
             turn_budget_exhausted_rate(runs),
             e2e_success_rate(runs),
+            degradation_rate(runs),
         ],
         stability=[pass_at_k(pass_groups or []), flaky_rate(pass_groups or [])],
+        collection=[
+            tool_pairing_rate(runs),
+            unknown_event_rate(runs),
+            bad_line_rate(runs),
+            incomplete_run_rate(runs),
+        ],
         failures=classify_failures(runs),
         node_efficiency=node_efficiency(runs),
         tokens=total_tokens(runs),
@@ -509,6 +625,7 @@ def compute_all(runs: list[RunLog], pass_groups: list[list[bool]] | None = None,
             "with_parse_results": sum(1 for r in runs if r.has_parse_results),
             "multi_agent": sum(1 for r in runs if r.is_multi_agent),
             "bad_lines": sum(r.bad_lines for r in runs),
+            "unknown_events": sum(r.unknown_events for r in runs),
             "incomplete": len(incomplete_runs(runs)),
         },
     )

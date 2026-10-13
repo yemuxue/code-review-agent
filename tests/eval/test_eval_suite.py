@@ -14,12 +14,15 @@ def test_offline_fault_suite_has_ten_unique_cases():
 
 
 def test_offline_runner_covers_faults_and_gate(tmp_path):
-    results, data, gate = run_offline(tmp_path / "runs", repeat=2)
+    results, data, gate, health_data = run_offline(tmp_path / "runs", repeat=2)
     assert len(results) == 20 and all(result.passed for result in results)
     assert gate["passed"] is True
     by_name = {metric.name: metric for metric in data.stability}
     assert by_name["pass@2"].value == 1.0
     assert by_name["flaky 率"].value == 0.0
+    # 健康链路数据必须单独返回：指标门禁在它上面判定，不能被故障注入污染
+    assert health_data is not None
+    assert health_data.coverage["runs"] >= 1
 
 
 def test_runner_writes_report_and_enforces_gate(tmp_path):

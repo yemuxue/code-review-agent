@@ -3,7 +3,26 @@ Eval Dataset / 评估数据集
 用于量化 Agent 代码分析准确率
 
 设计说明：'标注了 50 条真实 bug，用精确率/召回率/F1 量化 Agent 效果'
+
+⚠️ 本数据集的行号是**标注时刻的快照**。`tests/test_eval_datasets.py` 的
+preflight 会校验每个标注点在目标仓库里仍然存在，行号失效会直接失败——
+不要手工改行号去"修绿"，要么确认标注仍成立，要么把它标成待复核。
 """
+
+from __future__ import annotations
+
+# ─── 数据集版本元信息（与 tests/eval_llm_agent_qa.py 同构）───
+DATASET_META = {
+    "dataset_id": "code-review-agent-self",
+    "version": "1.0.0",
+    "sample_count": 33,
+    "real_bug_count": 30,
+    "fp_trap_count": 3,
+    "target_project": "本仓库 src/",
+    "target_layout": "src/<file>",
+    "annotation_source": "人工标注（自评）",
+    "notes": "用于本仓自评与离线 smoke；行号随源码演进会失效，故设 preflight",
+}
 
 EVAL_SAMPLES = [
     # Format: (file, line, category, severity, description_en, description_cn, known_bug)

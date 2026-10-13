@@ -26,6 +26,7 @@ from langgraph.types import Send
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
 
 from src.skills import Skill, load_skills, build_role_blocks
+from src.multi_agent.finding_parser import parse_finding_lines
 
 
 def _merge_stats(a: dict, b: dict) -> dict:
@@ -270,6 +271,7 @@ class LangGraphOrchestrator:
         }
         result = self.graph.invoke(state)
         node_stats = result.get("node_stats", {})
+        degraded, degraded_reason = self._run_degradation(result, node_stats)
         if self.logger:
             # 节点统计此前只活在内存返回值里 —— 落盘后才能算耗时/token 分布
             self.logger.node_stats(node_stats)
@@ -284,6 +286,8 @@ class LangGraphOrchestrator:
                 "fixes": len(result.get("fixes", [])),
                 "fix_status": fix_status,
                 "complete": bool(result.get("complete", False)),
+                "degraded": degraded,
+                "degraded_reason": degraded_reason,
                 "nodes": len(node_stats),
             })
         return {
@@ -292,9 +296,29 @@ class LangGraphOrchestrator:
             "fixes": result.get("fixes", []),
             "messages": [m.content for m in result.get("messages", [])],
             "complete": result.get("complete", False),
+            # 降级语义：调用方据此判断"拿到了文本"是否等于"分析可信"。
+            # 旧实现只暴露 complete，而"没到 review 节点"与"某节点用满 turn 预算"
+            # 是两种不同的可信度损失，这里分开表达。
+            "degraded": degraded,
+            "degraded_reason": degraded_reason,
             "retries": result.get("retry_count", 0),
             "node_stats": node_stats,
         }
+
+    @staticmethod
+    def _run_degradation(result: dict, node_stats: dict) -> tuple[bool, str]:
+        """判定本轮编排是否发生了质量降级，返回 (degraded, 原因码)。"""
+        if not result.get("complete", False):
+            return True, "orchestrator_incomplete"
+        exhausted = [
+            name for name, stats in node_stats.items()
+            if isinstance(stats, dict) and int(stats.get("max_turns", 0)) > 0
+            and int(stats.get("turns", 0)) >= int(stats["max_turns"])
+        ]
+        if exhausted:
+            # 用满预算的节点由 _force_finish 兜底，产出质量已下降
+            return True, f"turn_budget_exhausted:{','.join(sorted(exhausted)[:3])}"
+        return False, ""
 
     # ═══ 路由 ═══
     def _fan_out(self, state: AgentState):
@@ -529,19 +553,12 @@ class LangGraphOrchestrator:
 
     # ═══ 解析 ═══
     def _parse_findings(self, text: str) -> list[dict]:
-        findings = []
-        for line in text.split("\n"):
-            if line.startswith("FINDING|"):
-                parts = line.split("|")
-                if len(parts) >= 6:
-                    findings.append({
-                        "id": len(findings) + 1, "file": parts[1].strip(), "line": parts[2].strip(),
-                        "category": parts[3].strip(), "severity": parts[4].strip(),
-                        "description_en": parts[5].strip() if len(parts) > 5 else "",
-                        "description_cn": parts[6].strip() if len(parts) > 6 else "",
-                        "suggestion": parts[7].strip() if len(parts) > 7 else "",
-                    })
-        return findings
+        """解析 Planner 输出中的 FINDING 行。
+
+        复用共享解析器：结构化字段与自由文本的切分规则只保留一处，
+        避免与 API 入口各自漂移（描述含 `|` 时按固定下标取值会错位）。
+        """
+        return parse_finding_lines(text)
 
     def _parse_verdicts(self, text: str, findings: list) -> list[dict]:
         verdicts = []

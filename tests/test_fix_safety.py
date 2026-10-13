@@ -11,7 +11,6 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import pytest
 from src.tools.git_tools import write_file, restore_from_backup, verify_file_integrity
 
 ORIGINAL = """def foo():

@@ -1,6 +1,8 @@
 """Database integration tests"""
+import os
+import shutil
 import sqlite3
-import sys, os, shutil
+import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 os.chdir(str(Path(__file__).parent.parent))

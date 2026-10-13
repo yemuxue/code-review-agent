@@ -83,15 +83,38 @@ for _k, _v in _DOTENV.items():
         os.environ[_k] = _v
 
 
+def _read_secret_file(env_name: str) -> str:
+    """读取 <NAME>_FILE 指向的文件内容（用于避免密钥明文写进 .env）。
+
+    与 JWT_SECRET_FILE 保持同一套约定：先看直接变量，再看文件。
+    文件缺失/不可读时不静默忽略——那会退化成"认证莫名失败"，
+    而是记一条明确日志，让调用方看到原因。
+    """
+    path = os.environ.get(env_name, "").strip()
+    if not path:
+        return ""
+    try:
+        return Path(path).read_text(encoding="utf-8").strip()
+    except OSError as exc:
+        _LOGGER.warning("%s points to an unreadable file (%s): %s", env_name, path, exc)
+        return ""
+
+
 def get_api_key():
     # Accept both the primary ANTHROPIC_AUTH_TOKEN and the common
     # ANTHROPIC_API_KEY env var names; the former takes precedence.
-    key = os.environ.get("ANTHROPIC_AUTH_TOKEN") or os.environ.get("ANTHROPIC_API_KEY")
+    # 也支持 *_FILE 形式：把密钥放在 .env 之外的独立文件里（可设更严格权限，
+    # 也不会随 .env 被误提交/被构建上下文打包）。
+    key = (os.environ.get("ANTHROPIC_AUTH_TOKEN")
+           or os.environ.get("ANTHROPIC_API_KEY")
+           or _read_secret_file("ANTHROPIC_AUTH_TOKEN_FILE")
+           or _read_secret_file("ANTHROPIC_API_KEY_FILE"))
     if not key:
         raise ConfigError(
             "API key is missing. Set ANTHROPIC_AUTH_TOKEN (or ANTHROPIC_API_KEY) "
             "in your environment or in the .env file (e.g. "
-            "ANTHROPIC_AUTH_TOKEN=sk-...)."
+            "ANTHROPIC_AUTH_TOKEN=sk-...). To keep the secret out of .env, "
+            "set ANTHROPIC_AUTH_TOKEN_FILE=/path/to/key-file instead."
         )
     return key
 

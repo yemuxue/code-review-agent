@@ -12,6 +12,7 @@ from src.eval.log_parser import invalid_json_ratio, load_logs, parse_log_file
 from src.eval.metrics import (
     classify_failures,
     compute_all,
+    degradation_rate,
     e2e_success_rate,
     flaky_rate,
     idle_turn_rate,
@@ -172,6 +173,73 @@ def test_e2e_rate_treats_missing_complete_as_implicit_success(tmp_path):
     assert incomplete_runs([parse_log_file(hole)])[0]["run"] == "interrupted"
 
 
+# ═══ 降级率 ═══
+
+def test_degradation_rate_counts_model_errors(tmp_path):
+    """模型故障 / 预算耗尽 / 空回答都会 HTTP 200 + 文本，必须单独计为降级。
+
+    否则"端到端成功率"会把这些运行算成成功，系统性高估质量。
+    """
+    clean = _write_log(tmp_path, "clean", [
+        {"event": "session_start"},
+        {"event": "session_end", "complete": True, "degraded": False},
+    ])
+    model_error = _write_log(tmp_path, "model_error", [
+        {"event": "session_start"},
+        {"event": "session_end", "complete": False,
+         "degraded": True, "degraded_reason": "model_error:RuntimeError"},
+    ])
+    budget = _write_log(tmp_path, "budget", [
+        {"event": "session_start"},
+        {"event": "session_end", "complete": False,
+         "degraded": True, "degraded_reason": "turn_budget_exhausted"},
+    ])
+    metric = degradation_rate([parse_log_file(p)
+                               for p in (clean, model_error, budget)])
+
+    assert metric.numerator == 2
+    assert metric.denominator == 3
+    assert "model_error" in metric.note
+    assert "turn_budget_exhausted" in metric.note
+
+
+def test_degradation_rate_ignores_incomplete_runs(tmp_path):
+    """未收尾运行属采集缺口，由 incomplete_run_rate 覆盖，不进降级率分母。"""
+    hole = _write_log(tmp_path, "interrupted", [{"event": "session_start"}])
+    clean = _write_log(tmp_path, "clean", [
+        {"event": "session_start"},
+        {"event": "session_end", "complete": True, "degraded": False},
+    ])
+    metric = degradation_rate([parse_log_file(p) for p in (hole, clean)])
+
+    assert metric.denominator == 1
+    assert metric.value == 0.0
+
+
+def test_degradation_rate_is_zero_for_legacy_logs_without_flag(tmp_path):
+    """老日志没有 degraded 字段 → 不臆造降级（None 不等于 True）。"""
+    legacy = _write_log(tmp_path, "legacy", [
+        {"event": "session_start"},
+        {"event": "session_end", "turns_taken": 3},
+    ])
+    metric = degradation_rate([parse_log_file(legacy)])
+
+    assert metric.value == 0.0
+
+
+def test_session_end_carries_degradation_fields_from_summary(tmp_path):
+    """log_parser 必须把降级字段透出，否则指标层拿不到数据源。"""
+    path = _write_log(tmp_path, "degraded", [
+        {"event": "session_start"},
+        {"event": "session_end", "complete": True,
+         "degraded": True, "degraded_reason": "empty_final_answer"},
+    ])
+    summary = parse_log_file(path).summary()
+
+    assert summary["degraded"] is True
+    assert summary["degraded_reason"] == "empty_final_answer"
+
+
 # ═══ 失败分类 ═══
 
 def test_failure_taxonomy_mapping(tmp_path):
@@ -185,7 +253,50 @@ def test_failure_taxonomy_mapping(tmp_path):
          "message": "API HTTP 503: overloaded"},
     ])
     buckets = classify_failures([parse_log_file(path)])
-    assert [len(buckets[c]) for c in ("F-02", "F-03", "F-04", "F-05")] == [1, 1, 1, 1]
+    # F-03 有两条：args_invalid + hitl_blocked（两者都是"没能按预期执行"）。
+    # 旧实现漏掉了 hitl_blocked 分支，把这条失败静默丢弃。
+    assert [len(buckets[c]) for c in ("F-02", "F-03", "F-04", "F-05")] == [1, 2, 1, 1]
+    assert {entry["failure_kind"] for entry in buckets["F-03"]} == {"args_invalid", "hitl_blocked"}
+
+
+def test_every_emitted_failure_kind_maps_to_a_bucket():
+    """守卫：所有会被发出的 failure_kind 都必须映射到某个 F 分类。
+
+    这是"防静默丢弃"的回归防线——hitl_blocked 曾被发出但无人接收，
+    失败在报告里凭空消失，而当时的测试恰好把这次丢失固化了。
+    """
+    from src.eval.metrics import FAILURE_KIND_TO_CODE, FAILURE_KINDS_EMITTED
+
+    missing = FAILURE_KINDS_EMITTED - set(FAILURE_KIND_TO_CODE)
+    assert not missing, f"这些 failure_kind 没有归因规则，会被静默丢弃: {sorted(missing)}"
+    assert FAILURE_KINDS_EMITTED, "failure_kind 契约清单不能为空"
+
+
+def test_failure_kind_contract_covers_harness_emissions():
+    """契约清单必须覆盖 harness/agent.py 实际写入的 failure_kind 字面量。"""
+    import re
+
+    from src.eval.metrics import FAILURE_KINDS_EMITTED
+
+    source = Path("src/harness/agent.py").read_text(encoding="utf-8")
+    emitted = set(re.findall(r'failure_kind="([a-z_]+)"', source))
+    assert emitted, "未能从 agent.py 提取 failure_kind 字面量"
+    uncovered = emitted - FAILURE_KINDS_EMITTED
+    assert not uncovered, (
+        f"harness 会发出但契约未登记的 failure_kind: {sorted(uncovered)}；"
+        "请同时更新 metrics.py 的 FAILURE_KINDS_EMITTED 与 FAILURE_KIND_TO_CODE")
+
+
+def test_unmapped_failure_kind_is_attributed_not_dropped(tmp_path):
+    """未知 failure_kind 必须落到某个桶并标注"待补规则"，不能消失。"""
+    path = _write_log(tmp_path, "r1", [
+        {"event": "session_start"},
+        _tool_end(1, "read_file", error=True, failure_kind="brand_new_kind"),
+    ])
+    buckets = classify_failures([parse_log_file(path)])
+
+    assert len(buckets["F-04"]) == 1
+    assert "需补归因规则" in buckets["F-04"][0]["detail"]
 
 
 def test_tool_error_and_error_event_not_double_counted(tmp_path):

@@ -19,21 +19,36 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from src.eval.log_parser import RunLog, invalid_json_ratio, load_logs
 from src.eval.metrics import (
+    FAILURE_KINDS,
+    IMPLEMENTED_FAILURE_KINDS,
     EvalReportData,
     Metric,
     compute_all,
     failure_summary,
 )
 
-# §4.1/§4.2 目标值（基线报告用于对照，尚未作为门禁——门禁在 Phase 4）
+# §4.1/§4.2 目标值。由 src/eval/baseline.py::evaluate_targets 直接消费，
+# 是**唯一的阈值来源**（报告展示与 CI 门禁共用，避免两处漂移）。
 TARGETS = {
     "工具调用成功率": (0.98, "≥"),
+    "工具事件配对率": (1.0, "≥"),
+    "参数合法率": (0.95, "≥"),
     "Plan 可执行率": (0.95, "≥"),
     "VERDICT 解析率": (0.95, "≥"),
     "fix 成功率": (0.70, "≥"),
+    "fix 输出解析率": (0.95, "≥"),
     "空转率": (0.10, "≤"),
     "循环率": (0.0, "≤"),
     "端到端成功率": (0.90, "≥"),
+    # 降级率：产出文本但结果不可信（模型故障/预算耗尽/空回答）的运行占比。
+    # 没有这条时，这些"HTTP 200 + 一段文本"的运行会被算成成功，系统性高估质量。
+    "降级率": (0.0, "≤"),
+    # 采集健康度：遥测退化必须能被门禁拦住（此前完全无人判定）
+    "日志坏行率": (0.0, "≤"),
+    "未知事件占比": (0.0, "≤"),
+    "未收尾运行占比": (0.0, "≤"),
+    # 稳定性：同一用例多次运行必须一致
+    "flaky 率": (0.0, "≤"),
 }
 
 
@@ -133,6 +148,14 @@ def render_report(data: EvalReportData, source: str, generated_at: datetime | No
         "",
     ]
 
+    # 显式区分"有归因规则但本批未命中"与"尚未实现规则"：
+    # 旧报告把 F-08/F-09 与其它分类并列，读者会误读成"本次为 0"。
+    unimplemented = sorted(set(FAILURE_KINDS) - IMPLEMENTED_FAILURE_KINDS)
+    if unimplemented:
+        lines += [f"> ⚠️ 以下分类**尚无归因规则**，永远不会出现计数（不代表本次为 0）："
+                  f"{'、'.join(f'{c} {FAILURE_KINDS[c]}' for c in unimplemented)}。",
+                  "> 它们需要新增检测规则（状态污染 / 平台差异）才有意义。", ""]
+
     summary = failure_summary(data.failures)
     if summary:
         lines += ["| 代码 | 类型 | 次数 |", "|------|------|------|"]
@@ -156,7 +179,14 @@ def render_report(data: EvalReportData, source: str, generated_at: datetime | No
         "",
         *_metric_table(data.stability),
         "",
-        "## 6. 结论与下一步",
+        "## 6. 采集健康度",
+        "",
+        *_metric_table(data.collection),
+        "",
+        "> 采集健康度恶化会让依赖该数据源的指标静默变成 n/a，属最隐蔽的退化，",
+        "> 因此这些指标同时参与 CI 门禁与基线回归比对。",
+        "",
+        "## 7. 结论与下一步",
         "",
     ]
     lines += _conclusions(data)

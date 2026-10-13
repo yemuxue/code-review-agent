@@ -7,8 +7,72 @@ import os
 from dataclasses import dataclass, field
 try:
     from src.harness.streaming import Chunk
-except ImportError:
-    from harness.streaming import Chunk
+except ImportError:  # 兼容以 `src` 为工作目录直接运行脚本的场景
+    # 回退导入与上面的绝对导入同名，类型检查会判为重复定义；这是
+    # 运行期兼容分支而非真正的重定义，故显式忽略。
+    from harness.streaming import Chunk  # type: ignore[no-redef]
+
+# HTTP User-Agent：部分网关（含 Cloudflare 前置）会拒绝 urllib 默认 UA
+# （表现为 HTTP 403 / error code 1010，看起来像鉴权失败）。两条协议路径
+# 必须使用同一个常量，避免再次出现"一条协议能用、另一条 403"的不一致。
+_HTTP_USER_AGENT = "curl/8.0"
+
+# 瞬时故障的重试次数。网关抖动的实测表现是"部分请求耗时 15s 后 502"，
+# 固定 3 次（1s/2s 退避）不足以吸收这种成片失败，因此改为可配置。
+_DEFAULT_RETRY_ATTEMPTS = 4
+
+# 单次调用的墙钟预算（秒）。**必须有**：重试次数 × 响应超时的乘积很容易
+# 变成小时级（4 次 × 120s + 退避 = 8 分钟/样本），批处理会跑到无法接受。
+# 预算耗尽即停止重试并把最后一次错误抛给上层，让调用方尽快看到失败。
+_DEFAULT_CALL_BUDGET_S = 90.0
+
+
+def _retry_attempts() -> int:
+    """从环境变量读取重试次数（总尝试次数，含首次）。"""
+    try:
+        return max(1, min(int(os.environ.get("LLM_MAX_ATTEMPTS", "4")), 8))
+    except ValueError:
+        return _DEFAULT_RETRY_ATTEMPTS
+
+
+def _call_budget_s() -> float:
+    """单次调用的总墙钟预算（秒）。"""
+    try:
+        return max(5.0, min(float(os.environ.get("LLM_CALL_BUDGET_SECONDS", "90")), 600.0))
+    except ValueError:
+        return _DEFAULT_CALL_BUDGET_S
+
+
+def _http_timeout_s() -> float:
+    """单次 HTTP 请求超时（秒）。
+
+    必须与"重试次数 × 预算"一起看：三者相乘才是最坏耗时。
+    原来的 120s 配合 3 次重试意味着单个样本最坏 6 分钟以上，
+    批处理会慢到不可用。
+    """
+    try:
+        return max(5.0, min(float(os.environ.get("LLM_HTTP_TIMEOUT_SECONDS", "60")), 300.0))
+    except ValueError:
+        return 60.0
+
+
+# 思考深度可选项。Responses 协议用 reasoning.effort；Anthropic 协议用
+# thinking.budget_tokens，两者语义不同，故分开映射。
+_REASONING_EFFORTS = ("minimal", "low", "medium", "high")
+
+# effort → Anthropic thinking 预算（token）。仅供 anthropic 协议使用。
+_REASONING_BUDGET_TOKENS = {
+    "minimal": 1024,
+    "low": 2048,
+    "medium": 4096,
+    "high": 8192,
+}
+
+
+def _reasoning_effort() -> str:
+    """从 LLM_REASONING_EFFORT 读取思考深度；空值表示不显式指定。"""
+    raw = os.environ.get("LLM_REASONING_EFFORT", "").strip().lower()
+    return raw if raw in _REASONING_EFFORTS else ""
 
 @dataclass
 class LLMResponse:
@@ -18,7 +82,8 @@ class LLMResponse:
     @classmethod
     def from_anthropic(cls, raw: dict) -> "LLMResponse":
         import re as _re
-        tcs, text = [], ""
+        tcs: list[dict] = []
+        text = ""
         for b in raw.get("content",[]):
             if b["type"]=="text":
                 block_text = b.get("text","")
@@ -88,8 +153,29 @@ try:
     from src.harness.llm_cache import LLMCache
     _llm_cache = LLMCache(max_size=200, ttl_seconds=300)
 except ImportError:
-    from harness.llm_cache import LLMCache
+    # 同上的运行期兼容分支：与绝对导入同名会被判为重复定义。
+    from harness.llm_cache import LLMCache  # type: ignore[no-redef]
     _llm_cache = LLMCache(max_size=200, ttl_seconds=300)
+
+
+def _retry_delay(attempt: int, error=None) -> float:
+    """瞬时故障的重试等待时间。
+
+    优先使用上游给的 `Retry-After`：不遵守它会在网关已经过载时继续加压
+    （实测表现为"第一条成功、后续连续 502"）。没有该头时用指数退避。
+    """
+    if error is not None:
+        header = ""
+        try:
+            header = (error.headers.get("Retry-After") or "").strip()
+        except AttributeError:
+            header = ""
+        if header:
+            try:
+                return max(0.0, min(float(header), 60.0))
+            except ValueError:
+                pass
+    return 1.0 * (2 ** attempt)          # 1s, 2s（attempt 从 0 起）
 
 
 class AnthropicClient:
@@ -111,8 +197,9 @@ class AnthropicClient:
                  max_tokens: int | None = None):
         try:
             from src.config import get_api_key, get_base_url, get_model
-        except ImportError:
-            from config import get_api_key, get_base_url, get_model
+        except ImportError:  # 同上：兼容以 src 为工作目录的运行方式
+            from config import (  # type: ignore[no-redef]
+                get_api_key, get_base_url, get_model)
         configured_base_url = get_base_url().rstrip("/")
         self.api_key = api_key or get_api_key()
         self.base_url = (base_url or configured_base_url).rstrip("/")
@@ -127,6 +214,12 @@ class AnthropicClient:
                              else "anthropic")
         # Configurable per client/model; falls back to model-specific default
         self.max_tokens = max_tokens or self._MODEL_DEFAULT_MAX_TOKENS.get(self.model, 16384)
+        # 思考深度（reasoning effort）。实测只有 Responses 协议会回报
+        # reasoning_tokens，因此它也是唯一能证明"高思考度真的生效"的路径：
+        #   effort low → reasoning_tokens 59；effort high → 109。
+        # Anthropic 协议的 thinking 参数被网关接受但不回报用量，无法验证，
+        # 所以两条协议用各自的原生写法，而不是硬套一个参数名。
+        self.reasoning_effort = _reasoning_effort()
 
     @staticmethod
     def _tool_def(t: dict) -> dict:
@@ -140,6 +233,14 @@ class AnthropicClient:
             "input_schema": fn.get("parameters") or {"type": "object", "properties": {}},
         }
 
+    def _cache_variant(self) -> str:
+        """参与缓存键的请求参数指纹。
+
+        只包含会改变结果的参数：协议与思考深度。model 已单独作为键的一部分。
+        少了它就会出现"改了 reasoning_effort 却拿到旧深度答案"的静默错配。
+        """
+        return f"{self.api_protocol}|effort={self.reasoning_effort or '-'}"
+
     def chat(self, messages: list[dict], tools: list[dict] | None = None) -> LLMResponse:
         if self.api_protocol == "responses":
             return self._chat_responses(messages, tools)
@@ -147,7 +248,7 @@ class AnthropicClient:
         import urllib.error
         # Check cache
         if self.use_cache and not tools:
-            cached = _llm_cache.get(messages, self.model)
+            cached = _llm_cache.get(messages, self.model, self._cache_variant())
             if cached:
                 try:
                     obj = json.loads(cached)
@@ -163,6 +264,14 @@ class AnthropicClient:
         if tools:
             ant = [self._tool_def(t) for t in tools]
         payload = {"model":self.model,"max_tokens":self.max_tokens,"messages":apimsg}
+        if self.reasoning_effort:
+            # Anthropic 协议的原生写法是 thinking.budget_tokens。
+            # ⚠️ 实测该网关接受此参数但不回报 reasoning 用量，因此无法从
+            # 响应验证是否真的生效——要可验证的高思考度请用 responses 协议。
+            thinking_budget = _REASONING_BUDGET_TOKENS[self.reasoning_effort]
+            payload["thinking"] = {"type": "enabled", "budget_tokens": thinking_budget}
+            # thinking 会占用输出预算，max_tokens 必须留出余量，否则正文被挤空
+            payload["max_tokens"] = max(self.max_tokens, thinking_budget + 1024)
         if sp:
             # Prompt caching: system prompt rarely changes, mark as cacheable
             payload["system"] = [{"type":"text","text":sp,"cache_control":{"type":"ephemeral"}}]
@@ -176,31 +285,48 @@ class AnthropicClient:
             url=f"{self.base_url}/v1/messages",
             data=json.dumps(payload).encode("utf-8"),
             headers={"Content-Type":"application/json","x-api-key":self.api_key,
-                     "anthropic-version":"2023-06-01","anthropic-beta":"prompt-caching-2024-07-31"},
+                     "anthropic-version":"2023-06-01",
+                     "anthropic-beta":"prompt-caching-2024-07-31",
+                     # 部分网关（含 Cloudflare 前置）按 User-Agent 过滤，
+                     # urllib 默认 UA 会被直接拒绝（error code 1010 / HTTP 403）。
+                     # responses 路径早已设置该头，anthropic 路径此前遗漏，
+                     # 导致同一网关下"responses 能用、anthropic 403"的怪现象。
+                     "User-Agent": _HTTP_USER_AGENT},
             method="POST")
-        # 瞬时故障（限流 429 / 服务端 5xx / 过载 529）重试 2 次，退避 1s、2s；
+        # 瞬时故障（限流 429 / 服务端 5xx / 过载 529）重试，退避 1s、2s、4s…；
         # 其余 HTTP 错误（4xx 等）与连接类错误不重试，直接抛给上层展示。
         transient_codes = (429, 500, 502, 503, 504, 529)
-        for attempt in range(3):
+        attempts = _retry_attempts()
+        budget = _call_budget_s()
+        deadline = time.monotonic() + budget
+        for attempt in range(attempts):
             try:
-                with urllib.request.urlopen(req, timeout=120) as resp:
+                with urllib.request.urlopen(req, timeout=_http_timeout_s()) as resp:
                     raw = json.loads(resp.read().decode("utf-8"))
                     result = LLMResponse.from_anthropic(raw)
                     # Save to cache (text-only and tool-call-only responses)
                     if self.use_cache and not tools and (result.content or result.tool_calls):
                         _llm_cache.set(messages, json.dumps(
                             {"content": result.content, "tool_calls": result.tool_calls,
-                             "usage": result.usage}, ensure_ascii=False), self.model)
+                             "usage": result.usage}, ensure_ascii=False), self.model, self._cache_variant())
                     return result
             except urllib.error.HTTPError as e:
-                if e.code in transient_codes and attempt < 2:
-                    time.sleep(1.0 * (attempt + 1))
+                delay = _retry_delay(attempt, e)
+                if (e.code in transient_codes and attempt < attempts - 1
+                        and time.monotonic() + delay < deadline):
+                    time.sleep(delay)
                     continue
-                raise RuntimeError(f"API HTTP {e.code}: {e.read().decode('utf-8',errors='replace')}")
+                suffix = ("" if e.code not in transient_codes
+                          else f" (已尝试 {attempt + 1} 次/预算 {budget:.0f}s)")
+                raise RuntimeError(
+                    f"API HTTP {e.code}: {e.read().decode('utf-8',errors='replace')}{suffix}")
             except urllib.error.URLError as e:
                 raise RuntimeError(f"API connection error: {e.reason}")
             except (TimeoutError, ConnectionError, OSError) as e:
                 raise RuntimeError(f"API timeout/connection error: {e}")
+        # 重试循环理论上必然在 return/raise 处退出；这里显式兜底，
+        # 避免出现"静默返回 None"的调用方崩溃（也让类型检查确认返回类型）。
+        raise RuntimeError(f"API request failed after {attempts} attempts")
 
     def _chat_responses(self, messages: list[dict], tools: list[dict] | None = None) -> LLMResponse:
         """Call a Responses-compatible gateway while preserving the existing client API."""
@@ -208,7 +334,7 @@ class AnthropicClient:
         import urllib.error
 
         if self.use_cache and not tools:
-            cached = _llm_cache.get(messages, self.model)
+            cached = _llm_cache.get(messages, self.model, self._cache_variant())
             if cached:
                 try:
                     obj = json.loads(cached)
@@ -226,7 +352,11 @@ class AnthropicClient:
             "input": input_items,
             "max_output_tokens": self.max_tokens,
         }
-        if self.model == "gpt-5.5":
+        # 思考深度：显式配置优先；未配置时保留 gpt-5.5 的历史默认（low，
+        # 因为它在评测里只做短判定）。显式配置会覆盖该默认。
+        if self.reasoning_effort:
+            payload["reasoning"] = {"effort": self.reasoning_effort}
+        elif self.model == "gpt-5.5":
             payload["reasoning"] = {"effort": "low"}
         if instructions:
             payload["instructions"] = instructions
@@ -238,29 +368,38 @@ class AnthropicClient:
             data=json.dumps(payload).encode("utf-8"),
             headers={"Content-Type": "application/json",
                      "Authorization": f"Bearer {self.api_key}",
-                     # The gateway's edge filter rejects urllib's default UA.
-                     "User-Agent": "curl/8.0"},
+                     # 网关边缘过滤会拒绝 urllib 默认 UA
+                     "User-Agent": _HTTP_USER_AGENT},
             method="POST")
         transient_codes = (429, 500, 502, 503, 504, 529)
-        for attempt in range(3):
+        attempts = _retry_attempts()
+        budget = _call_budget_s()
+        deadline = time.monotonic() + budget
+        for attempt in range(attempts):
             try:
-                with urllib.request.urlopen(req, timeout=120) as resp:
+                with urllib.request.urlopen(req, timeout=_http_timeout_s()) as resp:
                     raw = json.loads(resp.read().decode("utf-8"))
                     result = LLMResponse.from_responses(raw)
                     if self.use_cache and not tools and (result.content or result.tool_calls):
                         _llm_cache.set(messages, json.dumps(
                             {"content": result.content, "tool_calls": result.tool_calls,
-                             "usage": result.usage}, ensure_ascii=False), self.model)
+                             "usage": result.usage}, ensure_ascii=False), self.model, self._cache_variant())
                     return result
             except urllib.error.HTTPError as e:
-                if e.code in transient_codes and attempt < 2:
-                    time.sleep(1.0 * (attempt + 1))
+                delay = _retry_delay(attempt, e)
+                if (e.code in transient_codes and attempt < attempts - 1
+                        and time.monotonic() + delay < deadline):
+                    time.sleep(delay)
                     continue
-                raise RuntimeError(f"API HTTP {e.code}: {e.read().decode('utf-8', errors='replace')}")
+                suffix = ("" if e.code not in transient_codes
+                          else f" (已尝试 {attempt + 1} 次/预算 {budget:.0f}s)")
+                raise RuntimeError(
+                    f"API HTTP {e.code}: {e.read().decode('utf-8', errors='replace')}{suffix}")
             except urllib.error.URLError as e:
                 raise RuntimeError(f"API connection error: {e.reason}")
             except (TimeoutError, ConnectionError, OSError) as e:
                 raise RuntimeError(f"API timeout/connection error: {e}")
+        raise RuntimeError(f"Responses API request failed after {attempts} attempts")
 
     @staticmethod
     def _responses_tool_def(tool: dict) -> dict:
@@ -328,7 +467,10 @@ class AnthropicClient:
                 url=f"{self.base_url}/v1/messages",
                 data=json.dumps(payload).encode("utf-8"),
                 headers={"Content-Type":"application/json","x-api-key":self.api_key,
-                         "anthropic-version":"2023-06-01","anthropic-beta":"prompt-caching-2024-07-31"},
+                         "anthropic-version":"2023-06-01",
+                         "anthropic-beta":"prompt-caching-2024-07-31",
+                         # 同 chat()：网关按 UA 过滤，必须用非 urllib 默认 UA
+                         "User-Agent": _HTTP_USER_AGENT},
                 method="POST")
             try:
                 with urllib.request.urlopen(req, timeout=300) as resp:

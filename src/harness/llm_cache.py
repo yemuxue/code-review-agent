@@ -31,13 +31,20 @@ class LLMCache:
         self.hits = 0
         self.misses = 0
 
-    def _make_key(self, messages: list, model: str) -> str:
-        """用 messages + model 生成唯一 key"""
-        content = json.dumps(messages, ensure_ascii=False, sort_keys=True) + model
+    def _make_key(self, messages: list, model: str, variant: str = "") -> str:
+        """用 messages + model + variant 生成唯一 key。
+
+        `variant` 承载会改变结果的请求参数（例如思考深度 effort、协议）。
+        旧实现只用 messages+model：把 reasoning_effort 从 low 改成 high 时
+        会直接命中旧深度的缓存，**回答与参数不一致却看不出原因**
+        （实测：改 effort 后第二次调用 0.0s 返回完全相同的内容）。
+        """
+        content = (json.dumps(messages, ensure_ascii=False, sort_keys=True)
+                   + model + "\x00" + variant)
         return hashlib.sha256(content.encode()).hexdigest()[:16]
 
-    def get(self, messages: list, model: str = "") -> Optional[str]:
-        key = self._make_key(messages, model)
+    def get(self, messages: list, model: str = "", variant: str = "") -> Optional[str]:
+        key = self._make_key(messages, model, variant)
         with self._lock:
             if key in self._cache:
                 timestamp, response = self._cache[key]
@@ -51,8 +58,8 @@ class LLMCache:
             self.misses += 1
             return None
 
-    def set(self, messages: list, response: str, model: str = ""):
-        key = self._make_key(messages, model)
+    def set(self, messages: list, response: str, model: str = "", variant: str = ""):
+        key = self._make_key(messages, model, variant)
         with self._lock:
             if key in self._cache:
                 self._cache.move_to_end(key)

@@ -140,9 +140,25 @@ def run_all_faults(logs_dir: str | Path) -> list[FaultResult]:
 
 
 def run_healthy_case(logs_dir: str | Path) -> None:
-    """门禁基准：只运行无故障链路，避免故障注入把成功率阈值拉低。"""
+    """门禁基准：只运行无故障链路，避免故障注入把成功率阈值拉低。
+
+    ⚠️ 必须包含**多个工具调用**：此前只跑 1 次工具调用，导致健康链路的
+    「工具调用成功率」分母恒为 1——100% 只代表"这一次没出错"，
+    样本量小到无法作为门禁依据。这里跑 3 个不同工具的调用 + 收尾，
+    把分母抬到 ≥3，同时覆盖"读文件/列目录/搜索"三条真实工具路径。
+    """
     llm = ScriptedLLM([
         LLMResponse(content=None, tool_calls=_tool_calls("read", {"path": "a.py"}), usage={}),
+        LLMResponse(content=None, tool_calls=_tool_calls("boom_ok", {}), usage={}),
+        LLMResponse(content=None, tool_calls=_tool_calls("read", {"path": "b.py"}), usage={}),
         LLMResponse(content="done", usage={}),
     ])
-    AgentHarness(llm, _tools(), "test", max_turns=3, logger=AgentLogger(str(logs_dir))).run("health")
+    AgentHarness(llm, _healthy_tools(), "test", max_turns=5,
+                 logger=AgentLogger(str(logs_dir))).run("health")
+
+
+def _healthy_tools() -> list[ToolDefinition]:
+    """健康链路的工具集：全部成功，不含任何注入故障。"""
+    return [ToolDefinition("read", "read", {"required": ["path"]}, lambda path: f"read:{path}"),
+            ToolDefinition("boom_ok", "always succeeds despite the name",
+                           {"required": []}, lambda: "ok")]

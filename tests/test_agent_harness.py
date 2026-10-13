@@ -3,12 +3,12 @@ Agent Harness 核心模块单元测试
 
 用 MockLLM 实现零 API 调用的测试，参考 llm-agent-qa-system 的 test 设计。
 """
-import sys, json
+import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pytest
-from src.harness.agent import AgentHarness, ToolDefinition, ToolCall
+from src.harness.agent import AgentHarness, ToolDefinition
 
 
 # ═══════════════════════════════════════════

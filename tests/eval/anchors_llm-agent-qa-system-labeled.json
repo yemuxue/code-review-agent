@@ -1,0 +1,998 @@
+{
+  "anchor_version": 1,
+  "count": 124,
+  "anchors": {
+    "#1": {
+      "file": "react_agent.py",
+      "line": 209,
+      "version": 1,
+      "line_hash": "ac5d82d5ca1354bf",
+      "context_hash": "0079648c68af407c",
+      "anchor_line": 210
+    },
+    "#2": {
+      "file": "react_agent.py",
+      "line": 154,
+      "version": 1,
+      "line_hash": "d09e9849a6179a53",
+      "context_hash": "f56284c65c721690",
+      "anchor_line": 154
+    },
+    "#3": {
+      "file": "react_agent.py",
+      "line": 379,
+      "version": 1,
+      "line_hash": "a1525183589fd6c9",
+      "context_hash": "5fc6c0ce90895bc2",
+      "anchor_line": 379
+    },
+    "#4": {
+      "file": "react_agent.py",
+      "line": 167,
+      "version": 1,
+      "line_hash": "4dcc1f526d706c3d",
+      "context_hash": "aae49bf1cd493576",
+      "anchor_line": 167
+    },
+    "#5": {
+      "file": "react_agent.py",
+      "line": 97,
+      "version": 1,
+      "line_hash": "eda938541a9bbc6c",
+      "context_hash": "985ddb2a74da43ea",
+      "anchor_line": 97
+    },
+    "#6": {
+      "file": "react_agent.py",
+      "line": 140,
+      "version": 1,
+      "line_hash": "bb93daa1c79d14ca",
+      "context_hash": "58a26464aa8b9d2c",
+      "anchor_line": 140
+    },
+    "#7": {
+      "file": "react_agent.py",
+      "line": 222,
+      "version": 1,
+      "line_hash": "d37fc0af6568884a",
+      "context_hash": "7e37989c02712f30",
+      "anchor_line": 222
+    },
+    "#8": {
+      "file": "react_agent.py",
+      "line": 242,
+      "version": 1,
+      "line_hash": "b69c6f947a4bbae7",
+      "context_hash": "ad96aa4565f3fc18",
+      "anchor_line": 242
+    },
+    "#9": {
+      "file": "react_agent.py",
+      "line": 281,
+      "version": 1,
+      "line_hash": "70748828098e0f59",
+      "context_hash": "7f97bb86b939ba09",
+      "anchor_line": 282
+    },
+    "#10": {
+      "file": "react_agent.py",
+      "line": 366,
+      "version": 1,
+      "line_hash": "44d91afa0b13ac27",
+      "context_hash": "0a575163c67f3ad2",
+      "anchor_line": 365
+    },
+    "#11": {
+      "file": "react_agent.py",
+      "line": 115,
+      "version": 1,
+      "line_hash": "89e4b1ac29189423",
+      "context_hash": "9e7f0dba3e216fab",
+      "anchor_line": 116
+    },
+    "#12": {
+      "file": "react_agent.py",
+      "line": 50,
+      "version": 1,
+      "line_hash": "b29c3c97372638e8",
+      "context_hash": "a5579786e84f4aad",
+      "anchor_line": 49
+    },
+    "#13": {
+      "file": "prompt.py",
+      "line": 52,
+      "version": 1,
+      "line_hash": "a14f1726add221ad",
+      "context_hash": "d5552fe26b48623c",
+      "anchor_line": 52
+    },
+    "#14": {
+      "file": "prompt.py",
+      "line": 76,
+      "version": 1,
+      "line_hash": "bf81a4d6fc7c7692",
+      "context_hash": "4b20eba8c4b0f11b",
+      "anchor_line": 76
+    },
+    "#15": {
+      "file": "prompt.py",
+      "line": 40,
+      "version": 1,
+      "line_hash": "11e749b676473436",
+      "context_hash": "104103ab376d0171",
+      "anchor_line": 40
+    },
+    "#16": {
+      "file": "prompt.py",
+      "line": 106,
+      "version": 1,
+      "line_hash": "2b71d56ee09d9e9f",
+      "context_hash": "ae2103298d6107c4",
+      "anchor_line": 106
+    },
+    "#17": {
+      "file": "prompt.py",
+      "line": 103,
+      "version": 1,
+      "line_hash": "2d633542ecbd00f5",
+      "context_hash": "4950415cb3772b60",
+      "anchor_line": 103
+    },
+    "#18": {
+      "file": "prompt.py",
+      "line": 29,
+      "version": 1,
+      "line_hash": "c3ac6d78f07b86ae",
+      "context_hash": "2cc2ac30c369cbe1",
+      "anchor_line": 29
+    },
+    "#19": {
+      "file": "agent/tools/base.py",
+      "line": 37,
+      "version": 1,
+      "line_hash": "eb50091f988b5343",
+      "context_hash": "ba841446233ca40c",
+      "anchor_line": 37
+    },
+    "#20": {
+      "file": "agent/tools/base.py",
+      "line": 59,
+      "version": 1,
+      "line_hash": "d801037a6ada7b1b",
+      "context_hash": "9607094fefd8a402",
+      "anchor_line": 59
+    },
+    "#21": {
+      "file": "agent/tools/base.py",
+      "line": 72,
+      "version": 1,
+      "line_hash": "8761c2f50a05555a",
+      "context_hash": "61cbdbb1db284bab",
+      "anchor_line": 72
+    },
+    "#22": {
+      "file": "agent/tools/base.py",
+      "line": 47,
+      "version": 1,
+      "line_hash": "35d12e1e975b88a4",
+      "context_hash": "a920afd1def704b3",
+      "anchor_line": 47
+    },
+    "#23": {
+      "file": "agent/tools/base.py",
+      "line": 24,
+      "version": 1,
+      "line_hash": "bfc69d6cd1f9d881",
+      "context_hash": "9e370a0587957b20",
+      "anchor_line": 24
+    },
+    "#24": {
+      "file": "tools/calculator.py",
+      "line": 105,
+      "version": 1,
+      "line_hash": "9e17e9a887e2a38b",
+      "context_hash": "bb129287f794ef7f",
+      "anchor_line": 105
+    },
+    "#25": {
+      "file": "tools/calculator.py",
+      "line": 18,
+      "version": 1,
+      "line_hash": "4295b5d34728e912",
+      "context_hash": "5d9a29e44e100b73",
+      "anchor_line": 18
+    },
+    "#26": {
+      "file": "tools/calculator.py",
+      "line": 105,
+      "version": 1,
+      "line_hash": "9e17e9a887e2a38b",
+      "context_hash": "bb129287f794ef7f",
+      "anchor_line": 105
+    },
+    "#27": {
+      "file": "tools/calculator.py",
+      "line": 96,
+      "version": 1,
+      "line_hash": "362a4a58c33d1825",
+      "context_hash": "b4280f2c5368162e",
+      "anchor_line": 96
+    },
+    "#28": {
+      "file": "tools/calculator.py",
+      "line": 50,
+      "version": 1,
+      "line_hash": "9dfed89d59be0347",
+      "context_hash": "03f2d2e2b707bf78",
+      "anchor_line": 50
+    },
+    "#29": {
+      "file": "tools/web_search.py",
+      "line": 62,
+      "version": 1,
+      "line_hash": "c10f818658879c63",
+      "context_hash": "33c5fc09978b3490",
+      "anchor_line": 62
+    },
+    "#30": {
+      "file": "tools/web_search.py",
+      "line": 73,
+      "version": 1,
+      "line_hash": "6b2b5896ee71ffe7",
+      "context_hash": "5156d31c46235c21",
+      "anchor_line": 73
+    },
+    "#31": {
+      "file": "tools/web_search.py",
+      "line": 84,
+      "version": 1,
+      "line_hash": "1c23ab5f650c7237",
+      "context_hash": "27d7416243a1922b",
+      "anchor_line": 84
+    },
+    "#32": {
+      "file": "tools/web_search.py",
+      "line": 47,
+      "version": 1,
+      "line_hash": "e426f54e2f86dedc",
+      "context_hash": "aa43c58bc0badf7e",
+      "anchor_line": 47
+    },
+    "#33": {
+      "file": "tools/web_search.py",
+      "line": 67,
+      "version": 1,
+      "line_hash": "fc4c1868f34cfb51",
+      "context_hash": "085218fda3fd8901",
+      "anchor_line": 67
+    },
+    "#34": {
+      "file": "tools/knowledge_base.py",
+      "line": 73,
+      "version": 1,
+      "line_hash": "a3ba4ac054346ef9",
+      "context_hash": "c50baaa8a669cc87",
+      "anchor_line": 73
+    },
+    "#35": {
+      "file": "tools/knowledge_base.py",
+      "line": 91,
+      "version": 1,
+      "line_hash": "19c28491425bbf2a",
+      "context_hash": "d8627b7b2c414d70",
+      "anchor_line": 91
+    },
+    "#36": {
+      "file": "tools/knowledge_base.py",
+      "line": 53,
+      "version": 1,
+      "line_hash": "36c310b7da8cd402",
+      "context_hash": "0e89bef896a74035",
+      "anchor_line": 53
+    },
+    "#37": {
+      "file": "tools/knowledge_base.py",
+      "line": 79,
+      "version": 1,
+      "line_hash": "ff5e8ac558919205",
+      "context_hash": "891bafdfa28a648e",
+      "anchor_line": 79
+    },
+    "#38": {
+      "file": "llm/base.py",
+      "line": 30,
+      "version": 1,
+      "line_hash": "00c4ed602e383cbd",
+      "context_hash": "0c655b05eec64c94",
+      "anchor_line": 30
+    },
+    "#39": {
+      "file": "llm/base.py",
+      "line": 112,
+      "version": 1,
+      "line_hash": "3643b69698eef5e9",
+      "context_hash": "f00c0fadd074ccb9",
+      "anchor_line": 112
+    },
+    "#40": {
+      "file": "llm/base.py",
+      "line": 131,
+      "version": 1,
+      "line_hash": "27ef7dff24c7ff5b",
+      "context_hash": "fdd1566ecd11fa93",
+      "anchor_line": 131
+    },
+    "#41": {
+      "file": "llm/base.py",
+      "line": 95,
+      "version": 1,
+      "line_hash": "00c4ed602e383cbd",
+      "context_hash": "906f7517731435f8",
+      "anchor_line": 95
+    },
+    "#42": {
+      "file": "llm/base.py",
+      "line": 88,
+      "version": 1,
+      "line_hash": "bc3cf222c996cbec",
+      "context_hash": "57a8f207a8ac3acb",
+      "anchor_line": 88
+    },
+    "#43": {
+      "file": "llm/deepseek_adapter.py",
+      "line": 12,
+      "version": 1,
+      "line_hash": "39cae0ab9f67aef9",
+      "context_hash": "78d4cbe147f59b81",
+      "anchor_line": 12
+    },
+    "#44": {
+      "file": "llm/deepseek_adapter.py",
+      "line": 25,
+      "version": 1,
+      "line_hash": "60b4484507f66d8d",
+      "context_hash": "9f828db29508bcad",
+      "anchor_line": 25
+    },
+    "#45": {
+      "file": "llm/deepseek_adapter.py",
+      "line": 20,
+      "version": 1,
+      "line_hash": "bc49fda0db296a28",
+      "context_hash": "0c59e83e60c554bd",
+      "anchor_line": 20
+    },
+    "#46": {
+      "file": "llm/qwen_adapter.py",
+      "line": 12,
+      "version": 1,
+      "line_hash": "f0c64a8b50329a90",
+      "context_hash": "82afbb6d5c1f5e64",
+      "anchor_line": 12
+    },
+    "#47": {
+      "file": "llm/qwen_adapter.py",
+      "line": 31,
+      "version": 1,
+      "line_hash": "f0f636a8efc372c4",
+      "context_hash": "37883cafed0026d5",
+      "anchor_line": 31
+    },
+    "#48": {
+      "file": "memory/sliding_window.py",
+      "line": 34,
+      "version": 1,
+      "line_hash": "231a93a7feba4af1",
+      "context_hash": "34f9fe47f9aa8fc1",
+      "anchor_line": 34
+    },
+    "#49": {
+      "file": "memory/sliding_window.py",
+      "line": 36,
+      "version": 1,
+      "line_hash": "387df009bcdc4685",
+      "context_hash": "482ead958341c54d",
+      "anchor_line": 36
+    },
+    "#50": {
+      "file": "memory/sliding_window.py",
+      "line": 56,
+      "version": 1,
+      "line_hash": "991008c574a99be2",
+      "context_hash": "0c092ee2890e48e1",
+      "anchor_line": 56
+    },
+    "#51": {
+      "file": "memory/sliding_window.py",
+      "line": 66,
+      "version": 1,
+      "line_hash": "778f03f07347a612",
+      "context_hash": "24c620038fa06d81",
+      "anchor_line": 67
+    },
+    "#52": {
+      "file": "memory/sliding_window.py",
+      "line": 41,
+      "version": 1,
+      "line_hash": "7faa71397552474d",
+      "context_hash": "981e1e5e7dce82f2",
+      "anchor_line": 42
+    },
+    "#53": {
+      "file": "rag/vector_store.py",
+      "line": 78,
+      "version": 1,
+      "line_hash": "938ec4706c5655bf",
+      "context_hash": "85293c26a1eb004b",
+      "anchor_line": 78
+    },
+    "#54": {
+      "file": "rag/vector_store.py",
+      "line": 128,
+      "version": 1,
+      "line_hash": "b2aa0eecc6563c58",
+      "context_hash": "e01226cf2920028b",
+      "anchor_line": 128
+    },
+    "#55": {
+      "file": "rag/vector_store.py",
+      "line": 54,
+      "version": 1,
+      "line_hash": "e9dc52bf3963abec",
+      "context_hash": "ed4fe45ecd797578",
+      "anchor_line": 54
+    },
+    "#56": {
+      "file": "rag/vector_store.py",
+      "line": 89,
+      "version": 1,
+      "line_hash": "8f7ab6df34999286",
+      "context_hash": "41f240bdc1293001",
+      "anchor_line": 89
+    },
+    "#57": {
+      "file": "rag/vector_store.py",
+      "line": 113,
+      "version": 1,
+      "line_hash": "c405450fbbacd65e",
+      "context_hash": "1c69456feb201558",
+      "anchor_line": 113
+    },
+    "#58": {
+      "file": "rag/vector_store.py",
+      "line": 49,
+      "version": 1,
+      "line_hash": "8761c2f50a05555a",
+      "context_hash": "3f528541041141fb",
+      "anchor_line": 50
+    },
+    "#59": {
+      "file": "rag/vector_store.py",
+      "line": 136,
+      "version": 1,
+      "line_hash": "991008c574a99be2",
+      "context_hash": "10f4f4a015a4d51d",
+      "anchor_line": 137
+    },
+    "#60": {
+      "file": "rag/retriever.py",
+      "line": 64,
+      "version": 1,
+      "line_hash": "2ebed04710f0be12",
+      "context_hash": "92d3d0c814e4d6a7",
+      "anchor_line": 64
+    },
+    "#61": {
+      "file": "rag/retriever.py",
+      "line": 101,
+      "version": 1,
+      "line_hash": "1c23ab5f650c7237",
+      "context_hash": "fd59a0bad539ae60",
+      "anchor_line": 101
+    },
+    "#62": {
+      "file": "rag/retriever.py",
+      "line": 41,
+      "version": 1,
+      "line_hash": "b80856b7228826b0",
+      "context_hash": "5d463b04188d1006",
+      "anchor_line": 41
+    },
+    "#63": {
+      "file": "rag/retriever.py",
+      "line": 78,
+      "version": 1,
+      "line_hash": "23eca88b07fcefb9",
+      "context_hash": "e1189c7a76aac001",
+      "anchor_line": 78
+    },
+    "#64": {
+      "file": "rag/reranker.py",
+      "line": 83,
+      "version": 1,
+      "line_hash": "57a5a3eb5f4845aa",
+      "context_hash": "1c1df2e448a7da8a",
+      "anchor_line": 83
+    },
+    "#65": {
+      "file": "rag/reranker.py",
+      "line": 87,
+      "version": 1,
+      "line_hash": "dbc350761e2792d8",
+      "context_hash": "06a99df44cffbb63",
+      "anchor_line": 87
+    },
+    "#66": {
+      "file": "rag/reranker.py",
+      "line": 42,
+      "version": 1,
+      "line_hash": "43a9731d3d750d65",
+      "context_hash": "759c9f113cd44811",
+      "anchor_line": 42
+    },
+    "#67": {
+      "file": "rag/reranker.py",
+      "line": 48,
+      "version": 1,
+      "line_hash": "cd4afe48faa19d58",
+      "context_hash": "9632fa90c53b68ed",
+      "anchor_line": 48
+    },
+    "#68": {
+      "file": "rag/embedding.py",
+      "line": 45,
+      "version": 1,
+      "line_hash": "21e584a4e09c9d27",
+      "context_hash": "d223a70bb329efad",
+      "anchor_line": 45
+    },
+    "#69": {
+      "file": "rag/embedding.py",
+      "line": 92,
+      "version": 1,
+      "line_hash": "e121d677f5f6f7bd",
+      "context_hash": "4035c200bdeac510",
+      "anchor_line": 92
+    },
+    "#70": {
+      "file": "rag/embedding.py",
+      "line": 72,
+      "version": 1,
+      "line_hash": "c962cd1f6bcda244",
+      "context_hash": "acfae87f1cfaf1fa",
+      "anchor_line": 72
+    },
+    "#71": {
+      "file": "rag/embedding.py",
+      "line": 79,
+      "version": 1,
+      "line_hash": "7ced66e7273b1ac8",
+      "context_hash": "904eb56bd0d22394",
+      "anchor_line": 79
+    },
+    "#72": {
+      "file": "rag/document_loader.py",
+      "line": 105,
+      "version": 1,
+      "line_hash": "5e27c97a72d92a91",
+      "context_hash": "6adb4d621acea8d5",
+      "anchor_line": 106
+    },
+    "#73": {
+      "file": "rag/document_loader.py",
+      "line": 42,
+      "version": 1,
+      "line_hash": "5cdf66bc72a6dfcf",
+      "context_hash": "888d22e1c7564283",
+      "anchor_line": 42
+    },
+    "#74": {
+      "file": "rag/document_loader.py",
+      "line": 148,
+      "version": 1,
+      "line_hash": "4ab188b82c30bc78",
+      "context_hash": "09f4919baad3ce14",
+      "anchor_line": 148
+    },
+    "#75": {
+      "file": "rag/document_loader.py",
+      "line": 95,
+      "version": 1,
+      "line_hash": "bda6e23601e03a0d",
+      "context_hash": "1e31316fe9dca23d",
+      "anchor_line": 95
+    },
+    "#76": {
+      "file": "rag/document_loader.py",
+      "line": 123,
+      "version": 1,
+      "line_hash": "5122aa6050364173",
+      "context_hash": "3e339918ba26d305",
+      "anchor_line": 123
+    },
+    "#77": {
+      "file": "rag/document_loader.py",
+      "line": 170,
+      "version": 1,
+      "line_hash": "7bf532cc7d9bf79f",
+      "context_hash": "b9224e6b0f1379bb",
+      "anchor_line": 171
+    },
+    "#78": {
+      "file": "rag/text_splitter.py",
+      "line": 127,
+      "version": 1,
+      "line_hash": "852fc254f4252f19",
+      "context_hash": "618df7653fee7eed",
+      "anchor_line": 127
+    },
+    "#79": {
+      "file": "rag/text_splitter.py",
+      "line": 96,
+      "version": 1,
+      "line_hash": "a36227f0e3347147",
+      "context_hash": "b2dbfb1568dc4f4f",
+      "anchor_line": 96
+    },
+    "#80": {
+      "file": "rag/text_splitter.py",
+      "line": 114,
+      "version": 1,
+      "line_hash": "3640332e39f80902",
+      "context_hash": "ee648cda6b951d73",
+      "anchor_line": 114
+    },
+    "#81": {
+      "file": "rag/text_splitter.py",
+      "line": 60,
+      "version": 1,
+      "line_hash": "5295c93ee7e03d18",
+      "context_hash": "a5a7f38a0942427a",
+      "anchor_line": 60
+    },
+    "#82": {
+      "file": "rag/text_splitter.py",
+      "line": 103,
+      "version": 1,
+      "line_hash": "462700ec3824375c",
+      "context_hash": "e98845e6cd53d4e0",
+      "anchor_line": 104
+    },
+    "#83": {
+      "file": "config/settings.py",
+      "line": 108,
+      "version": 1,
+      "line_hash": "0769f786b60deefe",
+      "context_hash": "0769f786b60deefe",
+      "anchor_line": 108
+    },
+    "#84": {
+      "file": "config/settings.py",
+      "line": 97,
+      "version": 1,
+      "line_hash": "222bf5359d50652f",
+      "context_hash": "cfd13717f5247aa4",
+      "anchor_line": 97
+    },
+    "#85": {
+      "file": "config/settings.py",
+      "line": 65,
+      "version": 1,
+      "line_hash": "ec9ed03568670a9c",
+      "context_hash": "fcba141cb31a1854",
+      "anchor_line": 66
+    },
+    "#86": {
+      "file": "config/settings.py",
+      "line": 16,
+      "version": 1,
+      "line_hash": "9d6a2360e2b46c3e",
+      "context_hash": "d9b86045fff9247a",
+      "anchor_line": 16
+    },
+    "#87": {
+      "file": "config/settings.py",
+      "line": 52,
+      "version": 1,
+      "line_hash": "713a48e4e421efd1",
+      "context_hash": "e51de36c38e4641d",
+      "anchor_line": 52
+    },
+    "#88": {
+      "file": "app/streamlit_app.py",
+      "line": 64,
+      "version": 1,
+      "line_hash": "9057658797422617",
+      "context_hash": "774bd232ae0cb673",
+      "anchor_line": 65
+    },
+    "#89": {
+      "file": "app/streamlit_app.py",
+      "line": 248,
+      "version": 1,
+      "line_hash": "9ac5baa581ab53f1",
+      "context_hash": "c86b0f4c273bf6cc",
+      "anchor_line": 248
+    },
+    "#90": {
+      "file": "app/streamlit_app.py",
+      "line": 267,
+      "version": 1,
+      "line_hash": "03adf5f300b90f34",
+      "context_hash": "5cd1ddb5c79896e6",
+      "anchor_line": 267
+    },
+    "#91": {
+      "file": "app/streamlit_app.py",
+      "line": 331,
+      "version": 1,
+      "line_hash": "8a92fa00ea15a7e3",
+      "context_hash": "f970325844f366e7",
+      "anchor_line": 331
+    },
+    "#92": {
+      "file": "app/streamlit_app.py",
+      "line": 296,
+      "version": 1,
+      "line_hash": "5aa453650974f2ae",
+      "context_hash": "f4936624c17915c5",
+      "anchor_line": 296
+    },
+    "#93": {
+      "file": "app/streamlit_app.py",
+      "line": 256,
+      "version": 1,
+      "line_hash": "536714bff38f2027",
+      "context_hash": "3c78f998c4033e3f",
+      "anchor_line": 256
+    },
+    "#94": {
+      "file": "app/streamlit_app.py",
+      "line": 140,
+      "version": 1,
+      "line_hash": "eb51b2b32960b3ba",
+      "context_hash": "ee7f0c7983e52bf8",
+      "anchor_line": 140
+    },
+    "#95": {
+      "file": "app/chat_ui.py",
+      "line": 71,
+      "version": 1,
+      "line_hash": "0b9b16c1fc30a8ba",
+      "context_hash": "bb148075ad1ce475",
+      "anchor_line": 71
+    },
+    "#96": {
+      "file": "app/chat_ui.py",
+      "line": 42,
+      "version": 1,
+      "line_hash": "a4b004ee6fc02ef2",
+      "context_hash": "82b72ac87714ca2b",
+      "anchor_line": 42
+    },
+    "#97": {
+      "file": "app/chat_ui.py",
+      "line": 84,
+      "version": 1,
+      "line_hash": "530e8a8f52b74bf9",
+      "context_hash": "9e1d6952c6863569",
+      "anchor_line": 84
+    },
+    "#98": {
+      "file": "app/sidebar.py",
+      "line": 77,
+      "version": 1,
+      "line_hash": "ce3375c01332cad2",
+      "context_hash": "7a3df234deae9e9d",
+      "anchor_line": 77
+    },
+    "#99": {
+      "file": "app/sidebar.py",
+      "line": 143,
+      "version": 1,
+      "line_hash": "3def5679e10f67a6",
+      "context_hash": "22e5f6c521b1135d",
+      "anchor_line": 143
+    },
+    "#100": {
+      "file": "app/sidebar.py",
+      "line": 110,
+      "version": 1,
+      "line_hash": "cc2bfac26ae76a9b",
+      "context_hash": "8a3205cb9bc1fdab",
+      "anchor_line": 110
+    },
+    "#101": {
+      "file": "app/sidebar.py",
+      "line": 11,
+      "version": 1,
+      "line_hash": "92dffbe14b7c484f",
+      "context_hash": "ae40a61700438fa6",
+      "anchor_line": 11
+    },
+    "#102": {
+      "file": "utils/helpers.py",
+      "line": 79,
+      "version": 1,
+      "line_hash": "59c5577e278b5ea5",
+      "context_hash": "1fe070f8b98633ee",
+      "anchor_line": 79
+    },
+    "#103": {
+      "file": "utils/helpers.py",
+      "line": 105,
+      "version": 1,
+      "line_hash": "f832a8b24e5d7a74",
+      "context_hash": "408e5a5593cad687",
+      "anchor_line": 105
+    },
+    "#104": {
+      "file": "utils/helpers.py",
+      "line": 114,
+      "version": 1,
+      "line_hash": "31195f034fdbc650",
+      "context_hash": "6c8e25daa05b0977",
+      "anchor_line": 114
+    },
+    "#105": {
+      "file": "utils/helpers.py",
+      "line": 40,
+      "version": 1,
+      "line_hash": "20bd3989441ca024",
+      "context_hash": "bd8839f85bae93f5",
+      "anchor_line": 40
+    },
+    "#106": {
+      "file": "utils/helpers.py",
+      "line": 26,
+      "version": 1,
+      "line_hash": "72dcfba3d08bd396",
+      "context_hash": "5982ed4c4e83e54d",
+      "anchor_line": 26
+    },
+    "#107": {
+      "file": "utils/logger.py",
+      "line": 13,
+      "version": 1,
+      "line_hash": "dc13eda9d1ab53ea",
+      "context_hash": "6aa2ac6a1a5c229d",
+      "anchor_line": 13
+    },
+    "#108": {
+      "file": "utils/logger.py",
+      "line": 48,
+      "version": 1,
+      "line_hash": "5ad23c02fe6037c6",
+      "context_hash": "52baa99cd0a97cca",
+      "anchor_line": 48
+    },
+    "#109": {
+      "file": "memory/base.py",
+      "line": 10,
+      "version": 1,
+      "line_hash": "d39c8389cd5cd8f5",
+      "context_hash": "7e1f1875a4c9d3e9",
+      "anchor_line": 10
+    },
+    "#110": {
+      "file": "react_agent.py",
+      "line": 1,
+      "version": 1,
+      "line_hash": "ced7ebeefcfe6024",
+      "context_hash": "97d35e2aefdebb41",
+      "anchor_line": 2
+    },
+    "#111": {
+      "file": "react_agent.py",
+      "line": 394,
+      "version": 1,
+      "line_hash": "6ec62bdbed4baa41",
+      "context_hash": "c8c0f228ceb6e98e",
+      "anchor_line": 394
+    },
+    "#112": {
+      "file": "prompt.py",
+      "line": 1,
+      "version": 1,
+      "line_hash": "2a35813d1b048b15",
+      "context_hash": "830c9b38479ef148",
+      "anchor_line": 2
+    },
+    "#113": {
+      "file": "tools/calculator.py",
+      "line": 1,
+      "version": 1,
+      "line_hash": "3bd5c2985b8a9e95",
+      "context_hash": "3e5d8097c5747879",
+      "anchor_line": 2
+    },
+    "#114": {
+      "file": "llm/base.py",
+      "line": 26,
+      "version": 1,
+      "line_hash": "c98cc0112c3152aa",
+      "context_hash": "7f1a833f57509455",
+      "anchor_line": 26
+    },
+    "#115": {
+      "file": "rag/vector_store.py",
+      "line": 1,
+      "version": 1,
+      "line_hash": "798da12e9302ee73",
+      "context_hash": "e94329b969563648",
+      "anchor_line": 2
+    },
+    "#116": {
+      "file": "rag/embedding.py",
+      "line": 71,
+      "version": 1,
+      "line_hash": "43cbf7c10f137da7",
+      "context_hash": "beb208b9f2c0a9ab",
+      "anchor_line": 71
+    },
+    "#117": {
+      "file": "rag/embedding.py",
+      "line": 93,
+      "version": 1,
+      "line_hash": "ac8acbe5027b7223",
+      "context_hash": "584632545b31b116",
+      "anchor_line": 94
+    },
+    "#118": {
+      "file": "rag/reranker.py",
+      "line": 1,
+      "version": 1,
+      "line_hash": "53a9f5a7c1ebdf02",
+      "context_hash": "1fefbe9a2c692da8",
+      "anchor_line": 2
+    },
+    "#119": {
+      "file": "memory/sliding_window.py",
+      "line": 1,
+      "version": 1,
+      "line_hash": "2a6d169799caa406",
+      "context_hash": "d1e086e046623cd4",
+      "anchor_line": 2
+    },
+    "#120": {
+      "file": "config/settings.py",
+      "line": 1,
+      "version": 1,
+      "line_hash": "f1418505f562400b",
+      "context_hash": "c21e6a5e8fa4843a",
+      "anchor_line": 2
+    },
+    "#121": {
+      "file": "app/streamlit_app.py",
+      "line": 1,
+      "version": 1,
+      "line_hash": "2aa1e04d0bd29991",
+      "context_hash": "99cabcacdbdece71",
+      "anchor_line": 2
+    },
+    "#122": {
+      "file": "tools/web_search.py",
+      "line": 1,
+      "version": 1,
+      "line_hash": "88a2c6636983b5c0",
+      "context_hash": "5365fdf1c9fde315",
+      "anchor_line": 2
+    },
+    "#123": {
+      "file": "rag/document_loader.py",
+      "line": 1,
+      "version": 1,
+      "line_hash": "9ff1d2beac264bb0",
+      "context_hash": "2b1ed01c498693ab",
+      "anchor_line": 2
+    },
+    "#124": {
+      "file": "rag/text_splitter.py",
+      "line": 1,
+      "version": 1,
+      "line_hash": "e57d4491d1feed07",
+      "context_hash": "ff62ea753faf3c85",
+      "anchor_line": 2
+    }
+  }
+}

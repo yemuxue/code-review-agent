@@ -2,7 +2,8 @@
 
 验证管线加固：write_file 截断守卫 + verify 完整性检查 + 自动回滚
 """
-import sys, json, time
+import sys
+import time
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 

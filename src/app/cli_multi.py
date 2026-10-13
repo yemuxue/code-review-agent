@@ -14,10 +14,18 @@ from src.llm_client import AnthropicClient
 from src.harness.agent import ToolDefinition
 from src.harness.telemetry import AgentLogger
 from src.multi_agent.factory import create_langgraph_orchestrator, langgraph_final_report
-from src.tools.git_tools import (list_files, read_file, grep_pattern, run_command, write_file)
+from src.tools.git_tools import list_files, read_file, grep_pattern, write_file
 from src.config import get_api_key, get_base_url, get_model
 
-# Multi-Agent 需要的所有工具
+# Multi-Agent 需要的工具。
+#
+# ⚠️ 这里刻意不注册 run_command：
+#   - LangGraph 编排的节点工具名列表里并没有 run_command，
+#     注册它只会让 "描述声明了能力、实际不可达" 的不一致状态继续存在；
+#   - 本入口没有把 Sandbox/HITL 传进编排，注册等于把
+#     "无隔离的命令执行"写进工具描述里。
+# 若将来确实需要命令执行，必须先同时接入 Sandbox（fail-closed）
+# 与 HITL 审批，再把工具名加入对应节点的工具列表。
 ALL_TOOLS = [
     ToolDefinition(name="list_files", description="List all files in a directory recursively",
         parameters={"type":"object","properties":{"path":{"type":"string","description":"Directory path"},"pattern":{"type":"string","description":"File pattern, e.g. *.py"}},"required":["path"]},
@@ -28,9 +36,6 @@ ALL_TOOLS = [
     ToolDefinition(name="grep_pattern", description="Search regex pattern in files with surrounding context",
         parameters={"type":"object","properties":{"pattern":{"type":"string","description":"Python regex"},"path":{"type":"string"},"file_glob":{"type":"string"},"context_lines":{"type":"integer"},"max_results":{"type":"integer"}},"required":["pattern","path"]},
         fn=grep_pattern),
-    ToolDefinition(name="run_command", description="Run a shell command (pytest, mypy, etc). Timeout: 60s.",
-        parameters={"type":"object","properties":{"command":{"type":"string","description":"Shell command to run"}},"required":["command"]},
-        fn=run_command),
     ToolDefinition(name="write_file", description="Write a complete repaired file inside the current project root.",
         parameters={"type":"object","properties":{"file_path":{"type":"string"},"content":{"type":"string"},"start_line":{"type":"integer"}},"required":["file_path","content"]},
         fn=write_file),

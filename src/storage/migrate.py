@@ -1,49 +1,32 @@
 """
 Database migration script / 数据库迁移脚本
-Run: python src/storage/migrate.py
+
+Run: python -m src.storage.migrate
+
+注意：Database() 在构造时已自动执行全部增量迁移，本脚本只是
+"显式迁移 + 打印结果" 的运维入口，不重复实现迁移逻辑。
 """
 
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from storage.database import Database
+# 使用 src.* 绝对导入，与仓库其它模块一致。
+# 旧实现把"仓库根"插入 sys.path 后 `from storage.database import ...`，
+# 但仓库根下并没有 storage 包（真实包是 <root>/src/storage，且
+# src/ 不是导入根），按文档命令执行必然 ModuleNotFoundError。
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "src"))
+
+from src.storage.database import Database
 
 
 def migrate():
-    """Apply all pending migrations."""
+    """Apply all pending migrations (delegates to Database.__init__)."""
     db = Database("./data/code_review.db")
 
-    with db._get_conn() as conn:
-        # Migration 001: Add logs table
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS logs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                session_id TEXT DEFAULT '',
-                event TEXT NOT NULL DEFAULT '',
-                turn INTEGER DEFAULT 0,
-                tool TEXT DEFAULT '',
-                error INTEGER DEFAULT 0,
-                message TEXT DEFAULT '',
-                created_at TEXT NOT NULL DEFAULT (datetime('now'))
-            )
-        """)
-        conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_logs_session ON logs(session_id)
-        """)
-
-        # Migration 002: Add metrics columns
-        try:
-            conn.execute("ALTER TABLE sessions ADD COLUMN total_tokens INTEGER DEFAULT 0")
-        except Exception:
-            pass
-        try:
-            conn.execute("ALTER TABLE sessions ADD COLUMN total_duration_ms INTEGER DEFAULT 0")
-        except Exception:
-            pass
-
+    stats = db.get_stats()
     print("Migrations applied successfully.")
-    print(f"Sessions: {db.get_stats()['total_sessions']}")
+    print(f"Sessions: {stats['total_sessions']}")
+    print(f"Findings: {stats['total_findings']}")
 
 
 if __name__ == "__main__":

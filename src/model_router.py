@@ -7,9 +7,13 @@
 
 from __future__ import annotations
 try:
-    from src.llm_client import AnthropicClient, LLMResponse
-except ImportError:
-    from llm_client import AnthropicClient, LLMResponse
+    from src.llm_client import AnthropicClient
+except ImportError:  # 兼容以 src 为工作目录的运行方式
+    from llm_client import AnthropicClient  # type: ignore[no-redef]
+
+# LLMResponse 仅用于 chat() 的返回注解；直接来自 llm_client 模块，
+# 不再重复导入/定义（旧实现 import 了同名类型判定为重复定义）。
+from src.llm_client import LLMResponse
 
 
 MODEL_REGISTRY = {
