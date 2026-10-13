@@ -15,7 +15,10 @@
 
 ## 二、API 与后端
 
-| 当前 | 生产级 | 差距 |
+> 下表"当前"列是 **2026-07-21 原型期** 的状态快照，保留用于展示演进过程。
+> 认证、限流、指标、异步化等项的**最新状态见文末"改进进度"**，两处结论不再互相矛盾。
+
+| 当前（原型期） | 生产级 | 差距 |
 |------|--------|------|
 | FastAPI 单进程 | FastAPI + Gunicorn 多 worker | 并发处理能力 |
 | 无认证 | JWT / API Key / OAuth2 | 任意人可调 API |
@@ -107,9 +110,21 @@
 
 ## 改进进度
 
-- [x] 1. Prometheus metrics — `/metrics` endpoint + `Instrumentator`
-- [x] 2. JWT 认证 + Rate Limit — `slowapi` 限流 + `HTTPBearer` 认证
-- [x] 3. GitHub Actions CI — `.github/workflows/ci.yml`
+- [x] 1. Prometheus metrics — `/metrics`（需 JWT 访问）+ `Instrumentator`
+- [x] 2. JWT 认证 + Rate Limit — `slowapi` 限流（全局 100/min，登录 10/min）+ `HTTPBearer` 认证
+- [x] 3. GitHub Actions CI — `.github/workflows/ci.yml`（ruff → **全量 mypy** → pytest+coverage → 离线评测门禁）
 - [x] 4. Migration 脚本 — `src/storage/migrate.py`（替代 Alembic，避免 C++ 依赖）
-- [x] 5. pytest 12/12 通过 + pytest-cov 集成
-- [x] 6. LangGraph — `langgraph_orchestrator.py`（替换硬编码 3 Agent）
+- [x] 5. pytest 通过 + pytest-cov 集成 — 当前 **199 passed / 1 skipped**，
+      覆盖率 52%（`streamlit_app.py` 为入口脚本、`cli*.py` 未被单测覆盖，是主要缺口）
+- [x] 6. LangGraph — `langgraph_orchestrator.py`（三个入口统一经 `factory.create_langgraph_orchestrator`）
+- [x] 7. 用户数据隔离 — 会话/消息/日志/finding/向量索引按 `owner_username` 过滤，历史空归属 fail-closed
+- [x] 8. 命令执行 fail-closed — 无沙箱即拒绝 `run_command`；子进程环境白名单，不透传宿主密钥
+- [x] 9. HITL fail-closed — 无审批人时拒绝写操作，默认仅审查
+- [x] 10. 全量类型检查 — `mypy src/` 0 error（42 个源文件），规则固化在 `pyproject.toml`
+
+### 仍未解决（下一轮）
+
+- [ ] 覆盖率提升到 80%：需要可测试化 `streamlit_app.py`（把会话/持久化逻辑抽成不依赖 Streamlit 的模块）
+- [ ] 容器级隔离成为生产默认：`DockerSandbox` 已实现但未被任何入口实例化
+- [ ] 异步任务队列：长分析仍会占用请求线程
+- [ ] `run_command` 白名单与审计（当前仅靠"无沙箱即拒绝"兜底）
