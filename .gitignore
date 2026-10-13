@@ -8,7 +8,9 @@ __pycache__/
 .coverage
 coverage.xml
 .mypy_cache/
+.mypy-cache-retry*/
 .ruff_cache/
+/.streamlit-*.log
 data/
 logs/
 reports/

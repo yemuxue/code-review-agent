@@ -437,6 +437,7 @@ curl -X POST http://localhost:8000/findings/search \
 运行评估：
 
 ```bash
+python tests/eval_llm_agent_qa.py     # 数据集概览（124 条标注样本）
 python -m tests.eval.runner --suite offline --repeat 2 --gate   # 离线评测门禁（CI 同款）
 python scripts/replay_baseline.py check <新产物.json>            # 与权威基线比对（不可比会拒绝）
 ```
