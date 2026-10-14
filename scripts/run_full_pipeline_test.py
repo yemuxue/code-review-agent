@@ -7,7 +7,9 @@
 运行:
     python scripts/run_full_pipeline_test.py
 """
-import sys, json, io
+import sys
+import json
+import io
 from pathlib import Path
 
 PROJ = Path(__file__).parent.parent
@@ -33,7 +35,8 @@ TARGET = next(
 
 # --safe: 复制目标到临时目录再分析，防止 fix 修改原文件
 if "--safe" in sys.argv:
-    import shutil, tempfile
+    import shutil
+    import tempfile
     _src = Path(TARGET)
     _tmp_dir = Path(tempfile.mkdtemp(prefix="pipeline_safe_"))
     _copy = _tmp_dir / _src.name
@@ -60,7 +63,7 @@ def main():
     )
 
     print("=" * 70)
-    print(f"  全流程测试 / Full Pipeline Test")
+    print("  全流程测试 / Full Pipeline Test")
     print(f"  目标: {TARGET}")
     print("=" * 70)
 
@@ -88,7 +91,7 @@ def main():
     for fx in fixes:
         print(f"  [{fx['status']}] #{fx['finding_id']} {fx['file_path']} — {fx['summary'][:60]}")
 
-    print(f"\n⏱️ Node Stats (节点统计):")
+    print("\n⏱️ Node Stats (节点统计):")
     for node, s in result["node_stats"].items():
         print(f"  {node}: {s.get('turns')} turns | {s.get('tools')} tools | {s.get('tokens')} tok | {s.get('elapsed_ms')}ms")
 

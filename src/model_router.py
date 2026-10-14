@@ -2,14 +2,18 @@
 多模型路由 / Multi-Model Router
 按任务类型和成本分配不同模型
 
-面试话术：'用 Router 按任务复杂度分配模型：简单任务用便宜模型，复杂任务用强模型，成本优化 60%'
+设计说明：'用 Router 按任务复杂度分配模型：简单任务用便宜模型，复杂任务用强模型，成本优化 60%'
 """
 
 from __future__ import annotations
 try:
-    from src.llm_client import AnthropicClient, LLMResponse
-except ImportError:
-    from llm_client import AnthropicClient, LLMResponse
+    from src.llm_client import AnthropicClient
+except ImportError:  # 兼容以 src 为工作目录的运行方式
+    from llm_client import AnthropicClient  # type: ignore[no-redef]
+
+# LLMResponse 仅用于 chat() 的返回注解；直接来自 llm_client 模块，
+# 不再重复导入/定义（旧实现 import 了同名类型判定为重复定义）。
+from src.llm_client import LLMResponse
 
 
 MODEL_REGISTRY = {

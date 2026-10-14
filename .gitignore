@@ -1,8 +1,16 @@
 .env
+# 密钥文件目录：明文密钥放这里，绝不入库（.env 只引用其路径）
+.secrets/
 .sandbox/
 __pycache__/
 *.pyc
 .pytest_cache/
+.coverage
+coverage.xml
+.mypy_cache/
+.mypy-cache-retry*/
+.ruff_cache/
+/.streamlit-*.log
 data/
 logs/
 reports/
@@ -11,5 +19,28 @@ sessions/
 /dist/
 *.egg-info/
 .worktrees/
-面试*.md
+.eval-runs/
 *.bak
+/.pm-workflow/
+/scripts/pm-runtime-config.js
+/scripts/.venv/
+/.handoff/
+
+# ── 个人材料与本地工具配置（绝不应进入公开仓库）──
+# 加这些规则的原因：一次 `git add -A` 险些把个人简历 docx/md、
+# 本地 Claude 权限配置、以及诊断产物推到公开仓库。用忽略规则把
+# "不该公开的内容"变成机器可拦的约束，而不是靠每次提交时记得住。
+JL/
+*.docx
+简历_*.md
+agent_resume_template*.docx
+
+# 本地 Agent/DSH 工具配置与诊断产物（含路径、进程号等本机信息）
+.claude/
+.dsh-acl-reports/
+
+# 下划线开头的一次性脚本（见 pyproject.toml 的 ruff exclude，同一约定）
+/scripts/_*.py
+
+# 个人面试/简历材料处理脚本（含个人文档绝对路径）
+/scripts/merge_interview_doc.py

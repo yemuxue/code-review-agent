@@ -1,0 +1,72 @@
+# 构建上下文排除清单。
+#
+# ⚠️ 这个文件是安全边界，不是优化项：
+# 之前没有 .dockerignore 且 Dockerfile 使用 `COPY . .`，于是
+#   - .env（ANTHROPIC_AUTH_TOKEN / JWT_SECRET_KEY / ADMIN_PASSWORD）
+#   - data/code_review.db（含 bcrypt 哈希与全部会话/发现）
+#   - data/users.json（账号与口令哈希）
+#   - logs/（运行轨迹，含被审查代码片段）
+# 全部被打进镜像层。即使后续层删除文件，早期层里依然可以取回。
+# 因此这些路径必须在构建上下文阶段就排除掉。
+
+# ── 密钥与运行时数据（最关键的排除项）──
+.env
+.env.*
+!.env.example
+# 密钥文件目录：.env 现在只引用这里的路径，明文必须留在构建上下文之外
+.secrets/
+data/
+logs/
+reports/
+sessions/
+.sandbox/
+*.db
+*.db-wal
+*.db-shm
+*.bak
+
+# ── 版本控制与 CI ──
+.git/
+.gitignore
+.gitattributes
+.github/
+
+# ── 开发/测试资产 ──
+tests/
+.agents/
+.claude/
+.eval-runs/
+.pm-workflow/
+.worktrees/
+.handoff/
+.dsh-acl-reports/
+docs/
+skills/
+*.md
+!README.md
+
+# ── Python 缓存与构建产物 ──
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.mypy-cache-retry*/
+.ruff-cache-retry*/
+.coverage
+coverage.xml
+
+# ── 本地工具链与编辑器 ──
+.vscode/
+.idea/
+*.log
+push.bat
+setup_docker.bat
+start_services.bat
+stop_services.bat
+启动原型导出服务.bat
+启动原型导出服务.command

@@ -2,7 +2,7 @@
 Human-in-the-loop Guard / 人机协作审批
 危险工具调用前需人工确认
 
-面试话术：'用权限分级 + 人工审批实现 Human-in-the-loop，危险操作不自动执行'
+设计说明：'用权限分级 + 人工审批实现 Human-in-the-loop，危险操作不自动执行'
 """
 
 from enum import Enum
@@ -87,19 +87,23 @@ class HumanInTheLoop:
         return True
 
     def request_approval(self, tool_name: str, args: dict) -> bool:
-        """请求人工审批。返回 True = 批准，False = 拒绝"""
+        """请求人工审批。返回 True = 批准，False = 拒绝
+
+        设计原则：**没有审批人时一律拒绝写操作**（fail-closed）。
+        旧实现在没有 approval_callback 时执行 `approved = risk == MODERATE`，
+        等于无人值守自动批准所有写操作，与"Human-in-the-loop"的语义相反。
+        要放行写操作，必须由调用方显式注入 approval_callback
+        （例如前端在用户开启"允许自动修复"后注入，并按路径边界判定）。
+        """
         risk = self.assess_risk(tool_name, args)
 
         if risk == RiskLevel.SAFE and self.auto_approve_safe:
             self.stats["auto_approved"] += 1
             return True
 
-        # 使用外部回调或默认行为
-        if self.approval_callback:
-            approved = self.approval_callback(tool_name, args, risk)
-        else:
-            # 默认：危险操作拒绝，中等操作批准
-            approved = risk == RiskLevel.MODERATE
+        # 没有回调 = 没有人可以批准 → 拒绝（不给"默认批准"留任何分支）
+        approved = bool(self.approval_callback(tool_name, args, risk)) \
+            if self.approval_callback else False
 
         if approved:
             self.stats["approved"] += 1

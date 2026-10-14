@@ -1,6 +1,6 @@
 # Code Review Agent — 技术报告
 
-> 面试用技术深度文档 | 2026-07-22
+> 技术深度与设计决策文档 | 2026-07-22
 
 ---
 
@@ -129,9 +129,9 @@ GET  /stats              系统统计
 | Streaming | 状态机解析 tool call | 支持但配置复杂 | 不支持 | 不支持 |
 | 沙箱 | 进程隔离 + HITL | 无 | 无 | Docker 隔离 |
 | 学习成本 | 需要理解原理 | API 调用即可 | API 调用即可 | 中等 |
-| 面试价值 | **极高** | 低 | 低 | 中 |
+| 展示价值 | **极高** | 低 | 低 | 中 |
 
-> **面试话术**："我选择手写 Agent Loop 而不是用 LangChain，因为面试官想看的是你对底层机制的理解，而不是你会调哪个 API。我可以现场画出 Execution Loop 的每一行代码。"
+> **设计说明**：选择手写 Agent Loop 而不是用 LangChain，是为了精确控制底层机制，包括消息构建、工具调用解析、错误处理和循环边界。
 
 ### 4.2 Multi-Agent
 
@@ -146,7 +146,7 @@ GET  /stats              系统统计
 | Human-in-loop | ✅ 工具级审批 | ✅ 节点级 | ✅ |
 | 中文支持 | ✅ 中英双语输出 | 依赖模型 | 依赖模型 |
 
-> **面试话术**："我实现了两种 Multi-Agent 方案：硬编码管线展示了底层原理，LangGraph 方案展示了生产级图编排能力——Send API 并行验证、按文件分组串行修复、写前备份、修复后审核。面试时可以讨论两者的取舍。"
+> **设计说明**：同时保留硬编码管线和 LangGraph 图编排，前者便于控制底层流程，后者支持 Send API 并行验证、按文件分组串行修复、写前备份和修复后审核。
 
 ### 4.3 基础设施
 
@@ -162,7 +162,7 @@ GET  /stats              系统统计
 | 缓存 | 内存 LRU + TTL | Redis |
 | 向量搜索 | FTS5（关键词） | pgvector / Milvus |
 
-> **面试话术**："当前用的是 SQLite + FTS5，适合单机部署。我理解生产环境需要 PostgreSQL + Elasticsearch + Redis 三件套，已经在 docker-compose.yml 里配置好了，换 Linux 服务器一条命令就能切换。"
+> **设计说明**：当前使用 SQLite + FTS5，适合单机部署；规模扩大时可演进到 PostgreSQL + Elasticsearch + Redis，接口层保持稳定。
 
 ### 4.4 评估数据
 
@@ -181,11 +181,11 @@ GET  /stats              系统统计
 
 ---
 
-## 五、常见面试问答
+## 五、常见技术问答
 
 ### Q1: 为什么不用 LangChain/CrewAI？
 
-**答**：LangChain 的 AgentExecutor 是黑盒，出问题很难调试。CrewAI 的 API 太高层，无法展示底层理解。我选择手写 Execution Loop，面试时可以逐行解释每一步：消息怎么构建、tool call 怎么解析、结果怎么回传、错误怎么处理。这比"我用过 LangChain"有说服力得多。
+**答**：LangChain 的 AgentExecutor 抽象层较高，出问题时不易定位。手写 Execution Loop 可以直接控制消息构建、tool call 解析、结果回传和错误处理，便于调试与演进。
 
 ### Q2: Agent 和普通 LLM 调用的区别？
 

@@ -1,0 +1,42 @@
+{
+  "record_version": 1,
+  "accepted_at": "2026-10-07T22:00:44+08:00",
+  "decision": "严格标准下的精确优先基线",
+  "dataset_version": "1.2.0",
+  "dataset_version_source": "tests/eval_llm_agent_qa.py::DATASET_META（产物 meta 里是原始运行时的旧版本号）",
+  "metrics_source": "v1.2.0（标签修正后重算，未重新调用 API）",
+  "inferred_fields": [
+    "judge_variant（基线运行早于该字段落盘；当时用的是 strict 提示词）",
+    "context_lines（基线运行早于该字段落盘；当时 CONTEXT_LINES 硬编码为 15）"
+  ],
+  "dataset_id": "llm-agent-qa-system-labeled",
+  "sample_count": 124,
+  "real_bug_count": 84,
+  "fp_trap_count": 40,
+  "model": "gpt-6-sol",
+  "judge_variant": "strict",
+  "context_lines": 15,
+  "scoring": "per_sample_llm_judgement",
+  "quality_claim": "真实模型判分",
+  "metrics": {
+    "precision": "94.0%",
+    "recall": "56.0%",
+    "f1_score": "0.70",
+    "true_positives": 47,
+    "false_positives": 3,
+    "false_negatives": 37,
+    "true_negatives": 37
+  },
+  "rationale": "模型只报它有把握的缺陷，因此精确率高（94.0%）而召回率中等（56.0%）。剩余漏报以客观但低优先级的维护性问题为主，模型判为『不值得报』。两条提示词杠杆（放宽判据、改开放式枚举）经实验证伪：放宽判据反而丢掉 8 个正确检出，枚举提问同样无法召回这些样本。因此接受该召回率，而不是用放宽标准去换取数字。",
+  "known_limitations": [
+    "tools/calculator.py:105 有两条标注共用同一位置，一次检出会计入 2 次",
+    "24 条【已修复】负例只排除了原标注所指的问题（另有 3 条已因该风险收回）",
+    "38 条判据口径分歧样本保持原样，是产品口径而非标注错误"
+  ],
+  "miss_breakdown": {
+    "口径分歧（客观低优先级维护性问题）": 30,
+    "真实漏报（模型判断错误）": 2,
+    "重定位标注后仍漏": 2,
+    "v1.2.0 复核收回的（位置仍有其它真实缺陷）": 3
+  }
+}

@@ -46,7 +46,6 @@ Bug 清单（共 30 个）:
     30. 魔法数字无注释                                 (L225)
 """
 
-import ast
 import os
 import json
 import pickle
@@ -60,7 +59,7 @@ from typing import Optional
 
 # Bug 1: KeyError — 无默认值直接取键
 def get_user_name(users: dict, user_id: str) -> str:
-    return users.get(user_id, "")  # FIXED: safe access with default instead of KeyError
+    return users[user_id]  # ← BUG: KeyError if user_id missing
 
 
 # Bug 2: IndexError — 空列表直接取 [0]
@@ -154,7 +153,7 @@ def add_tag(tags: list = []) -> list:  # ← BUG: mutable default shared across 
 
 # Bug 16: eval() 执行不可信输入
 def evaluate_expression(expression: str) -> float:
-    return ast.literal_eval(expression)  # FIXED: safe literal evaluation instead of eval()
+    return eval(expression)  # ← SECURITY: code injection via eval
 
 
 # Bug 17: 硬编码 API 密钥

@@ -1,0 +1,191 @@
+{
+  "bug_count": 30,
+  "by_category": {
+    "BUG": 15,
+    "SECURITY": 7,
+    "PERF": 5,
+    "STYLE": 3
+  },
+  "findings": [
+    {
+      "id": 1,
+      "title": "KeyError: dict 无默认值直接取键",
+      "line": 1,
+      "category": "BUG"
+    },
+    {
+      "id": 2,
+      "title": "IndexError: 空列表直接取 [0]",
+      "line": 7,
+      "category": "BUG"
+    },
+    {
+      "id": 3,
+      "title": "除零错误: 未检查分母",
+      "line": 17,
+      "category": "BUG"
+    },
+    {
+      "id": 4,
+      "title": "int() 转换无 try/except",
+      "line": 25,
+      "category": "BUG"
+    },
+    {
+      "id": 5,
+      "title": "json.loads 无异常处理",
+      "line": 31,
+      "category": "BUG"
+    },
+    {
+      "id": 6,
+      "title": "变量未定义就使用",
+      "line": 41,
+      "category": "BUG"
+    },
+    {
+      "id": 7,
+      "title": "忘记 return",
+      "line": 50,
+      "category": "BUG"
+    },
+    {
+      "id": 8,
+      "title": "+= 与全局变量混淆 (nonlocal 缺失)",
+      "line": 58,
+      "category": "BUG"
+    },
+    {
+      "id": 9,
+      "title": "无限递归: 缺终止条件",
+      "line": 67,
+      "category": "BUG"
+    },
+    {
+      "id": 10,
+      "title": "文件未关闭 (no with)",
+      "line": 76,
+      "category": "BUG"
+    },
+    {
+      "id": 11,
+      "title": "逻辑错误: and/or 混用",
+      "line": 84,
+      "category": "BUG"
+    },
+    {
+      "id": 12,
+      "title": "浅拷贝修改原对象",
+      "line": 92,
+      "category": "BUG"
+    },
+    {
+      "id": 13,
+      "title": "循环内修改迭代列表",
+      "line": 100,
+      "category": "BUG"
+    },
+    {
+      "id": 14,
+      "title": "str 和 int 拼接 TypeError",
+      "line": 110,
+      "category": "BUG"
+    },
+    {
+      "id": 15,
+      "title": "参数默认值为可变对象",
+      "line": 118,
+      "category": "BUG"
+    },
+    {
+      "id": 16,
+      "title": "eval() 执行不可信输入",
+      "line": 126,
+      "category": "SECURITY"
+    },
+    {
+      "id": 17,
+      "title": "硬编码 API 密钥",
+      "line": 131,
+      "category": "SECURITY"
+    },
+    {
+      "id": 18,
+      "title": "SQL 注入: 字符串拼接查询",
+      "line": 137,
+      "category": "SECURITY"
+    },
+    {
+      "id": 19,
+      "title": "subprocess 命令注入 (shell=True)",
+      "line": 143,
+      "category": "SECURITY"
+    },
+    {
+      "id": 20,
+      "title": "密码明文存储",
+      "line": 150,
+      "category": "SECURITY"
+    },
+    {
+      "id": 21,
+      "title": "文件路径穿越 (无路径校验)",
+      "line": 157,
+      "category": "SECURITY"
+    },
+    {
+      "id": 22,
+      "title": "pickle.loads 不可信数据",
+      "line": 166,
+      "category": "SECURITY"
+    },
+    {
+      "id": 23,
+      "title": "循环内重复打开文件",
+      "line": 176,
+      "category": "PERF"
+    },
+    {
+      "id": 24,
+      "title": "O(n²) 列表查找",
+      "line": 183,
+      "category": "PERF"
+    },
+    {
+      "id": 25,
+      "title": "不必要全局锁",
+      "line": 191,
+      "category": "PERF"
+    },
+    {
+      "id": 26,
+      "title": "大字符串 += 拼接",
+      "line": 200,
+      "category": "PERF"
+    },
+    {
+      "id": 27,
+      "title": "缓存失效: 每次重算",
+      "line": 207,
+      "category": "PERF"
+    },
+    {
+      "id": 28,
+      "title": "裸 except: 吞所有异常",
+      "line": 214,
+      "category": "STYLE"
+    },
+    {
+      "id": 29,
+      "title": "import 不在顶部",
+      "line": 219,
+      "category": "STYLE"
+    },
+    {
+      "id": 30,
+      "title": "魔法数字无注释",
+      "line": 225,
+      "category": "STYLE"
+    }
+  ]
+}

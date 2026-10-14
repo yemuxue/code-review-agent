@@ -1,0 +1,1005 @@
+{
+  "total": 124,
+  "scanned": 124,
+  "true_positives": 41,
+  "false_positives": 2,
+  "false_negatives": 67,
+  "true_negatives": 14,
+  "precision": "95.3%",
+  "recall": "38.0%",
+  "f1_score": "0.54",
+  "details": [
+    [
+      "react_agent.py",
+      209,
+      true,
+      false,
+      "FN",
+      "NO — THIS FALLBACK INTENTIONALLY TREATS AN OTHERWISE UNPARSEABLE MODEL RESPONSE "
+    ],
+    [
+      "react_agent.py",
+      154,
+      true,
+      true,
+      "TP",
+      "YES — THE BROAD `EXCEPT EXCEPTION` SWALLOWS ALL FAILURES AND EXPOSES THE RAW EXC"
+    ],
+    [
+      "react_agent.py",
+      379,
+      true,
+      false,
+      "FN",
+      "API_ERROR: RuntimeError: API timeout/connection error: The read operation timed "
+    ],
+    [
+      "react_agent.py",
+      167,
+      true,
+      true,
+      "TP",
+      "YES — `_EXTRACT_FINAL_ANSWER(RESPONSE_TEXT)` IS CALLED WITHOUT ERROR HANDLING, S"
+    ],
+    [
+      "react_agent.py",
+      97,
+      true,
+      false,
+      "FN",
+      "NO — THIS CORRECTLY PRESERVES AN EXPLICITLY SUPPLIED `MEMORY` INSTANCE, INCLUDIN"
+    ],
+    [
+      "react_agent.py",
+      140,
+      true,
+      true,
+      "TP",
+      "YES — THE USER MESSAGE IS PERSISTED BEFORE VALIDATION OR ANY SUCCESSFUL PROCESSI"
+    ],
+    [
+      "react_agent.py",
+      222,
+      true,
+      true,
+      "TP",
+      "YES — `MESSAGES` IS MUTATED IN PLACE, SO THE ADDED USER MESSAGE MAY PERSIST INTO"
+    ],
+    [
+      "react_agent.py",
+      242,
+      true,
+      false,
+      "FN",
+      "NO — LINE 242 IS ONLY A CHINESE DOCSTRING DESCRIBING THE STREAMING REACT LOOP AN"
+    ],
+    [
+      "react_agent.py",
+      281,
+      true,
+      true,
+      "TP",
+      "YES — REPEATEDLY CONCATENATING STRINGS WITH `FULL_RESPONSE += TOKEN` DURING STRE"
+    ],
+    [
+      "react_agent.py",
+      366,
+      true,
+      false,
+      "FN",
+      "NO — LINE 366 IS ONLY THE OPENING DOCSTRING LINE, AND THERE IS NO FUNCTIONAL ISS"
+    ],
+    [
+      "react_agent.py",
+      115,
+      true,
+      false,
+      "FN",
+      "NO — LINE 115 IS BLANK AND CONTAINS NO EXECUTABLE LOGIC OR IDENTIFIABLE BUG."
+    ],
+    [
+      "react_agent.py",
+      50,
+      true,
+      false,
+      "FN",
+      "NO — LINE 50 IS ONLY A STANDALONE STRING LITERAL SERVING AS A FIELD COMMENT, AND"
+    ],
+    [
+      "prompt.py",
+      52,
+      true,
+      false,
+      "FN",
+      "NO — LINE 52 IS A LITERAL XML EXAMPLE INSIDE THE F-STRING AND CONTAINS NO INTERP"
+    ],
+    [
+      "prompt.py",
+      75,
+      true,
+      false,
+      "FN",
+      "API_ERROR: RuntimeError: API timeout/connection error: The read operation timed "
+    ],
+    [
+      "prompt.py",
+      40,
+      true,
+      false,
+      "FN",
+      "NO — THE F-STRING IS SYNTACTICALLY VALID, AND INTERPOLATING `TOOLS_TEXT` INTO TH"
+    ],
+    [
+      "prompt.py",
+      85,
+      true,
+      false,
+      "FN",
+      "NO — 该行只是对简单问题允许跳过工具调用并直接使用 `<FINAL_ANSWER>`，与上下文规则一致，不会导致功能错误。"
+    ],
+    [
+      "prompt.py",
+      103,
+      true,
+      false,
+      "FN",
+      "NO — THIS IS A VALID CONSTANT STRING ASSIGNMENT WITH NO APPARENT FUNCTIONAL, SEC"
+    ],
+    [
+      "prompt.py",
+      29,
+      true,
+      false,
+      "FN",
+      "NO — THE LINE CORRECTLY JOINS PARAMETER DESCRIPTIONS AND PROVIDES A SENSIBLE FAL"
+    ],
+    [
+      "tools/base.py",
+      37,
+      true,
+      true,
+      "TP",
+      "YES — `NAME` IS A MUTABLE CLASS ATTRIBUTE THAT SUBCLASSES OR INSTANCES CAN ACCID"
+    ],
+    [
+      "tools/base.py",
+      59,
+      true,
+      true,
+      "TP",
+      "YES — `SAFE_EXECUTE` RETURNS IMMEDIATELY AFTER THE `TRY` BLOCK SHOWN, SO UNLESS "
+    ],
+    [
+      "tools/base.py",
+      72,
+      true,
+      true,
+      "TP",
+      "YES — CATCHING EVERY `EXCEPTION` AND CONVERTING IT TO A NORMAL SUCCESS-LIKE RETU"
+    ],
+    [
+      "tools/base.py",
+      47,
+      true,
+      false,
+      "FN",
+      "NO — THE ABSTRACT `EXECUTE(SELF, **KWARGS) -> STR` DECLARATION IS VALID AND APPR"
+    ],
+    [
+      "tools/base.py",
+      24,
+      true,
+      false,
+      "FN",
+      "NO — LINE 24 IS VALID DOCTEST SYNTAX SHOWING A CLASS ATTRIBUTE ASSIGNMENT INSIDE"
+    ],
+    [
+      "tools/calculator.py",
+      105,
+      true,
+      true,
+      "TP",
+      "YES — `EVAL` CAN EXECUTE RESOURCE-EXHAUSTING EXPRESSIONS (FOR EXAMPLE, HUGE EXPO"
+    ],
+    [
+      "tools/calculator.py",
+      18,
+      true,
+      true,
+      "TP",
+      "YES — `\\W` PERMITS ARBITRARY IDENTIFIERS (INCLUDING NAMES SUCH AS `__IMPORT__`),"
+    ],
+    [
+      "tools/calculator.py",
+      105,
+      true,
+      true,
+      "TP",
+      "YES — `EVAL` CAN EXECUTE RESOURCE-EXHAUSTING EXPRESSIONS (FOR EXAMPLE, HUGE EXPO"
+    ],
+    [
+      "tools/calculator.py",
+      96,
+      false,
+      true,
+      "FP",
+      "YES — `MATCH()` ONLY GUARANTEES A VALID PREFIX UNLESS `_SAFE_EXPR_PATTERN` IS EX"
+    ],
+    [
+      "tools/calculator.py",
+      50,
+      true,
+      false,
+      "FN",
+      "NO — DEFINING THE SAFE-FUNCTION MAPPING AT CLASS SCOPE IS VALID, ASSUMING IT IS "
+    ],
+    [
+      "tools/web_search.py",
+      62,
+      true,
+      false,
+      "FN",
+      "NO — THE IMPORT CORRECTLY FALLS BACK TO `DUCKDUCKGO_SEARCH` WHEN `DDGS` IS UNAVA"
+    ],
+    [
+      "tools/web_search.py",
+      73,
+      true,
+      false,
+      "FN",
+      "NO — BOTH THE CURRENT `DDGS` AND LEGACY `DUCKDUCKGO_SEARCH` APIS SUPPORT USING `"
+    ],
+    [
+      "tools/web_search.py",
+      84,
+      true,
+      false,
+      "FN",
+      "NO — LINE 84 ONLY APPENDS FORMATTED STRINGS USING SAFELY RETRIEVED DICTIONARY VA"
+    ],
+    [
+      "tools/web_search.py",
+      47,
+      true,
+      false,
+      "FN",
+      "NO — ASSIGNING THE CONSTRUCTOR ARGUMENT TO AN INSTANCE ATTRIBUTE IS CORRECT; ANY"
+    ],
+    [
+      "tools/web_search.py",
+      67,
+      true,
+      false,
+      "FN",
+      "NO — RETURNING A CLEAR INSTALLATION MESSAGE WHEN NEITHER SUPPORTED SEARCH PACKAG"
+    ],
+    [
+      "tools/knowledge_base.py",
+      73,
+      true,
+      false,
+      "FN",
+      "NO — CHECKING FOR AN UNINITIALIZED KNOWLEDGE-BASE RETRIEVER AND RETURNING A CLEA"
+    ],
+    [
+      "tools/knowledge_base.py",
+      91,
+      true,
+      false,
+      "FN",
+      "NO — ASSUMING `DOC` IS A STANDARD DOCUMENT OBJECT WITH A DICTIONARY-LIKE `METADA"
+    ],
+    [
+      "tools/knowledge_base.py",
+      53,
+      true,
+      false,
+      "FN",
+      "NO — THIS LINE SIMPLY ASSIGNS THE PROVIDED RETRIEVER TO AN INSTANCE ATTRIBUTE; W"
+    ],
+    [
+      "tools/knowledge_base.py",
+      79,
+      true,
+      false,
+      "FN",
+      "NO — CHECKING WHETHER `RESULTS` IS EMPTY IS VALID AND SAFELY HANDLES THE NO-MATC"
+    ],
+    [
+      "llm/base.py",
+      30,
+      true,
+      false,
+      "FN",
+      "NO — THE METHOD DECLARATION AND PARAMETERS ARE VALID, AND NO FUNCTIONAL ISSUE CA"
+    ],
+    [
+      "llm/base.py",
+      112,
+      true,
+      false,
+      "FN",
+      "NO — RETURNING AN EMPTY STRING WHEN THE RESPONSE CONTENT IS `NONE` OR EMPTY IS A"
+    ],
+    [
+      "llm/base.py",
+      131,
+      true,
+      true,
+      "TP",
+      "YES — STREAMING RESPONSES CAN CONTAIN CHUNKS WITH AN EMPTY `CHOICES` ARRAY (FOR "
+    ],
+    [
+      "llm/base.py",
+      95,
+      true,
+      false,
+      "FN",
+      "API_ERROR: RuntimeError: API timeout/connection error: The read operation timed "
+    ],
+    [
+      "llm/base.py",
+      88,
+      true,
+      false,
+      "FN",
+      "NO — THIS LAZILY CREATES AND CACHES THE CLIENT WHEN `SELF.CLIENT` IS `NONE`, WHI"
+    ],
+    [
+      "llm/deepseek_adapter.py",
+      12,
+      true,
+      false,
+      "FN",
+      "NO — THE CLASS DECLARATION IS VALID PYTHON, ASSUMING BOTH IMPORTED BASE CLASSES "
+    ],
+    [
+      "llm/deepseek_adapter.py",
+      25,
+      true,
+      false,
+      "FN",
+      "NO — LINE 25 IS A VALID DOCTEST EXAMPLE; THE `>>>` PROMPT IS INSIDE THE DOCSTRIN"
+    ],
+    [
+      "llm/deepseek_adapter.py",
+      20,
+      true,
+      false,
+      "FN",
+      "NO — THE `>>>` IS VALID DOCTEST SYNTAX INSIDE THE CLASS DOCSTRING, AND THE EXAMP"
+    ],
+    [
+      "llm/qwen_adapter.py",
+      12,
+      true,
+      false,
+      "FN",
+      "NO — THE CLASS DECLARATION IS VALID PYTHON, AND THE MULTIPLE INHERITANCE ORDER I"
+    ],
+    [
+      "llm/qwen_adapter.py",
+      31,
+      true,
+      false,
+      "FN",
+      "NO — THE PROPERTY IS A VALID, READ-ONLY ACCESSOR RETURNING A STABLE PROVIDER NAM"
+    ],
+    [
+      "memory/sliding_window.py",
+      34,
+      true,
+      true,
+      "TP",
+      "YES — `WINDOW_SIZE` IS NOT VALIDATED, SO NEGATIVE VALUES RAISE `VALUEERROR` WHEN"
+    ],
+    [
+      "memory/sliding_window.py",
+      36,
+      true,
+      false,
+      "FN",
+      "NO — `ADD_MESSAGE` CORRECTLY APPENDS EACH MESSAGE, AND THE DEQUE AUTOMATICALLY E"
+    ],
+    [
+      "memory/sliding_window.py",
+      56,
+      true,
+      false,
+      "FN",
+      "NO — `CLEAR()` SIMPLY EMPTIES THE MESSAGE COLLECTION, WHICH IS THE EXPECTED BEHA"
+    ],
+    [
+      "memory/sliding_window.py",
+      66,
+      true,
+      false,
+      "FN",
+      "NO — LINE 66 IS ONLY THE METHOD’S DOCSTRING AND CONTAINS NO FUNCTIONAL ISSUE; TH"
+    ],
+    [
+      "memory/sliding_window.py",
+      41,
+      true,
+      false,
+      "FN",
+      "NO — LINE 41 CORRECTLY CLOSES THE DOCSTRING, AND THE SURROUNDING METHOD APPENDS "
+    ],
+    [
+      "rag/vector_store.py",
+      78,
+      true,
+      true,
+      "TP",
+      "YES — PYTHON’S `HASH()` IS RANDOMIZED BETWEEN PROCESSES, SO IDS FOR THE SAME DOC"
+    ],
+    [
+      "rag/vector_store.py",
+      128,
+      true,
+      true,
+      "TP",
+      "YES — CHROMA’S DISTANCE METRIC (OFTEN SQUARED L2, BUT POTENTIALLY COSINE OR INNE"
+    ],
+    [
+      "rag/vector_store.py",
+      54,
+      true,
+      true,
+      "TP",
+      "YES — CATCHING EVERY EXCEPTION TREATS FAILURES SUCH AS DATABASE OR CONNECTION ER"
+    ],
+    [
+      "rag/vector_store.py",
+      89,
+      true,
+      true,
+      "TP",
+      "YES — THE LOOP SLICES `EMBEDDINGS` USING DOCUMENT INDICES, SO IF THERE ARE FEWER"
+    ],
+    [
+      "rag/vector_store.py",
+      113,
+      true,
+      true,
+      "TP",
+      "YES — `K` IS PASSED DIRECTLY WITHOUT VALIDATION, SO ZERO OR NEGATIVE VALUES CAN "
+    ],
+    [
+      "rag/vector_store.py",
+      49,
+      true,
+      true,
+      "TP",
+      "YES — CATCHING EVERY EXCEPTION FROM `GET_COLLECTION` CAN MASK DATABASE OR OPERAT"
+    ],
+    [
+      "rag/vector_store.py",
+      136,
+      true,
+      false,
+      "FN",
+      "NO — LINE 136 IS ONLY A BLANK SEPARATOR, AND THE SURROUNDING CODE DOES NOT SHOW "
+    ],
+    [
+      "rag/retriever.py",
+      64,
+      true,
+      true,
+      "TP",
+      "YES — `QUERY.STRIP()` RAISES AN `ATTRIBUTEERROR` IF `QUERY` IS `NONE` OR OTHERWI"
+    ],
+    [
+      "rag/retriever.py",
+      101,
+      true,
+      true,
+      "TP",
+      "YES — `SOURCE` IS RETRIEVED BUT NEVER USED, SO THE OUTPUT ALWAYS LABELS THE SOUR"
+    ],
+    [
+      "rag/retriever.py",
+      41,
+      true,
+      false,
+      "FN",
+      "NO — ASSIGNING THE PROVIDED EMBEDDING MODEL TO AN INSTANCE ATTRIBUTE IS CORRECT "
+    ],
+    [
+      "rag/retriever.py",
+      78,
+      true,
+      false,
+      "FN",
+      "NO — `QUERY: STR` IS A VALID PARAMETER ANNOTATION AND INTRODUCES NO BUG BY ITSEL"
+    ],
+    [
+      "rag/reranker.py",
+      83,
+      true,
+      true,
+      "TP",
+      "YES — IF `PREDICT` RETURNS A SCALAR, `.TOLIST()` CAN PRODUCE A SCALAR AND LINE 8"
+    ],
+    [
+      "rag/reranker.py",
+      87,
+      true,
+      true,
+      "TP",
+      "YES — THE CONDITIONAL CONVERTS BOTH BRANCHES TO `FLOAT`, SO IT IS REDUNDANT AND "
+    ],
+    [
+      "rag/reranker.py",
+      42,
+      true,
+      true,
+      "TP",
+      "YES — THE UNSYNCHRONIZED LAZY INITIALIZATION CAN LOAD MULTIPLE `CROSSENCODER` IN"
+    ],
+    [
+      "rag/reranker.py",
+      48,
+      true,
+      false,
+      "FN",
+      "NO — `MAX_LENGTH=512` IS A VALID `CROSSENCODER` PARAMETER AND INTENTIONALLY CAPS"
+    ],
+    [
+      "rag/embedding.py",
+      45,
+      true,
+      true,
+      "TP",
+      "YES — THE LAZY INITIALIZATION IS NOT THREAD-SAFE, SO CONCURRENT FIRST ACCESSES C"
+    ],
+    [
+      "rag/embedding.py",
+      92,
+      true,
+      false,
+      "FN",
+      "NO — THE QUERY PREFIX IS THE OFFICIAL BGE RETRIEVAL INSTRUCTION, AND INTERPOLATI"
+    ],
+    [
+      "rag/embedding.py",
+      72,
+      true,
+      false,
+      "FN",
+      "NO — PASSING THE TEXT LIST TO `MODEL.ENCODE` IS APPROPRIATE FOR BATCH DOCUMENT E"
+    ],
+    [
+      "rag/embedding.py",
+      79,
+      true,
+      false,
+      "FN",
+      "NO — THE DECLARATION IS VALID PYTHON FOR SUPPORTED VERSIONS (3.9+), AND NO FUNCT"
+    ],
+    [
+      "rag/document_loader.py",
+      105,
+      true,
+      false,
+      "FN",
+      "NO — THE BLANK LINE AFTER READING THE FILE IS PURELY COSMETIC; THE CONTENT IS RE"
+    ],
+    [
+      "rag/document_loader.py",
+      42,
+      true,
+      true,
+      "TP",
+      "YES — `.PDF` IS DOCUMENTED AS SUPPORTED, BUT IT IS MISSING FROM `SUPPORTED_EXTEN"
+    ],
+    [
+      "rag/document_loader.py",
+      148,
+      true,
+      true,
+      "TP",
+      "YES — THE REGEX CAN CATASTROPHICALLY BACKTRACK AND CONSUME EXCESSIVE CPU/MEMORY "
+    ],
+    [
+      "rag/document_loader.py",
+      95,
+      true,
+      true,
+      "TP",
+      "YES — THE SURROUNDING BROAD `EXCEPT EXCEPTION` SWALLOWS ANY ERROR FROM `EXTEND` "
+    ],
+    [
+      "rag/document_loader.py",
+      123,
+      true,
+      true,
+      "TP",
+      "YES — THE REGEX SPLITS ANY LINE CONTAINING `## `, INCLUDING OCCURRENCES INSIDE F"
+    ],
+    [
+      "rag/document_loader.py",
+      170,
+      true,
+      true,
+      "TP",
+      "YES — IF A CSV ROW HAS MORE FIELDS THAN THE HEADER ROW, `HEADERS[J]` RAISES AN `"
+    ],
+    [
+      "rag/text_splitter.py",
+      127,
+      true,
+      true,
+      "TP",
+      "YES — THE OVERLAP CAN MAKE `CURRENT_CHUNK` EXCEED `CHUNK_SIZE` WHEN THE NEXT SEN"
+    ],
+    [
+      "rag/text_splitter.py",
+      96,
+      true,
+      true,
+      "TP",
+      "YES — THE PATTERN TREATS EVERY `.` AS A SENTENCE BOUNDARY, INCORRECTLY SPLITTING"
+    ],
+    [
+      "rag/text_splitter.py",
+      114,
+      true,
+      true,
+      "TP",
+      "YES — CONCATENATING SENTENCES WITHOUT A SEPARATOR PRODUCES MALFORMED TEXT (FOR E"
+    ],
+    [
+      "rag/text_splitter.py",
+      60,
+      true,
+      false,
+      "FN",
+      "NO — CALLING `_SPLIT_BY_PARAGRAPH(TEXT)` IS APPROPRIATE HERE, AND NO FUNCTIONAL "
+    ],
+    [
+      "rag/text_splitter.py",
+      103,
+      true,
+      false,
+      "FN",
+      "NO — THE SENTENCE IS CORRECTLY APPENDED FOR LATER MERGING, AND THE SUBSEQUENT CH"
+    ],
+    [
+      "config/settings.py",
+      108,
+      true,
+      false,
+      "FN",
+      "NO — CREATING A MODULE-LEVEL SETTINGS SINGLETON FROM ENVIRONMENT VARIABLES IS VA"
+    ],
+    [
+      "config/settings.py",
+      97,
+      true,
+      true,
+      "TP",
+      "YES — `INT(OS.GETENV(\"CHUNK_SIZE\", \"512\"))` RAISES `VALUEERROR` AT IMPORT TIME I"
+    ],
+    [
+      "config/settings.py",
+      65,
+      true,
+      false,
+      "FN",
+      "NO — LINE 65 IS ONLY A BLANK LINE AND CONTAINS NO EXECUTABLE LOGIC OR BEHAVIOR."
+    ],
+    [
+      "config/settings.py",
+      16,
+      true,
+      false,
+      "FN",
+      "NO — `LOAD_DOTENV(_ENV_FILE)` IS VALID HERE, AND CONDITIONALLY LOADING AN EXISTI"
+    ],
+    [
+      "config/settings.py",
+      52,
+      true,
+      true,
+      "TP",
+      "YES — FOR `CONFIG/SETTINGS.PY`, `PATH(__FILE__).PARENT.PARENT.PARENT` RESOLVES O"
+    ],
+    [
+      "app/streamlit_app.py",
+      64,
+      true,
+      false,
+      "FN",
+      "NO — THIS IS A VALID DOCSTRING, AND THE SURROUNDING INITIALIZATION CODE SHOWS NO"
+    ],
+    [
+      "app/streamlit_app.py",
+      248,
+      true,
+      false,
+      "FN",
+      "NO — ASSUMING `CREATE_AGENT(SETTINGS)` INITIALIZES `ST.SESSION_STATE[\"AGENT\"]` A"
+    ],
+    [
+      "app/streamlit_app.py",
+      267,
+      true,
+      false,
+      "FN",
+      "NO — CHECKING THE TRUTHINESS OF `ST.SESSION_STATE.GET(\"MESSAGES\")` CORRECTLY HAN"
+    ],
+    [
+      "app/streamlit_app.py",
+      331,
+      true,
+      true,
+      "TP",
+      "YES — `FULL_TEXT` MAY BE UNINITIALIZED IF THE EVENT STREAM CONTAINS NO `FINAL_AN"
+    ],
+    [
+      "app/streamlit_app.py",
+      296,
+      true,
+      false,
+      "FN",
+      "NO — ITERATING OVER `AGENT.RUN_STREAM(PROMPT)` IS VALID PROVIDED IT RETURNS A SY"
+    ],
+    [
+      "app/streamlit_app.py",
+      256,
+      true,
+      true,
+      "TP",
+      "YES — `ST.RERUN()` EXECUTES BEFORE `ST.SESSION_STATE[\"SETTINGS\"] = SETTINGS`, SO"
+    ],
+    [
+      "app/streamlit_app.py",
+      140,
+      true,
+      true,
+      "TP",
+      "YES — THE SURROUNDING CODE SILENTLY SWALLOWS EVERY `RERANKER()` INITIALIZATION E"
+    ],
+    [
+      "app/chat_ui.py",
+      71,
+      true,
+      false,
+      "FN",
+      "NO — THE CODE CORRECTLY CREATES A COLLAPSED STREAMLIT EXPANDER AND SAFELY TRUNCA"
+    ],
+    [
+      "app/chat_ui.py",
+      42,
+      true,
+      false,
+      "FN",
+      "NO — `ST.TEXT(THINKING)` CORRECTLY RENDERS THE PROVIDED STRING INSIDE THE COLLAP"
+    ],
+    [
+      "app/chat_ui.py",
+      84,
+      true,
+      false,
+      "FN",
+      "NO — `ST.COLUMNS(3)` IS VALID STREAMLIT USAGE HERE, AND THE SUBSEQUENT METRIC CA"
+    ],
+    [
+      "app/sidebar.py",
+      77,
+      true,
+      false,
+      "FN",
+      "NO — ASSIGNING THE SELECTED `PROVIDER` TO `SETTINGS.LLM_PROVIDER` IS CORRECT, AS"
+    ],
+    [
+      "app/sidebar.py",
+      143,
+      true,
+      false,
+      "FN",
+      "NO — `OS.PATH.JOIN` WITH A SINGLE PATH ARGUMENT SIMPLY RETURNS THAT PATH, SO THI"
+    ],
+    [
+      "app/sidebar.py",
+      110,
+      true,
+      false,
+      "FN",
+      "NO — LINE 110 IS A STATIC INFORMATIONAL STRING AND DOES NOT INTRODUCE A FUNCTION"
+    ],
+    [
+      "app/sidebar.py",
+      11,
+      true,
+      false,
+      "FN",
+      "NO — IMPORTING `CREATE_LLM_ADAPTER` IS VALID AS LONG AS `SRC.LLM` EXPOSES IT, AN"
+    ],
+    [
+      "utils/helpers.py",
+      79,
+      true,
+      true,
+      "TP",
+      "YES — THE GREEDY PATTERNS CAN CAPTURE FROM THE FIRST OPENING DELIMITER TO THE LA"
+    ],
+    [
+      "utils/helpers.py",
+      105,
+      true,
+      false,
+      "FN",
+      "NO — THE LINE CORRECTLY ADVANCES THE INDEX PAST THE FOUND `START_TAG`, AND NO BU"
+    ],
+    [
+      "utils/helpers.py",
+      114,
+      true,
+      true,
+      "TP",
+      "YES — `INT(...)` TRUNCATES FRACTIONAL ESTIMATES, SO NONEMPTY SHORT INPUT SUCH AS"
+    ],
+    [
+      "utils/helpers.py",
+      40,
+      true,
+      false,
+      "FN",
+      "NO — `TS IS NONE` CORRECTLY DEFAULTS TO THE CURRENT LOCAL TIME, WHILE `DATETIME."
+    ],
+    [
+      "utils/helpers.py",
+      26,
+      true,
+      false,
+      "FN",
+      "NO — RETURNING THE ORIGINAL TEXT WHEN ITS LENGTH IS WITHIN THE LIMIT IS CORRECT;"
+    ],
+    [
+      "utils/logger.py",
+      13,
+      true,
+      true,
+      "TP",
+      "YES — CACHING ONLY BY LOGGER NAME MEANS SUBSEQUENT CALLS WITH THE SAME NAME BUT "
+    ],
+    [
+      "utils/logger.py",
+      48,
+      true,
+      false,
+      "FN",
+      "NO — CONVERTING `LOG_FILE` TO A `PATH` AND CREATING ITS PARENT DIRECTORY IS VALI"
+    ],
+    [
+      "memory/base.py",
+      10,
+      true,
+      false,
+      "FN",
+      "NO — `MEMORY` CORRECTLY INHERITS FROM `ABC` AND DEFINES AN ABSTRACT METHOD; THER"
+    ],
+    [
+      "react_agent.py",
+      1,
+      false,
+      false,
+      "TN",
+      "NO — THE MODULE-LEVEL DOCSTRING IS VALID PYTHON SYNTAX AND CONTAINS NO BUG OR IS"
+    ],
+    [
+      "react_agent.py",
+      394,
+      false,
+      false,
+      "TN",
+      "NO — DEFINING `RESET` AT THIS POINT IS VALID, AND CLEARING `SELF.MEMORY` CORRECT"
+    ],
+    [
+      "prompt.py",
+      1,
+      false,
+      false,
+      "TN",
+      "NO — THE LINE IS A VALID MODULE-LEVEL DOCSTRING DECLARATION, ASSUMING THE DISPLA"
+    ],
+    [
+      "tools/calculator.py",
+      1,
+      false,
+      false,
+      "TN",
+      "NO — LINE 1 IS A VALID MODULE DOCSTRING, AND THERE IS NO EVIDENT BUG IN THE SHOW"
+    ],
+    [
+      "llm/base.py",
+      26,
+      false,
+      false,
+      "TN",
+      "NO — `_INIT_CLIENT` IS INTENTIONALLY AN ABSTRACT-LIKE HOOK THAT RAISES `NOTIMPLE"
+    ],
+    [
+      "rag/vector_store.py",
+      1,
+      false,
+      false,
+      "TN",
+      "NO — THE MODULE DOCSTRING AND IMPORTS ARE VALID PYTHON AND SHOW NO ISSUE ON THE "
+    ],
+    [
+      "rag/embedding.py",
+      71,
+      false,
+      true,
+      "FP",
+      "YES — `SELF.MODEL.ENCODE` MAY RETURN A PLAIN LIST FOR SOME MODEL IMPLEMENTATIONS"
+    ],
+    [
+      "rag/embedding.py",
+      93,
+      false,
+      false,
+      "TN",
+      "NO — LINE 93 IS ONLY A BLANK LINE; THE QUERY PREFIX AND EMBEDDING CALL APPEAR CO"
+    ],
+    [
+      "rag/reranker.py",
+      1,
+      false,
+      false,
+      "TN",
+      "NO — THIS IS A VALID MODULE DOCSTRING AND INTRODUCES NO BUG."
+    ],
+    [
+      "memory/sliding_window.py",
+      1,
+      false,
+      false,
+      "TN",
+      "NO — THE LINE IS A VALID MODULE-LEVEL DOCSTRING, AND THERE IS NO BUG OR ISSUE IN"
+    ],
+    [
+      "config/settings.py",
+      1,
+      false,
+      false,
+      "TN",
+      "NO — THIS IS A VALID MODULE DOCSTRING AT THE START OF THE FILE, AND THE SHOWN CO"
+    ],
+    [
+      "app/streamlit_app.py",
+      1,
+      false,
+      false,
+      "TN",
+      "NO — LINE 1 STARTS A VALID MODULE DOCSTRING, AND THE SURROUNDING LINES SHOW NO I"
+    ],
+    [
+      "tools/web_search.py",
+      1,
+      false,
+      false,
+      "TN",
+      "NO — LINE 1 IS A VALID MODULE DOCSTRING, SO IT INTRODUCES NO FUNCTIONAL OR MAINT"
+    ],
+    [
+      "rag/document_loader.py",
+      1,
+      false,
+      false,
+      "TN",
+      "NO — LINE 1 BEGINS A VALID MODULE DOCSTRING, SO THERE IS NO BUG."
+    ],
+    [
+      "rag/text_splitter.py",
+      1,
+      false,
+      false,
+      "TN",
+      "NO — THE MODULE-LEVEL DOCSTRING AND IMPORTS SHOWN ARE VALID PYTHON AND CONTAIN N"
+    ]
+  ]
+}

@@ -1,0 +1,55 @@
+{
+  "run_at": "2026-10-08T10:10:25.232Z",
+  "viewport": {
+    "width": 1440,
+    "height": 960
+  },
+  "personas": [
+    "reviewer",
+    "author",
+    "admin"
+  ],
+  "completed_tasks": 9,
+  "timings": [
+    {
+      "task": "从任务列表进入审查",
+      "ms": 52
+    },
+    {
+      "task": "找到高风险问题并查看证据",
+      "ms": 20
+    },
+    {
+      "task": "查看 diff 并提交审批",
+      "ms": 49
+    }
+  ],
+  "total_ms": 6532,
+  "observations": [
+    {
+      "severity": "P0",
+      "finding": "Reviewer 能在任务列表中找到已完成 PR，并进入发现列表。",
+      "evidence": "任务列表行点击后进入“修复退款回调鉴权”。"
+    },
+    {
+      "severity": "P1",
+      "finding": "高风险证据和操作入口集中，用户可在同一屏完成理解与下一步判断。",
+      "evidence": "高风险发现、文件行号、代码片段、影响判断和“查看修复补丁”同时出现。"
+    },
+    {
+      "severity": "P1",
+      "finding": "忽略操作反馈明确，但“误报”和“暂不处理”需要在真实产品中拆分标签。",
+      "evidence": "当前原型只用“忽略”状态承接两类行为。"
+    },
+    {
+      "severity": "P0",
+      "finding": "补丁审批有明确确认门槛，Verify 结果能让用户知道修改是否可继续。",
+      "evidence": "未勾选完整 diff 前审批按钮禁用；Verify 通过后才可返回报告。"
+    },
+    {
+      "severity": "P1",
+      "finding": "平台管理员能看到质量指标，但还需要从报告直接跳转到失败样本和责任归因。",
+      "evidence": "当前质量报告展示趋势和反馈标签，缺少失败样本下钻。"
+    }
+  ]
+}

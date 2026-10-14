@@ -6,8 +6,14 @@ on:
   pull_request:
     branches: [main]
 
+# 覆盖率下限：当前实测约 52%，主要缺口是无法单测的 Streamlit 入口脚本。
+# 设一个"不允许倒退"的地板值，而不是一步到位要 80%——
+# 否则为了过门禁会去写无意义的测试。提升路径见 docs/current-remediation-plan.md。
+env:
+  COVERAGE_FLOOR: "50"
+
 jobs:
-  test:
+  lint-and-types:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -18,25 +24,121 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -r requirements.txt
+          pip install -e .
           pip install ruff mypy
 
+      # 规则集与忽略项由 pyproject.toml [tool.ruff] 单独定义，
+      # 这里不再用命令行 --ignore 覆盖，避免 CI 与本地判定不一致。
+      # scripts/ 一并纳入：容器配置校验脚本也在其中，不能是法外之地。
       - name: Lint
-        run: ruff check src/ --ignore E501,F841,E701,E702,E722,E741,E402
+        run: ruff check src/ tests/ scripts/
 
+      # 参数由 pyproject.toml [tool.mypy] 提供；覆盖范围是整个 src。
       - name: Type check
-        run: >-
-          mypy src/security src/harness/agent.py src/harness/jwt_auth.py
-          src/storage/database.py src/memory/vector_store.py
-          --ignore-missing-imports --explicit-package-bases
+        run: mypy src/
+
+  container-config:
+    # 不需要 docker：只校验 .dockerignore 排除项与 compose 的健康检查/重启策略。
+    # 这些是"密钥不进镜像"的机器可验证断言。
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install PyYAML
+        run: pip install pyyaml
+
+      - name: Check container configuration
+        run: python scripts/check_container_config.py
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      # pyproject 声明 requires-python >=3.9，因此 3.9 与 3.11 都要跑：
+      # 只测 3.11 无法发现 3.9 上的语法/标准库差异。
+      matrix:
+        python-version: ["3.11", "3.9"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          pip install -e .
+          pip install pytest pytest-asyncio pytest-cov
 
       - name: Test with coverage
-        run: pytest tests/ -v --tb=short --cov=src --cov-report=term-missing --cov-report=xml
-
-      - name: Eval dataset
-        run: python -c "from tests.eval_dataset import EVAL_SAMPLES; print('Eval samples:', len(EVAL_SAMPLES), 'ready')"
+        run: >-
+          pytest tests/ -v --tb=short
+          --cov=src --cov-report=term-missing --cov-report=xml
+          --cov-fail-under=${{ env.COVERAGE_FLOOR }}
 
       - name: Upload coverage
+        if: matrix.python-version == '3.11'
         uses: codecov/codecov-action@v4
         with:
           files: ./coverage.xml
+
+  dataset-preflight:
+    # 标注集能不能用，是质量读数的前提。这个作业不需要 API、不需要外部仓库：
+    # 校验随仓库的自评集（文件/行号/枚举/版本元信息）。
+    # 外部项目数据集（124 条）需要额外 checkout，用 --target 显式传入才校验，
+    # 见 docs/agent-evaluation-plan.md 的复现步骤。
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Labeled dataset preflight
+        run: python -m tests.eval.datasets
+
+      # 锚点校验：preflight 只能确认「文件存在 + 行号在范围内」，无法发现
+      # 「该行内容已变」（缺陷被修复）。2026-10-07 的漏报归因显示这类标注
+      # 占漏报的 48%。锚点指纹把这种失效变成可机械发现的信号。
+      # 只跑自评集：它指向本仓库，不需要额外 checkout。
+      # 注意：锚点只能防止**未来**失效；已有的语义失效必须靠逐条归因。
+      - name: Annotation anchor check (self dataset)
+        run: >-
+          python -m tests.eval.anchors verify
+          --dataset code-review-agent-self --target-dir .
+
+  eval-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -e .
+
+      # 离线评测门禁：故障注入断言 + 指标目标值 + 与已提交基线比对回归。
+      # 基线文件入库（reports/eval_offline_baseline.json）是刻意的：
+      # 没有基线时"变好了还是变差了"只能靠人眼看 markdown，CI 无法拦截回归。
+      - name: Offline agent evaluation gate
+        run: >-
+          python -m tests.eval.runner --suite offline --repeat 2
+          --report reports/eval_offline_ci.md
+          --gate --baseline reports/eval_offline_baseline.json
+
+      - name: Upload eval report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-offline-report
+          path: |
+            reports/eval_offline_ci.md
+            reports/eval_offline_baseline.json
+          if-no-files-found: warn

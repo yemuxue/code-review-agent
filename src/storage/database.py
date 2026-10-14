@@ -138,16 +138,61 @@ class Database:
                 created_at TEXT NOT NULL DEFAULT (datetime('now')))""")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_logs_session ON logs(session_id)")
             # Mig 002: metrics columns
-            try: conn.execute("ALTER TABLE sessions ADD COLUMN total_tokens INTEGER DEFAULT 0")
-            except: pass
-            try: conn.execute("ALTER TABLE sessions ADD COLUMN total_duration_ms INTEGER DEFAULT 0")
-            except: pass
-            try: conn.execute("ALTER TABLE sessions ADD COLUMN owner_username TEXT NOT NULL DEFAULT ''")
-            except: pass
-            try: conn.execute("ALTER TABLE findings ADD COLUMN owner_username TEXT NOT NULL DEFAULT ''")
-            except: pass
+            # 只忽略"列已存在"这一种预期错误；其它 sqlite 错误必须抛出，
+            # 否则迁移失败会被静默跳过（旧实现用裸 except 吞掉一切）。
+            for _stmt in (
+                "ALTER TABLE sessions ADD COLUMN total_tokens INTEGER DEFAULT 0",
+                "ALTER TABLE sessions ADD COLUMN total_duration_ms INTEGER DEFAULT 0",
+                "ALTER TABLE sessions ADD COLUMN owner_username TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE findings ADD COLUMN owner_username TEXT NOT NULL DEFAULT ''",
+            ):
+                try:
+                    conn.execute(_stmt)
+                except sqlite3.OperationalError as exc:
+                    if not self._is_duplicate_column_error(exc):
+                        raise
             conn.execute("CREATE INDEX IF NOT EXISTS idx_sessions_owner ON sessions(owner_username)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_findings_owner ON findings(owner_username)")
+            # Mig 003: 消息幂等 ID。
+            # 之前前端靠"内容是否已存在"去重，导致同一个问题问两次只会留一条。
+            # 改为调用方提供稳定的 client_msg_id，用唯一索引做真正的幂等。
+            try:
+                conn.execute("ALTER TABLE messages ADD COLUMN client_msg_id TEXT DEFAULT NULL")
+            except sqlite3.OperationalError:
+                # 列已存在（迁移重复执行）——幂等预期路径
+                pass
+            conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_client_id "
+                "ON messages(client_msg_id) WHERE client_msg_id IS NOT NULL")
+            # Mig 004: 日志归属用户，便于按所有者直接过滤（无需回连 sessions）
+            try:
+                conn.execute("ALTER TABLE logs ADD COLUMN owner_username TEXT NOT NULL DEFAULT ''")
+            except sqlite3.OperationalError:
+                pass
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_logs_owner ON logs(owner_username)")
+            # Mig 005: 审计字段。
+            # 之前的 logs 表回答不了"谁在什么时候对哪个文件做了什么"：
+            # 只有 owner_username，没有 actor/request_id/file_path，
+            # 且 API 路径根本不写这张表。补列后才能做文件级取证。
+            for _stmt in (
+                "ALTER TABLE logs ADD COLUMN actor TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE logs ADD COLUMN request_id TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE logs ADD COLUMN file_path TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE logs ADD COLUMN outcome TEXT NOT NULL DEFAULT ''",
+            ):
+                try:
+                    conn.execute(_stmt)
+                except sqlite3.OperationalError as exc:
+                    if not self._is_duplicate_column_error(exc):
+                        raise
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_logs_actor ON logs(actor)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_logs_request ON logs(request_id)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_logs_file ON logs(file_path)")
+
+    @staticmethod
+    def _is_duplicate_column_error(exc: sqlite3.Error) -> bool:
+        """判断异常是否为"列已存在"（迁移幂等时可安全忽略）。"""
+        return "duplicate column" in str(exc).lower()
 
     @contextmanager
     def _get_conn(self):
@@ -179,7 +224,8 @@ class Database:
     def update_session(self, sid: str, **kwargs):
         if not kwargs:
             return
-        allowed = {"name", "mode", "project_path", "message_count", "finding_count"}
+        allowed = {"name", "mode", "project_path", "message_count", "finding_count",
+                   "owner_username"}
         updates = {k: v for k, v in kwargs.items() if k in allowed}
         if not updates:
             return
@@ -215,49 +261,149 @@ class Database:
                 ).fetchall()
             return [dict(r) for r in rows]
 
-    def delete_session(self, sid: str):
-        """删除会话及关联的 messages/findings/logs"""
+    def get_session_owner(self, sid: str) -> str:
+        """读取会话所有者（不存在返回空串），用于入口侧越权校验。"""
         with self._get_conn() as conn:
+            row = conn.execute("SELECT owner_username FROM sessions WHERE id=?", (sid,)).fetchone()
+            return (row["owner_username"] or "") if row else ""
+
+    def owns_session(self, sid: str, owner_username: str) -> bool:
+        """当前用户是否拥有该会话。
+
+        历史数据 owner_username 为空（迁移前的旧库、无登录入口写入的记录），
+        这类记录不归属任何用户，因此不授权任何登录用户——否则任何登录用户
+        都能读到别人的历史会话。
+        """
+        owner = self.get_session_owner(sid)
+        return bool(owner) and owner == owner_username
+
+    def delete_session(self, sid: str, owner_username: str | None = None,
+                       vector_store=None) -> bool:
+        """删除会话及关联的 messages/findings/logs（以及向量索引文档）。
+
+        owner_username 不为 None 时执行"仅所有者可删"校验：不匹配则
+        不做任何删除并返回 False，防止用别人的 session_id 删库。
+
+        vector_store 传入时会同步删除该会话的全文索引文档，避免
+        "会话已删除但仍能被搜索到"的悬空数据。
+        """
+        with self._get_conn() as conn:
+            if owner_username is not None:
+                row = conn.execute(
+                    "SELECT owner_username FROM sessions WHERE id=?", (sid,)
+                ).fetchone()
+                if not row or not row["owner_username"] or row["owner_username"] != owner_username:
+                    return False
             conn.execute("DELETE FROM logs WHERE session_id=?", (sid,))
             conn.execute("DELETE FROM findings WHERE session_id=?", (sid,))
             conn.execute("DELETE FROM messages WHERE session_id=?", (sid,))
             conn.execute("DELETE FROM sessions WHERE id=?", (sid,))
+        if vector_store is not None:
+            # 索引清理失败只影响搜索，不应让删除本身失败（会话已删）。
+            vector_store.delete_by_session(sid)
+        return True
 
     # ─── Logs / 日志 ──────────────────────────────
 
     def add_log(self, session_id: str, event: str, turn: int = 0,
-                tool: str = "", error: bool = False, message: str = ""):
+                tool: str = "", error: bool = False, message: str = "",
+                owner_username: str = "", actor: str = "", request_id: str = "",
+                file_path: str = "", outcome: str = ""):
         with self._get_conn() as conn:
             conn.execute(
-                "INSERT INTO logs (session_id,event,turn,tool,error,message) VALUES (?,?,?,?,?,?)",
-                (session_id, event, turn, tool, int(error), message[:500]),
+                "INSERT INTO logs (session_id,event,turn,tool,error,message,owner_username,"
+                "actor,request_id,file_path,outcome) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                (session_id, event, turn, tool, int(error), message[:500], owner_username,
+                 actor, request_id, file_path[:500], outcome),
             )
 
-    def get_logs(self, session_id: str, limit: int = 50) -> list[dict]:
+    def get_audit_trail(self, *, session_id: str | None = None, actor: str | None = None,
+                        request_id: str | None = None, file_path: str | None = None,
+                        limit: int = 100) -> list[dict]:
+        """按审计维度查询日志：回答"谁在什么时候对哪个文件做了什么"。
+
+        只返回带 actor 或 request_id 的记录（真正的审计事件），
+        避免混入普通执行日志噪音。
+        """
+        query = "SELECT * FROM logs WHERE (actor <> '' OR request_id <> '')"
+        params: list[object] = []
+        if session_id:
+            query += " AND session_id=?"
+            params.append(session_id)
+        if actor:
+            query += " AND actor=?"
+            params.append(actor)
+        if request_id:
+            query += " AND request_id=?"
+            params.append(request_id)
+        if file_path:
+            query += " AND file_path LIKE ?"
+            params.append(f"%{file_path}%")
+        query += " ORDER BY id DESC LIMIT ?"
+        params.append(limit)
         with self._get_conn() as conn:
-            rows = conn.execute(
-                "SELECT * FROM logs WHERE session_id=? ORDER BY id DESC LIMIT ?",
-                (session_id, limit),
-            ).fetchall()
+            return [dict(r) for r in conn.execute(query, params).fetchall()]
+
+    def get_logs(self, session_id: str, limit: int = 50,
+                 owner_username: str | None = None) -> list[dict]:
+        with self._get_conn() as conn:
+            query = "SELECT * FROM logs WHERE session_id=?"
+            params: list[object] = [session_id]
+            if owner_username is not None:
+                # 日志与 finding 同级敏感：非所有者不得读取他人会话的执行日志。
+                # 兼容两种来源：logs.owner_username 直写，或回连 sessions 归属。
+                query += (""" AND (owner_username=?
+                           OR session_id IN (SELECT id FROM sessions WHERE owner_username=?))""")
+                params.extend([owner_username, owner_username])
+            query += " ORDER BY id DESC LIMIT ?"
+            params.append(limit)
+            rows = conn.execute(query, params).fetchall()
             return [dict(r) for r in rows]
 
     # ─── Messages / 消息 ──────────────────────────
 
     def add_message(self, session_id: str, role: str, content: str,
-                    stats: dict | None = None, report_path: str = "") -> int:
+                    stats: dict | None = None, report_path: str = "",
+                    client_msg_id: str | None = None) -> int:
+        """写入消息。
+
+        client_msg_id 为调用方生成的稳定 ID：重复调用（例如 UI 重跑）
+        会命中唯一索引而被忽略，返回已存在行的 id，从而实现幂等，
+        不再依赖"内容是否出现过"这种会误删重复提问的判据。
+        """
         with self._get_conn() as conn:
+            if client_msg_id:
+                existing = conn.execute(
+                    "SELECT id FROM messages WHERE client_msg_id=?", (client_msg_id,)
+                ).fetchone()
+                if existing:
+                    return int(existing["id"])
             cur = conn.execute(
-                "INSERT INTO messages (session_id,role,content,stats_json,report_path) VALUES (?,?,?,?,?)",
-                (session_id, role, content, json.dumps(stats or {}, ensure_ascii=False), report_path),
+                "INSERT INTO messages (session_id,role,content,stats_json,report_path,client_msg_id) "
+                "VALUES (?,?,?,?,?,?)",
+                (session_id, role, content, json.dumps(stats or {}, ensure_ascii=False),
+                 report_path, client_msg_id),
             )
             conn.execute(
                 "UPDATE sessions SET message_count=message_count+1, updated_at=datetime('now') WHERE id=?",
                 (session_id,),
             )
-            return cur.lastrowid
+            return int(cur.lastrowid or 0)
 
-    def get_messages(self, session_id: str) -> list[dict]:
+    def get_messages(self, session_id: str,
+                     owner_username: str | None = None) -> list[dict]:
+        """读取会话消息。
+
+        owner_username 不为 None 时校验会话归属：仅所有者能读到消息，
+        否则任何拿到 session_id 的登录用户都能读取他人对话内容。
+        """
         with self._get_conn() as conn:
+            if owner_username is not None:
+                row = conn.execute(
+                    "SELECT owner_username FROM sessions WHERE id=?", (session_id,)
+                ).fetchone()
+                if not row or not row["owner_username"] or row["owner_username"] != owner_username:
+                    return []
             rows = conn.execute(
                 "SELECT * FROM messages WHERE session_id=? ORDER BY id ASC",
                 (session_id,),

@@ -1,51 +1,77 @@
 version: "3.8"
 
+# 单一依赖来源：Python 包依赖见 pyproject.toml（Dockerfile 从该文件构建 wheel）。
+# 模型默认值必须与 .env.example / src/config.py 的 get_model() 保持一致（deepseek-v4-flash），
+# 否则容器里的默认模型与本地/文档不一致，行为无法复现。
+x-app-environment: &app-environment
+  - ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN:?ANTHROPIC_AUTH_TOKEN is required}
+  - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:-https://api.deepseek.com/anthropic}
+  - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-deepseek-v4-flash}
+  - JWT_SECRET_KEY=${JWT_SECRET_KEY:?JWT_SECRET_KEY is required}
+  - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD is required}
+  - CODE_REVIEW_ALLOWED_ROOT=${CODE_REVIEW_ALLOWED_ROOT:-/app}
+
+x-app-volumes: &app-volumes
+  - ./data:/app/data
+  - ./logs:/app/logs
+  - ./reports:/app/reports
+  - ./sessions:/app/sessions
+
+# 资源限额：单个长任务（分钟级 LLM 调用）不应拖垮宿主机。
+# 说明：deploy.resources.limits 在 docker compose v2 的本地模式下生效；
+# 若你的 compose 版本忽略该段，请改用 `docker run --memory/--cpus`。
+x-app-limits: &app-limits
+  resources:
+    limits:
+      cpus: "2.0"
+      memory: 2g
+    reservations:
+      cpus: "0.5"
+      memory: 512m
+
 services:
   api:
     build: .
     ports:
       - "8000:8000"
-    environment:
-      - ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN}
-      - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:-https://api.deepseek.com/anthropic}
-      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-deepseek-chat}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?JWT_SECRET_KEY is required}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD is required}
-      - CODE_REVIEW_ALLOWED_ROOT=${CODE_REVIEW_ALLOWED_ROOT:-/app}
-    volumes:
-      - ./data:/app/data
-      - ./logs:/app/logs
-      - ./reports:/app/reports
-      - ./sessions:/app/sessions
-    command: uvicorn src.api.server:app --host 0.0.0.0 --port 8000
+    environment: *app-environment
+    volumes: *app-volumes
+    command: >-
+      uvicorn src.api.server:app --host 0.0.0.0 --port 8000
+      --timeout-graceful-shutdown 30
+    # 健康检查直接复用公开的 /health，探测失败会被 restart 策略接住
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     restart: unless-stopped
+    deploy: *app-limits
 
   streamlit:
     build: .
     ports:
       - "8501:8501"
-    environment:
-      - ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN}
-      - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:-https://api.deepseek.com/anthropic}
-      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-deepseek-chat}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?JWT_SECRET_KEY is required}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD is required}
-      - CODE_REVIEW_ALLOWED_ROOT=${CODE_REVIEW_ALLOWED_ROOT:-/app}
-    volumes:
-      - ./data:/app/data
-      - ./logs:/app/logs
-      - ./reports:/app/reports
-      - ./sessions:/app/sessions
-    command: streamlit run src/app/streamlit_app.py --server.port 8501 --server.address 0.0.0.0
+    environment: *app-environment
+    volumes: *app-volumes
+    command: >-
+      streamlit run src/app/streamlit_app.py
+      --server.port 8501 --server.address 0.0.0.0
+    healthcheck:
+      # Streamlit 的 /_stcore/health 是其官方健康端点
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8501/_stcore/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     restart: unless-stopped
+    deploy: *app-limits
 
-  chromadb:
-    image: chromadb/chroma:latest
-    ports:
-      - "8001:8000"
-    volumes:
-      - ./data/chroma:/chroma/chroma
-    environment:
-      - IS_PERSISTENT=TRUE
-      - ANONYMIZED_TELEMETRY=FALSE
-    restart: unless-stopped
+# 说明：
+# 1) 此前的 chromadb 服务已移除。检索层实际使用 SQLite FTS5
+#    （src/memory/vector_store.py），全仓库没有任何代码或依赖引用 chromadb，
+#    保留该服务只会多暴露一个 8001 端口并拉取浮动 tag 镜像（供应链风险）。
+# 2) 两个服务共用 ./data 挂载意味着它们共享同一个 SQLite 文件，
+#    但内存态（吊销列表）不共享。生产部署建议只对外暴露 api，
+#    或为两者使用独立数据目录。

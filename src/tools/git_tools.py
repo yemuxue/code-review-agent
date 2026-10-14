@@ -5,10 +5,40 @@ import re
 import subprocess
 from pathlib import Path
 
-# 代理配置（用于 git clone / fetch 等网络操作）
-PROXY_ENV = {"http_proxy": "http://127.0.0.1:7897",
-             "https_proxy": "http://127.0.0.1:7897"}
-GIT_ENV = {**os.environ, **PROXY_ENV}
+# 子进程环境白名单。旧实现用 `{**os.environ, **PROXY_ENV}`，把
+# ANTHROPIC_AUTH_TOKEN / JWT_SECRET_KEY / ADMIN_PASSWORD 等宿主密钥
+# 一并交给了 git 子进程（与 sandbox.py「绝不透传宿主环境」的设计矛盾）。
+# 这里只保留运行所需的非密钥变量。
+_ENV_PASSTHROUGH = (
+    "PATH", "HOME", "SystemRoot", "SystemDrive", "COMSPEC", "PATHEXT",
+    "TEMP", "TMP", "USERPROFILE", "LANG", "LC_ALL",
+    "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY",
+    "http_proxy", "https_proxy", "all_proxy", "NO_PROXY", "no_proxy",
+    "GIT_SSH", "GIT_SSH_COMMAND", "GIT_TERMINAL_PROMPT", "GIT_CONFIG_GLOBAL",
+)
+
+_LOCAL_PROXY = "http://127.0.0.1:7897"
+
+
+def _minimal_env() -> dict:
+    """最小化子进程环境：只透传白名单变量，不含任何密钥。"""
+    env = {k: os.environ[k] for k in _ENV_PASSTHROUGH if os.environ.get(k)}
+    env.setdefault("GIT_TERMINAL_PROMPT", "0")
+    return env
+
+
+def get_git_env() -> dict:
+    """git 子进程环境：白名单 + 代理，不含密钥。
+
+    每次调用重新构造，不缓存模块级快照——这样测试或运行期修改代理
+    变量可以立即生效。
+    """
+    env = _minimal_env()
+    # 未显式配置代理时才回退到本地开发代理；配置了就尊重配置值。
+    if not any(env.get(k) for k in ("HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy")):
+        env.setdefault("http_proxy", _LOCAL_PROXY)
+        env.setdefault("https_proxy", _LOCAL_PROXY)
+    return env
 
 def clone_repo(repo_url: str, branch: str = "main", destination: str = "") -> str:
     clean_url = repo_url.rstrip("/").removesuffix(".git")
@@ -23,7 +53,7 @@ def clone_repo(repo_url: str, branch: str = "main", destination: str = "") -> st
     try:
         result = subprocess.run(
             ["git","clone","--depth","1","--branch",branch,clean_url+".git",str(target)],
-            capture_output=True, text=True, timeout=120, env=GIT_ENV)
+            capture_output=True, text=True, timeout=120, env=get_git_env())
         if result.returncode != 0:
             return f"Clone failed (exit {result.returncode}):\nSTDERR: {result.stderr[:1000]}\nSTDOUT: {result.stdout[:500]}"
         file_count = sum(1 for _ in target.rglob("*") if _.is_file())
@@ -37,11 +67,11 @@ def get_diff(base_branch: str = "main", cwd: str = "") -> str:
     repo_dir = Path(cwd).resolve() if cwd else Path.cwd()
     try:
         subprocess.run(["git","fetch","origin",base_branch,"--depth=1"],
-                       capture_output=True, text=True, timeout=30, env=GIT_ENV, cwd=repo_dir)
+                       capture_output=True, text=True, timeout=30, env=get_git_env(), cwd=repo_dir)
         r1 = subprocess.run(["git","diff",f"origin/{base_branch}..HEAD","--stat"],
-                            capture_output=True, text=True, timeout=30, env=GIT_ENV, cwd=repo_dir)
+                            capture_output=True, text=True, timeout=30, env=get_git_env(), cwd=repo_dir)
         r2 = subprocess.run(["git","diff",f"origin/{base_branch}..HEAD"],
-                            capture_output=True, text=True, timeout=30, env=GIT_ENV, cwd=repo_dir)
+                            capture_output=True, text=True, timeout=30, env=get_git_env(), cwd=repo_dir)
         stat, diff = r1.stdout, r2.stdout
         if not diff: return "No changes detected (diff is empty). PR may already be merged."
         max_chars = 8000
@@ -90,7 +120,10 @@ def search_code(pattern: str, path: str = ".", file_glob: str = "*.py") -> str:
                         results.append(f"{fp}:{i}: {line.rstrip()}")
                         if len(results) >= 50: break
             if len(results) >= 50: break
-        except: continue
+        except OSError:
+            # 单个文件读失败（权限/编码/被删除）不影响整体搜索；
+            # 只吞 I/O 错误，避免把真实 bug 一并隐藏。
+            continue
     if not results: return f"No matches for: {pattern}"
     out = "\n".join(results)
     if len(results) >= 50: out += "\n\n[Truncated at 50]"
@@ -103,19 +136,19 @@ def fetch_pr(pr_number: int, cwd: str = "") -> str:
         repo_dir = Path(cwd).resolve() if cwd else Path.cwd()
         r = subprocess.run(
             ["git","fetch","origin",f"pull/{pr_number}/head:pr-{pr_number}"],
-            capture_output=True, text=True, timeout=60, env=GIT_ENV, cwd=repo_dir)
+            capture_output=True, text=True, timeout=60, env=get_git_env(), cwd=repo_dir)
         if r.returncode != 0:
             return f"Fetch PR failed (exit {r.returncode}):\n{r.stderr[:800]}"
         # Checkout the PR branch
         r2 = subprocess.run(
             ["git","checkout",f"pr-{pr_number}"],
-            capture_output=True, text=True, timeout=30, env=GIT_ENV, cwd=repo_dir)
+            capture_output=True, text=True, timeout=30, env=get_git_env(), cwd=repo_dir)
         if r2.returncode != 0:
             return f"Checkout PR failed (exit {r2.returncode}):\n{r2.stderr[:800]}"
         # Show what changed
         r3 = subprocess.run(
             ["git","diff","origin/main","--stat"],
-            capture_output=True, text=True, timeout=30, env=GIT_ENV, cwd=repo_dir)
+            capture_output=True, text=True, timeout=30, env=get_git_env(), cwd=repo_dir)
         return f"Fetched PR #{pr_number} branch. Files changed:\n{r3.stdout}"
     except Exception as e:
         return f"Fetch PR error: {type(e).__name__}: {e}"
@@ -158,7 +191,9 @@ def grep_pattern(pattern: str, path: str = ".", file_glob: str = "*.py",
                     results.append(f"--- {fp}:{i+1} ---\n{snippet}")
                     if len(results) >= max_results: break
             if len(results) >= max_results: break
-        except: continue
+        except OSError:
+            # 同上：只忽略单个文件的读取失败
+            continue
     if not results: return f"No matches for: {pattern}"
     return "\n".join(results)
 
@@ -303,13 +338,23 @@ def verify_file_integrity(file_path: str) -> list[str]:
     return issues
 
 
-def run_command(command: str) -> str:
-    """Run a shell command and return its output (timeout: 60s). Use for pytest, mypy, etc."""
+def run_command(command: str, cwd: str = "") -> str:
+    """Run a shell command and return its output (timeout: 60s).
+
+    ⚠️ 本函数自身不提供安全隔离，只做两件收敛：① 子进程环境走白名单，
+    不再继承宿主密钥；② 可通过 cwd 限定工作目录。真正执行不可信命令
+    必须经由 ``harness.sandbox.Sandbox``（AgentHarness 对 run_command
+    fail-closed，未配置沙箱时直接拒绝）。
+    """
     import shlex
     try:
         cmd = shlex.split(command) if isinstance(command, str) else command
+        if not cmd:
+            return "Command error: empty command"
+        # git 需要代理变量；其它命令用最小环境
+        env = get_git_env() if "git" in cmd[0] else _minimal_env()
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=60,
-                           env=GIT_ENV if "git" in cmd[0] else None)
+                           env=env, cwd=cwd or None)
         out = f"[EXIT:{r.returncode}]\n"
         if r.stdout: out += f"STDOUT:\n{r.stdout[:3000]}"
         if r.stderr: out += f"STDERR:\n{r.stderr[:1000]}"
@@ -318,3 +363,4 @@ def run_command(command: str) -> str:
         return "Command timed out (60s)."
     except Exception as e:
         return f"Command error: {type(e).__name__}: {e}"
+

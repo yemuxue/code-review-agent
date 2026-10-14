@@ -30,6 +30,9 @@ dependencies = [
     "bcrypt>=4.0.0",
     "langgraph>=0.2.0",
     "langchain-core>=0.3.0",
+    # src/config.py 优先使用 python-dotenv 解析 .env（缺失时走内置回退解析器），
+    # 之前只靠环境偶然存在，未声明依赖会导致 .env 中的引号/转义/行内注释被误解析。
+    "python-dotenv>=1.0.0",
 ]
 
 [project.optional-dependencies]
@@ -53,7 +56,31 @@ build-backend = "setuptools.build_meta"
 line-length = 100
 target-version = "py39"
 lint.select = ["E", "F", "W"]
-lint.ignore = ["E501", "F841"]
+# 有意的例外（与既有代码风格保持一致，避免把整仓格式重排混进功能修复）：
+#   E501 行太长（大量长提示词字符串）
+#   F841 未使用的局部变量（少量轨迹/调试残留）
+#   E701/E702/E741 本仓库通行的紧凑单行写法与 l 变量名
+#   E402 入口脚本必须在 sys.path 注入之后再导入 src.*（刻意的导入顺序）
+#
+# ⚠️ E722（裸 except）不在忽略列表中：忽略它会让 `except: pass` 这类
+#    吞异常写法永远无法被 lint 拦下，与"消除宽泛异常捕获"的整改直接冲突。
+#    同时 CI 不再用命令行 --ignore 覆盖本配置，保证本地与 CI 判定一致。
+lint.ignore = ["E501", "F841", "E701", "E702", "E741", "E402"]
+
+# scripts/ 下以下划线开头的文件是临时/一次性脚本（不进版本库、CI 也看不到）。
+# 不排除它们会让"本地 lint 全绿"与 CI 结果不一致——本地因为多了未跟踪的
+# 临时文件而失败，看起来像代码问题。
+exclude = ["scripts/_*.py"]
+
+[tool.ruff.lint.per-file-ignores]
+# 漏洞注入基线样本：文件里的 bug（未定义变量、裸 except、未使用导入等）
+# 就是被测对象本身，绝不能用 lint 修掉，否则测试资产失效。
+"tests/bug_injection_sample.py" = ["E722", "F401", "F821", "F823", "E402"]
+
+[tool.mypy]
+# 参数固化在这里，CI 只写 `mypy src`，避免"文档/CI/本地"三份命令漂移。
+ignore_missing_imports = true
+explicit_package_bases = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

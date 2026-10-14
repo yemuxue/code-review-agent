@@ -25,7 +25,7 @@ import src.config  # noqa: F401  ← 必须先加载 .env 进 os.environ（JWT_S
 from src.llm_client import AnthropicClient
 from src.harness.agent import AgentHarness, ToolDefinition
 from src.harness.telemetry import AgentLogger
-from src.harness.auth import HumanInTheLoop
+from src.harness.auth import HumanInTheLoop, RiskLevel
 from src.harness.sandbox import Sandbox
 from src.harness.memory import ContextMemory
 from src.harness.jwt_auth import get_user_store, get_auth
@@ -87,12 +87,13 @@ st.markdown("""<style>
 
 # Session defaults
 DEFAULT_PROJECT_ROOT = str(Path(__file__).resolve().parents[2] / "src")
-for k, v in {
+_SESSION_DEFAULTS: dict[str, object] = {
     "messages": [], "selected_files": [], "current_project": DEFAULT_PROJECT_ROOT,
     "session_id": None, "sessions": {},  # session_id -> {name, messages, mode}
     "authenticated": False, "current_user": None, "jwt_token": None, "login_error": "",
     "hitl_pending": None, "hitl_decision": None, "hitl_count": 0,
-}.items():
+}
+for k, v in _SESSION_DEFAULTS.items():
     if k not in st.session_state: st.session_state[k] = v
 
 # Load saved sessions from disk
@@ -100,25 +101,47 @@ for k, v in {
 db = Database("./data/code_review.db")
 vs = VectorStore("./data/search.db")
 
+
+def _current_username() -> str:
+    """当前登录用户名。
+
+    未登录时返回空串。数据库层的所有者过滤把空串当作"无归属"，
+    因此空串不会匹配到任何用户的数据（fail-closed），
+    不会因为漏传 owner 而回退到"看全部"。
+    """
+    user = st.session_state.get("current_user") or {}
+    return str(user.get("username") or "")
+
+
 def _load_sessions():
+    """只加载当前用户的会话（按 owner_username 过滤）。"""
     sessions = {}
+    owner = _current_username()
+    if not owner:
+        return sessions
     try:
-        for s in db.list_sessions(20):
+        for s in db.list_sessions(20, owner_username=owner):
             sessions[s["id"]] = {
                 "name": s.get("name", ""), "mode": s.get("mode", ""),
-                "messages": db.get_messages(s["id"]),
+                "messages": db.get_messages(s["id"], owner_username=owner),
                 "time": s.get("updated_at", ""),
             }
-    except Exception:
-        pass
+    except Exception as exc:
+        # 不能再静默吞掉：历史面板空白必须能让用户看到原因。
+        st.warning(format_frontend_error(exc))
     return sessions
 
+
 def _save_session(sid: str, data: dict):
+    """仅更新属于当前用户的会话，避免越权改他人会话标题。"""
+    owner = _current_username()
+    if not owner or not db.owns_session(sid, owner):
+        return
     try:
         db.update_session(sid, name=data.get("name", "")[:60],
                           mode=data.get("mode", ""))
-    except Exception:
-        pass
+    except Exception as exc:
+        st.warning(format_frontend_error(exc))
 
 # Always refresh from DB on every render
 st.session_state.sessions = _load_sessions()
@@ -166,7 +189,7 @@ if not st.session_state.authenticated:
 
         st.markdown("""
         <p style="text-align:center;color:#484f58;font-size:11px;margin-top:16px;">
-        Default: <code>admin</code> / <code>admin123</code><br>
+        Accounts are provisioned on first start from <code>ADMIN_PASSWORD</code> in <code>.env</code>.<br>
         JWT HS256 · Access 15min · Refresh 7d · bcrypt
         </p>
         """, unsafe_allow_html=True)
@@ -233,21 +256,24 @@ with st.sidebar:
     st.markdown('<div class="sidebar-section"><h4>Mode / 分析模式</h4></div>', unsafe_allow_html=True)
     mode = st.selectbox("mode", list(SYSTEM_PROMPTS.keys()), label_visibility="collapsed")
     is_multi = "Multi-Agent" in mode
-    auto_fix_enabled = False
+    # 默认仅审查。单 Agent 也能调用 write_file/run_command，因此自动修复
+    # 开关必须在两种模式下都生效（旧实现只在多 Agent 分支询问，
+    # 单 Agent 却用 HumanInTheLoop(auto_approve_safe=True) 静默放行写操作）。
     if is_multi:
         st.caption("🧠 plan → execute(并行) → review → fix → verify")
-        auto_fix_enabled = st.checkbox(
-            "Allow automatic fixes / 允许自动修复",
-            value=False,
-            help="默认仅审查；开启后才允许 Fixer 修改当前项目内的文件。",
-        )
     else:
         st.caption("🔍 快速代码分析")
+    auto_fix_enabled = st.checkbox(
+        "Allow automatic fixes / 允许自动修复",
+        value=False,
+        help="默认仅审查；开启后才允许 Agent 修改当前项目内的文件（写前自动备份）。",
+    )
 
     st.divider()
 
     # ── New Chat ──
     if st.button("➕ New Chat / 新建对话", use_container_width=True):
+        owner = _current_username()
         if st.session_state.messages:
             try:
                 sid = st.session_state.session_id or f"chat_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -256,12 +282,13 @@ with st.sidebar:
                 _save_session(sid, {"name": name, "messages": st.session_state.messages,
                                     "mode": mode, "time": datetime.datetime.now().isoformat()})
                 st.session_state.sessions = _load_sessions()
-            except Exception:
-                pass
+            except Exception as exc:
+                st.warning(format_frontend_error(exc))
         st.session_state.messages = []
         st.session_state.selected_files = []
         st.session_state.current_project = DEFAULT_PROJECT_ROOT
-        st.session_state.session_id = db.create_session(name="New Chat", mode=mode)
+        st.session_state.session_id = db.create_session(name="New Chat", mode=mode,
+                                                       owner_username=owner)
         st.rerun()
 
     st.divider()
@@ -288,7 +315,11 @@ with st.sidebar:
                     st.rerun()
             with c2:
                 if st.button("✕", key=f"del_{sid}", help="Delete session"):
-                    db.delete_session(sid)
+                    # 带 owner 校验删除；同时清理该会话的向量索引文档，
+                    # 否则已删会话的内容仍能被搜索到。
+                    if not db.delete_session(sid, owner_username=_current_username(),
+                                             vector_store=vs):
+                        st.warning("Not allowed: session does not belong to you / 无权删除该会话")
                     st.session_state.sessions = _load_sessions()
                     st.rerun()
     else:
@@ -315,7 +346,10 @@ with st.sidebar:
     st.markdown('<div class="sidebar-section"><h4>🔍 Search Findings / 搜索发现</h4></div>', unsafe_allow_html=True)
     search_query = st.text_input("Search", placeholder="e.g. SQL injection, null pointer...", label_visibility="collapsed", key="search_box")
     if search_query:
-        results = vs.search(search_query, n_results=5)
+        # 始终传入当前用户名（可能为空串）作为所有者条件。
+        # 空串只会匹配到"无归属"的文档，绝不会因为漏传而放开为全局检索。
+        results = vs.search(search_query, n_results=5,
+                            owner_username=_current_username())
         if results:
             for r in results:
                 fp = r.get("file_path", "?")
@@ -334,13 +368,14 @@ with st.sidebar:
                     unsafe_allow_html=True)
         else:
             st.caption("No results / 无结果")
-        st.caption(f"{vs.count()} documents indexed / 已索引")
+        st.caption(f"{vs.count(_current_username())} documents indexed / 已索引（当前用户）")
 
     st.divider()
     st.markdown('<div class="sidebar-section"><h4>📋 Logs / 日志</h4></div>', unsafe_allow_html=True)
-    # 从数据库读取当前会话日志
+    # 从数据库读取当前会话日志（仅当前用户拥有的会话）
     if st.session_state.session_id:
-        log_entries = db.get_logs(st.session_state.session_id, limit=15)
+        log_entries = db.get_logs(st.session_state.session_id, limit=15,
+                                  owner_username=_current_username())
         if log_entries:
             for entry in log_entries:
                 icon = "❌" if entry["error"] else ("🔧" if entry["tool"] else "🔄")
@@ -361,17 +396,23 @@ with st.sidebar:
             for lf in log_files:
                 with st.expander(f"📄 {lf.name}", expanded=False):
                     try:
-                        for line in lf.read_text(encoding="utf-8").strip().split("\n")[-8:]:
-                            try:
-                                rec = json.loads(line)
-                                icon = "🔧" if rec.get("tool") else "🔄"
-                                st.markdown(
-                                    f"<div class='log-line'>"
-                                    f"{icon} [{rec.get('event','')}] t={rec.get('turn','')} "
-                                    f"{rec.get('tool','')[:20]}</div>",
-                                    unsafe_allow_html=True)
-                            except: pass
-                    except: st.caption("unavailable")
+                        lines = lf.read_text(encoding="utf-8").strip().split("\n")[-8:]
+                    except OSError as exc:
+                        # 只兜住文件读取失败；JSON 解析失败按行跳过，
+                        # 不再用裸 except 把两类问题混在一起吞掉。
+                        st.caption(f"unavailable: {exc}")
+                        continue
+                    for line in lines:
+                        try:
+                            rec = json.loads(line)
+                        except json.JSONDecodeError:
+                            continue
+                        icon = "🔧" if rec.get("tool") else "🔄"
+                        st.markdown(
+                            f"<div class='log-line'>"
+                            f"{icon} [{rec.get('event','')}] t={rec.get('turn','')} "
+                            f"{rec.get('tool','')[:20]}</div>",
+                            unsafe_allow_html=True)
         else:
             st.caption("No logs / 暂无日志")
 
@@ -470,13 +511,18 @@ if prompt:
     full_query = prompt + extra
     st.session_state.messages.append({"role": "user", "content": full_query})
 
-    # 立即保存到数据库（防止中断丢失）
+    # 立即保存到数据库（防止中断丢失）。
+    # 会话必须在写消息之前创建：messages.session_id 有外键约束，
+    # 旧实现在没有会话时写入 "pending" 会触发 IntegrityError 并被吞掉，
+    # 用户消息实际从未落库。这里先建会话再写消息。
     try:
         if not st.session_state.session_id:
-            st.session_state.session_id = db.create_session(name=prompt[:50], mode=mode)
+            st.session_state.session_id = db.create_session(
+                name=prompt[:50], mode=mode, owner_username=_current_username())
         db.add_message(st.session_state.session_id, "user", full_query)
-    except Exception:
-        pass
+    except Exception as exc:
+        # 用户消息落盘失败必须提示：否则刷新后消息"凭空消失"无法解释。
+        st.warning(format_frontend_error(exc))
 
     with st.chat_message("user"):
         st.markdown('<span style="color:#8b949e;font-size:10px;font-weight:700;">YOU</span>', unsafe_allow_html=True)
@@ -495,7 +541,28 @@ if prompt:
         logger = AgentLogger(LOGS_DIR)
         log_path = logger.log_path
         client = AnthropicClient()  # 统一用 deepseek-chat
-        hitl_guard = HumanInTheLoop(auto_approve_safe=True)
+
+        # 审批策略（fail-closed）：
+        # - auto_fix 关闭（默认）：不给审批回调，写操作一律被拒 → 纯只读审查
+        # - auto_fix 开启：注入回调，仅放行针对本次项目根目录内的写入
+        def _approve_write(tool_name, args, risk):
+            if risk != RiskLevel.MODERATE:
+                return False
+            if tool_name != "write_file":
+                # run_command 等中等风险工具不在此处放行
+                return False
+            target = str(args.get("file_path", ""))
+            try:
+                root = Path(st.session_state.current_project).resolve(strict=True)
+                Path(target).resolve(strict=False).relative_to(root)
+            except (OSError, ValueError):
+                return False
+            return True
+
+        hitl_guard = HumanInTheLoop(
+            auto_approve_safe=True,
+            approval_callback=_approve_write if auto_fix_enabled else None,
+        )
 
         with st.status("🔄 Working...", expanded=True) as status:
             if is_multi:
@@ -504,7 +571,7 @@ if prompt:
                     orch = create_langgraph_orchestrator(
                         client, TOOLS, sandbox=Sandbox(), hitl=hitl_guard,
                         memory=ContextMemory(strategy="hybrid", window_size=10),
-                        auto_fix=auto_fix_enabled,
+                        auto_fix=auto_fix_enabled, logger=logger,
                     )
                     lang_result = orch.run(task=target, project_path=st.session_state.current_project)
                     n_findings = len(lang_result.get("findings", []))
@@ -657,45 +724,64 @@ if prompt:
     # Save report
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     report_path = f"{REPORTS_DIR}/report_{ts}.md"
-    with open(report_path, "w", encoding="utf-8") as f:
-        f.write(f"# {mode_label} Report\n\n**Project**: `{st.session_state.current_project}`\n**Time**: {ts}\n**Mode**: {mode}\n\n---\n\n{result_text}")
+    # 用 write_text 而非 open()+write：避免与循环变量重名，也让类型检查通过
+    Path(report_path).write_text(
+        f"# {mode_label} Report\n\n**Project**: `{st.session_state.current_project}`\n"
+        f"**Time**: {ts}\n**Mode**: {mode}\n\n---\n\n{result_text}",
+        encoding="utf-8",
+    )
 
     st.session_state.messages.append({
         "role": "assistant", "content": result_text, "stats": stats,
         "report_path": report_path,
     })
 
-    # 立即保存助手回复到数据库（防止中断丢失）
+    # 立即保存助手回复到数据库（防止中断丢失）。
+    # 不再用 "pending" 兜底：messages.session_id 有外键约束，写不存在的
+    # 会话会抛 IntegrityError（旧实现被静默吞掉 → 回复从未落库）。
     try:
-        db.add_message(st.session_state.session_id or "pending", "assistant", result_text, stats, report_path)
-    except Exception:
-        pass
+        if not st.session_state.session_id:
+            st.session_state.session_id = db.create_session(
+                name="New Chat", mode=mode, owner_username=_current_username())
+        db.add_message(st.session_state.session_id, "assistant", result_text, stats, report_path)
+    except Exception as exc:
+        st.warning(format_frontend_error(exc))
 
     # Auto-save to database (full sync)
     try:
+        owner = _current_username()
         if not st.session_state.session_id:
-            st.session_state.session_id = db.create_session(name="New Chat", mode=mode)
+            st.session_state.session_id = db.create_session(name="New Chat", mode=mode,
+                                                           owner_username=owner)
         sid = st.session_state.session_id
         name = (st.session_state.messages[0].get("content","New Chat").split("\n")[0][:50]
                 .replace("\n", " ").replace("|", ""))
-        db.update_session(sid, name=name, mode=mode)
+        db.update_session(sid, name=name, mode=mode, owner_username=owner)
         # Sync messages to DB
-        existing = [m["content"] for m in db.get_messages(sid)]
-        for msg in st.session_state.messages:
+        #
+        # 幂等改由 client_msg_id 保证（唯一索引），而不是"内容是否已存在"：
+        # 后者会让用户把同一个问题问两次时第二次被丢弃。
+        for idx, msg in enumerate(st.session_state.messages):
             content = msg.get("content", "")
-            if content not in existing:
-                db.add_message(sid, msg["role"], content,
-                               stats=msg.get("stats"), report_path=msg.get("report_path", ""))
+            db.add_message(sid, msg["role"], content,
+                           stats=msg.get("stats"), report_path=msg.get("report_path", ""),
+                           client_msg_id=f"{sid}:{msg['role']}:{idx}")
         # Sync logs from JSONL to DB
         try:
             if log_path and os.path.exists(log_path):
                 for line in Path(log_path).read_text(encoding="utf-8").strip().split("\n")[-50:]:
-                    rec = json.loads(line)
+                    try:
+                        rec = json.loads(line)
+                    except json.JSONDecodeError:
+                        # 单行损坏不应中断整轮日志同步
+                        continue
                     db.add_log(sid, rec.get("event",""), rec.get("turn",0),
                                rec.get("tool",""), rec.get("error",False),
-                               rec.get("message", rec.get("result_preview","")[:500]))
-        except Exception:
-            pass
+                               rec.get("message", rec.get("result_preview","")[:500]),
+                               owner_username=owner)
+        except OSError as exc:
+            # 日志文件缺失/不可读只影响日志面板，提示但不中断保存
+            st.caption(f"Log sync skipped: {exc}")
         # Index analysis text as individual paragraphs for granular search
         try:
             import re as _re
@@ -711,18 +797,22 @@ if prompt:
                     vs.add_finding(FindingDocument(
                         file_path=fp, line=ln, category="FINDING", severity="N/A",
                         description_en=para[:2000], description_cn=para[:2000],
-                        suggestion="", session_id=sid, verified=True))
+                        suggestion="", session_id=sid, verified=True,
+                        owner_username=owner), owner_username=owner)
                 # Also save file:line refs to DB
                 for m in _re.finditer(r'`?([\w/\.-]+\.py):(\d+)`?', result_text):
                     fp, ln = m.group(1), int(m.group(2))
-                    if len(ln) >= 1 and not fp.startswith(('http','data')):
+                    # 旧实现写成 len(ln)，而 ln 是 int，取长度会抛 TypeError
+                    # 被外层 except 吞掉，导致 REF 记录从未落库。
+                    if ln >= 1 and not fp.startswith(('http','data')):
                         db.add_finding(sid, Finding(id=str(uuid.uuid4()), session_id=sid,
                             file_path=fp, line=ln, category="REF", severity="N/A",
                             description_en="see report", description_cn="见报告",
-                            suggestion="", verdict="CONFIRMED"))
-        except Exception: pass
+                            suggestion="", verdict="CONFIRMED", owner_username=owner))
+        except Exception as exc:
+            st.warning(format_frontend_error(exc))
         st.session_state.sessions = _load_sessions()
-    except Exception:
-        pass
+    except Exception as exc:
+        st.warning(format_frontend_error(exc))
 
     st.rerun()

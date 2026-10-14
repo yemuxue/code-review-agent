@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1672" height="941" viewBox="0 0 1672 941" role="img" aria-label="任务列表页">
+<rect width="1672" height="941" fill="#ffffff"/>
+<rect x="0" y="0" width="1672" height="74" fill="#f1f5f9"/>
+<text x="48" y="47" font-family="Microsoft YaHei, 微软雅黑, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="26" font-weight="700" fill="#1e293b">S1 · 任务列表页</text>
+<line x1="0" y1="74" x2="1672" y2="74" stroke="#cbd5e1" stroke-width="2"/>
+<rect x="48" y="92" width="1576" height="46" rx="8" fill="#eef2ff" stroke="#c7d2fe"/>
+<text x="66" y="122" font-family="Microsoft YaHei, 微软雅黑, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="19" fill="#3730a3">审查任务 · 筛选仓库 / 状态 / 时间范围</text>
+<rect x="48" y="164" width="1576" height="46" fill="#ffffff" stroke="#e2e8f0"/>
+<text x="66" y="194" font-family="Microsoft YaHei, 微软雅黑, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="19" fill="#0f172a">顶部：标题「审查任务」+ 新建审查按钮</text>
+<text x="518" y="194" font-family="Consolas, Menlo, monospace" font-size="18" fill="#475569">[ 新建审查 ]</text>
+<rect x="48" y="210" width="1576" height="46" fill="#f8fafc" stroke="#e2e8f0"/>
+<text x="66" y="240" font-family="Microsoft YaHei, 微软雅黑, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="19" fill="#0f172a">筛选栏</text>
+<text x="518" y="240" font-family="Consolas, Menlo, monospace" font-size="18" fill="#475569">仓库 ▾ | 状态 ▾ | 时间范围 ▾ | 仅看失败 ☐</text>
+<rect x="48" y="256" width="1576" height="46" fill="#ffffff" stroke="#e2e8f0"/>
+<text x="66" y="286" font-family="Microsoft YaHei, 微软雅黑, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="19" fill="#0f172a">任务行 #1042 api-server PR#88</text>
+<text x="518" y="286" font-family="Consolas, Menlo, monospace" font-size="18" fill="#475569">已完成 · 发现 7 · 首结果 1m52s · 查看报告</text>
+<rect x="48" y="302" width="1576" height="46" fill="#f8fafc" stroke="#e2e8f0"/>
+<text x="66" y="332" font-family="Microsoft YaHei, 微软雅黑, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="19" fill="#0f172a">任务行 #1041 web-app PR#87</text>
+<text x="518" y="332" font-family="Consolas, Menlo, monospace" font-size="18" fill="#475569">等待审批 · 发现 3 · 查看补丁</text>
+<rect x="48" y="348" width="1576" height="46" fill="#ffffff" stroke="#e2e8f0"/>
+<text x="66" y="378" font-family="Microsoft YaHei, 微软雅黑, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="19" fill="#0f172a">任务行 #1039 pay-svc PR#85</text>
+<text x="518" y="378" font-family="Consolas, Menlo, monospace" font-size="18" fill="#475569">失败(权限) · 重试 / 详情</text>
+<rect x="48" y="394" width="1576" height="46" fill="#f8fafc" stroke="#e2e8f0"/>
+<text x="66" y="424" font-family="Microsoft YaHei, 微软雅黑, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="19" fill="#0f172a">空态 / 加载失败</text>
+<text x="518" y="424" font-family="Consolas, Menlo, monospace" font-size="18" fill="#475569">空态引导新建审查；失败展示重试，不显示假数据</text>
+<text x="48" y="462" font-family="Microsoft YaHei, 微软雅黑, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="16" fill="#94a3b8">占位线框图 · 非最终视觉设计 · 素材补齐后替换 ../原型截图/S1.png</text>
+</svg>

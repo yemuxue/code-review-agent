@@ -1,7 +1,7 @@
 """
 JWT Authentication — 真正的 JWT 认证（签名 + 过期 + 刷新）
 
-面试话术：
+设计说明：
   "用 python-jose 实现 HS256 签名 JWT，Access Token 15min 短期 +
    Refresh Token 7d 长期，双 token 轮换机制防止长期泄露。
    用户密码用 bcrypt 哈希存储，验证时使用 constant-time 比较。"
@@ -84,7 +84,7 @@ class UserStore:
     用户存储。开发环境用内存 + JSON 文件持久化。
     生产环境替换为数据库（PostgreSQL / MySQL）。
 
-    面试话术："当前用 bcrypt + 文件持久化做原型验证，
+    设计说明："当前用 bcrypt + 文件持久化做原型验证，
     生产环境切换到数据库，UserStore 接口不变——依赖倒置原则。"
     """
 
@@ -151,7 +151,7 @@ class UserStore:
         """
         验证密码。使用 bcrypt.verify()（内部用 constant-time 比较防止时序攻击）。
 
-        面试话术："密码验证用 bcrypt.verify()，内部是 constant-time 比较，
+        设计说明："密码验证用 bcrypt.verify()，内部是 constant-time 比较，
         防止时序侧信道攻击——即使攻击者测量响应时间也无法推断密码。"
         """
         data = self._users.get(username)
@@ -180,7 +180,7 @@ class JWTAuth:
       - "access": 短期，用于 API 鉴权（默认 15 min）
       - "refresh": 长期，仅用于刷新 access token（7 days）
 
-    面试话术：
+    设计说明：
       "双 token 设计：access token 15 分钟短期，即使泄露窗口也很小；
        refresh token 7 天长期，只发往 /auth/refresh 单一端点，
        降低暴露面。服务端可随时吊销 refresh token 来强制用户重新登录。"
@@ -227,7 +227,7 @@ class JWTAuth:
             JWTError: 签名无效 / 篡改 / 已被吊销
             ValueError: token_type 不匹配
 
-        面试话术："验证分四层：① jose.jwt.decode 验证 HMAC-SHA256 签名
+        设计说明："验证分四层：① jose.jwt.decode 验证 HMAC-SHA256 签名
         ——任何篡改都会导致签名不匹配被拒绝；② 检查 exp 字段是否过期；
         ③ 检查 token_type 防止 refresh token 被当 access token 用；
         ④ 检查 jti 是否在吊销列表中——已吊销的 refresh token 立即被拒绝。"
@@ -262,7 +262,7 @@ class JWTAuth:
         用 refresh token 换取新的 access token，并轮换 refresh token
         （旧 refresh token 立即吊销，防止被盗后无限次复用）。
 
-        面试话术："refresh token 只能换新 access token，不能访问业务 API。
+        设计说明："refresh token 只能换新 access token，不能访问业务 API。
         每次刷新都会吊销旧 refresh token 并签发新 refresh token（token rotation）。
         如果攻击者重放旧 refresh token，吊销列表会让验证失败，从而发现泄露。"
         """
@@ -305,7 +305,7 @@ class TokenRevocationList:
     """
     过期感知的内存吊销列表（TTL 对齐 token 过期时间，到期自动清理）。
 
-    面试话术："吊销列表用带 TTL 的存储实现，key 是 jti，
+    设计说明："吊销列表用带 TTL 的存储实现，key 是 jti，
     TTL 对齐 token 过期时间——token 过期后自动清理，不占内存、不拖慢查询。
     验证时 O(1) 检查 jti 是否在集合中。生产环境可平滑替换为 Redis。"
     """

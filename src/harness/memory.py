@@ -6,7 +6,7 @@ Context Memory Management / 上下文记忆管理
 2. Summarization   — LLM 压缩旧消息为摘要
 3. Hybrid          — 滑窗 + 摘要：保留 system + 最近 K 轮 + 旧轮摘要
 
-面试话术：'和 LangChain 的 ConversationSummaryBufferMemory 原理相同，但手写实现'
+设计说明：'和 LangChain 的 ConversationSummaryBufferMemory 原理相同，但手写实现'
 """
 
 from __future__ import annotations

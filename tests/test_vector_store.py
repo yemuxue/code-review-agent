@@ -1,5 +1,6 @@
 """Vector store (FTS5) integration tests"""
-import sys, shutil
+import shutil
+import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 

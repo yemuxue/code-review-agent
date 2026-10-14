@@ -200,7 +200,7 @@ class MultiAgentOrchestrator:
             f"For EACH finding #1 through #{len(findings)}, output:\n"
             f"VERDICT|finding_id|CONFIRMED/FALSE_POSITIVE/UNCERTAIN|Evidence: ...\n\n"
             f"Use grep_pattern to search for the code in each finding. "
-            f"Use run_command to execute tests if applicable.\n"
+            f"Only cite evidence you actually read — do not claim you ran tests.\n"
             f"Be honest: if you can't find evidence either way, say UNCERTAIN."
         )
         return self._executor_agent.run(query)

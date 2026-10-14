@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1672" height="941" viewBox="0 0 1672 941" role="img" aria-label="审查报告页">
+<rect width="1672" height="941" fill="#ffffff"/>
+<rect x="0" y="0" width="1672" height="74" fill="#f1f5f9"/>
+<text x="48" y="47" font-family="Microsoft YaHei, 微软雅黑, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="26" font-weight="700" fill="#1e293b">S8 · 审查报告页</text>
+<line x1="0" y1="74" x2="1672" y2="74" stroke="#cbd5e1" stroke-width="2"/>
+<rect x="48" y="92" width="1576" height="46" rx="8" fill="#eef2ff" stroke="#c7d2fe"/>
+<text x="66" y="122" font-family="Microsoft YaHei, 微软雅黑, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="19" fill="#3730a3">任务 #1042 · api-server · PR#88 · 已完成</text>
+<rect x="48" y="164" width="1576" height="46" fill="#ffffff" stroke="#e2e8f0"/>
+<text x="66" y="194" font-family="Microsoft YaHei, 微软雅黑, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="19" fill="#0f172a">报告摘要</text>
+<text x="518" y="194" font-family="Consolas, Menlo, monospace" font-size="18" fill="#475569">发现 7 条 · High 1 / Medium 4 / Low 2 · 已确认 5</text>
+<rect x="48" y="210" width="1576" height="46" fill="#f8fafc" stroke="#e2e8f0"/>
+<text x="66" y="240" font-family="Microsoft YaHei, 微软雅黑, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="19" fill="#0f172a">覆盖范围</text>
+<text x="518" y="240" font-family="Consolas, Menlo, monospace" font-size="18" fill="#475569">已读取 12 个文件 / 340 行；未覆盖其余仓库文件</text>
+<rect x="48" y="256" width="1576" height="46" fill="#ffffff" stroke="#e2e8f0"/>
+<text x="66" y="286" font-family="Microsoft YaHei, 微软雅黑, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="19" fill="#0f172a">发现清单</text>
+<text x="518" y="286" font-family="Consolas, Menlo, monospace" font-size="18" fill="#475569">按风险排序，可跳转 diff 对应行</text>
+<rect x="48" y="302" width="1576" height="46" fill="#f8fafc" stroke="#e2e8f0"/>
+<text x="66" y="332" font-family="Microsoft YaHei, 微软雅黑, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="19" fill="#0f172a">反馈汇总</text>
+<text x="518" y="332" font-family="Consolas, Menlo, monospace" font-size="18" fill="#475569">采纳 4 · 忽略 2 · 误报 1</text>
+<rect x="48" y="348" width="1576" height="46" fill="#ffffff" stroke="#e2e8f0"/>
+<text x="66" y="378" font-family="Microsoft YaHei, 微软雅黑, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="19" fill="#0f172a">修复汇总</text>
+<text x="518" y="378" font-family="Consolas, Menlo, monospace" font-size="18" fill="#475569">已应用 2 · 已验证 2 · 回滚 0</text>
+<rect x="48" y="394" width="1576" height="46" fill="#f8fafc" stroke="#e2e8f0"/>
+<text x="66" y="424" font-family="Microsoft YaHei, 微软雅黑, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="19" fill="#0f172a">操作</text>
+<text x="518" y="424" font-family="Consolas, Menlo, monospace" font-size="18" fill="#475569">[ 导出 ] [ 分享 ] [ 回写 PR 评论 ]</text>
+<rect x="48" y="440" width="1576" height="46" fill="#ffffff" stroke="#e2e8f0"/>
+<text x="66" y="470" font-family="Microsoft YaHei, 微软雅黑, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="19" fill="#0f172a">边界</text>
+<text x="518" y="470" font-family="Consolas, Menlo, monospace" font-size="18" fill="#475569">无发现时说明覆盖范围，不用「代码很干净」这类过度承诺</text>
+<text x="48" y="508" font-family="Microsoft YaHei, 微软雅黑, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="16" fill="#94a3b8">占位线框图 · 非最终视觉设计 · 素材补齐后替换 ../原型截图/S8.png</text>
+</svg>

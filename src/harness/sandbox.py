@@ -16,7 +16,7 @@
   对比：
   - 当前：进程级 subprocess，临时目录隔离
   - Docker：网络隔离 + 只读根FS + 内存限制 + capabilities/pids 限制
-  - 面试话术见模块末尾
+  - 设计说明见模块末尾
 """
 from __future__ import annotations
 import os
@@ -57,14 +57,24 @@ class Sandbox:
     def __init__(self, base_dir: str | None = None, timeout: int = 60,
                  allowed_commands: set[str] | None = None):
         # 默认隔离目录：项目根 .sandbox/（不在用户主目录树下）
+        #
+        # ⚠️ fail-closed：项目内目录建不出来时必须报错，绝不静默回退到
+        # tempfile.gettempdir()。临时目录通常位于用户主目录树下（%TEMP%），
+        # git 等工具会向上遍历找到主目录的 .git / .ssh，等于把隔离边界
+        # 换成比原意更弱的目录，而调用方毫无察觉。
         if base_dir is None:
+            _proj = Path(__file__).resolve().parent.parent.parent
+            _sb = _proj / ".sandbox"
             try:
-                _proj = Path(__file__).resolve().parent.parent.parent
-                _sb = _proj / ".sandbox"
                 _sb.mkdir(parents=True, exist_ok=True)
-                base_dir = str(_sb)
-            except Exception:
-                base_dir = tempfile.gettempdir()
+            except OSError as exc:
+                raise RuntimeError(
+                    f"Sandbox isolation directory is unavailable: {_sb} ({exc}). "
+                    "Refusing to fall back to the system temp directory, which may "
+                    "sit under the user home tree. Pass an explicit base_dir or fix "
+                    "permissions on the project directory."
+                ) from exc
+            base_dir = str(_sb)
         self.base_dir = base_dir
         self.timeout = timeout
         # Per-thread isolation context; never chdir the parent process.
@@ -258,7 +268,7 @@ class DockerSandbox:
         sandbox = DockerSandbox(image="python:3.11-slim")
         result = sandbox.run(["python", "-c", "print(2+2)"], cwd="/tmp/mywork")
 
-    面试话术: "当前项目的沙箱是进程级——线程+subprocess+临时目录，
+    设计说明: "当前项目的沙箱是进程级——线程+subprocess+临时目录，
     适合内网开发环境。生产环境会升级为 Docker 容器隔离：禁用网络、
     只读根文件系统、256MB 内存上限、禁止提权——这四条把攻击面从
     '能访问整个操作系统'压缩到 '只能在一个受限容器里跑几行代码'。"
