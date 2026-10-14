@@ -117,12 +117,16 @@ def load_config(root):
     path = config_path(root)
     if not path.is_file():
         raise RuntimeError(
-            "尚未初始化项目运行配置。请双击项目根目录的「启动原型导出服务」"
-            "（Windows 为 .bat），它会自动创建配置并启动服务。")
+            "尚未初始化项目运行配置。请在项目目录执行 "
+            "python3 scripts/start_service.py --serve（Windows 用 "
+            "py -3 scripts\\start_service.py --serve），"
+            "它会自动创建配置并启动服务。")
     config = json.loads(path.read_text(encoding="utf-8"))
     if Path(config["root"]).resolve() != Path(root).resolve():
         raise RuntimeError(
-            "项目目录已移动。请双击项目根目录的「启动原型导出服务」（Windows 为 .bat）重新初始化。")
+            "项目目录已移动。请在项目目录执行 "
+            "python3 scripts/start_service.py --serve 重新初始化"
+            "（Windows 用 py -3 scripts\\start_service.py --serve）。")
     return config
 
 

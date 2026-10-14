@@ -439,25 +439,22 @@ def doctor(root):
             else:
                 print(f"  ⚠️  {label} {port}：被占用（{reason}）；启动时会自动换端口")
 
-    entries = [("启动原型导出服务.command", os.name != "nt"),
-               ("启动原型导出服务.bat", os.name == "nt")]
+    # 启动入口现为命令行脚本：原先的双击入口（.command/.bat）已从仓库移除，
+    # 改为直接运行 scripts/start_service.py --serve。
+    entry = root / "scripts" / "start_service.py"
     print()
-    for name, relevant in entries:
-        path = root / name
-        if not path.exists():
-            print(f"  {'❌' if relevant else '  '} 启动入口 {name}：不存在")
-        elif os.name != "nt" and name.endswith(".command"):
-            executable = os.access(path, os.X_OK)
-            print(f"  {_mark(executable)} 启动入口 {name}：" +
-                  ("可执行" if executable else "缺少可执行权限，请运行 chmod +x"))
-        else:
-            print(f"  ✅ 启动入口 {name}：存在")
+    if not entry.exists():
+        print("  ❌ 启动入口 scripts/start_service.py：不存在")
+    else:
+        print("  ✅ 启动入口 scripts/start_service.py：存在"
+              "（服务用它启动：--serve）")
 
     if sys.platform == "darwin":
         import pm_launchagent
         registered, agent_port, matched, pid = pm_launchagent.status(config)
         if not registered:
-            print("  ⚠️  按需启动器：未注册——点导出不会自动起服务，需要先双击启动入口。")
+            print("  ⚠️  按需启动器：未注册——点导出不会自动起服务，"
+                  "需要先手动启动入口。")
             print("      注册：bash scripts/install_launcher.sh")
         elif not matched:
             # plist 里的端口是写死的，端口自愈过就会错位。

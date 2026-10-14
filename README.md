@@ -181,9 +181,6 @@ cp .env.example .env
 ### 启动
 
 ```bash
-# Windows：同时启动 FastAPI 和 Streamlit（推荐，脚本会配置本地代理）
-start_services.bat
-
 # 方式 1: Streamlit Web UI（推荐）
 streamlit run src/app/streamlit_app.py
 
@@ -202,10 +199,8 @@ python -m uvicorn src.api.server:app --port 8000
 - FastAPI: http://localhost:8000/docs
 - Metrics: http://localhost:8000/metrics
 
-`start_services.bat` 默认使用 `C:\tools\anaconda3\envs\pytorch\python.exe`，不可用时回退到
-`python`；若未继承代理环境变量，会使用 `http://127.0.0.1:7897`。两个服务独立运行，启动日志
-写入 `logs/fastapi-service.*.log` 和 `logs/streamlit-service.*.log`。如本机未运行该代理，请在
-启动前设置正确的 `HTTP_PROXY`、`HTTPS_PROXY` 和 `ALL_PROXY`。
+> 需要代理访问模型 API 时，请在启动前设置 `HTTP_PROXY` / `HTTPS_PROXY` /
+> `ALL_PROXY`；本仓库不再附带任何指向本机代理的启动脚本。
 
 ### Docker
 

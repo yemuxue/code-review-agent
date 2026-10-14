@@ -19,7 +19,7 @@ description: PM需求产出工作流：输入需求描述，产出PRD+原型+流
    - **不存在** → 以需求名新建顶层文件夹 `[需求名]/`，再在其下建本步需要的子目录。
 2. **谁先做谁建家**：本工作流不假设一定先有 PRD。若用户先做的是需求挖掘或数据分析，则由那一步首次创建 `[需求名]/`；之后做 PRD/原型/流程图时复用同一个 `[需求名]/`，所有产物都收在这一个需求目录内，不重复另建。
 3. **子目录用到才建**：一个需求目录下最多包含这 7 类子目录 —— `需求文档/ 原型/ 流程图/ 原型截图/ 需求挖掘/ 验收清单/ 数据分析/`，外加 `沟通记录.md`。**只创建当前步骤实际用到的子目录**，不预建空文件夹。
-4. **共享资源不进需求目录**：`scripts/`、两个启动入口（`启动原型导出服务.command` / `.bat`）、`.handoff/`、`.pm-workflow/`、`关键点.md`、`.mcp.json`、`.agents/` 为所有需求共享，始终留在项目根目录。
+4. **共享资源不进需求目录**：`scripts/`（含导出服务入口 `scripts/start_service.py`）、`.handoff/`、`.pm-workflow/`、`.mcp.json`、`.agents/` 为所有需求共享，始终留在项目根目录。
 5. **需求名一致性**：同一需求在所有工作流中使用**完全相同**的 `[需求名]`，确保各步产出归入同一文件夹；命名有歧义时先与用户确认。
 
 ---
@@ -1116,7 +1116,7 @@ PRD HTML 会被推到公司内网供多人浏览。内网是 `http://` 非 local
    > **实测踩过（删了 8 张补 1 张）：** `原型截图/` 里同时存放 PM 手工产物。用 `[需求名]-shots.html`（状态可寻址的截图版）按 hash 一个状态一张手截、手工命名（`01-详情页.png` 等），PRD 的「原型」列直接 `<img>` 引这些名字。而对 `[需求名]-prototype.html` 跑一次导出时，它本身没有 `.device` 节点、只出 1 张整页图，`*.png` 却把那 8 张全删了，PRD 当场变成碎图，且**这些图不在 git 里，删了就没了**。
 
 
-7. **极度重要（导出服务）：** 项目根目录提供两个双击入口——macOS 的 `启动原型导出服务.command` 和 Windows 的 `启动原型导出服务.bat`。服务端口由项目确定性推导（不是固定的 8765），页面通过 `scripts/pm-runtime-config.js` 拿到实际地址，**不要在原型或 PRD 里写死任何端口号**。点导出时若服务未响应，按钮需显示"正在连接导出服务"，并按访问者的平台提示对应的那个入口（客户端已按 `navigator.userAgent` 自动选词）。浏览器安全限制下，HTML 不能直接启动 Python 进程，得有个东西在启动器端口上应答：**macOS 上这个角色由 launchd 担任**（安装时已默认注册按需启动器，socket 激活、空闲零进程），所以点导出会自动起服务，不需要先双击入口；Windows 上没有这一层，必须先双击 `.bat` 并保持窗口开着。
+7. **极度重要（导出服务）：** 项目根目录不再提供双击入口，导出服务的启动方式是命令行脚本 `scripts/start_service.py --serve`（macOS 用 `python3`，Windows 用 `py -3`）。服务端口由项目确定性推导（不是固定的 8765），页面通过 `scripts/pm-runtime-config.js` 拿到实际地址，**不要在原型或 PRD 里写死任何端口号**。点导出时若服务未响应，按钮需显示"正在连接导出服务"，并按访问者的平台提示对应的命令（客户端已按 `navigator.userAgent` 自动选词）。浏览器安全限制下，HTML 不能直接启动 Python 进程，得有个东西在启动器端口上应答：**macOS 上这个角色由 launchd 担任**（安装时已默认注册按需启动器，socket 激活、空闲零进程），所以点导出会自动起服务，不需要先手动启动；Windows 上没有这一层，必须先运行 `start_service.py --serve` 并保持窗口开着。
 8. 同时保留 `trigger-export` 的 `postMessage` 监听，以兼容 iframe 嵌入场景；无 hash 时 body 加 `.tiled` class 平铺展示所有 `.device`，有 hash 时只显示对应单页。
 9. **极度重要（单页模式 CSS 陷阱）：** 单页模式下**禁止**对 `.gallery` 等包裹容器设置 `display: none`，否则内部 `.device` 即使有 `!important` 也不会显示（CSS 继承：父隐藏则子不可见）。正确做法：保持 `.gallery` 为 `display: block`，隐藏每个 `.device-wrapper`，仅对 `.device-wrapper.active` 设置 `display: flex`。JS init 中通过 `device.closest('.device-wrapper')` 找到父容器加 `active` 类。
 10. 保存路径：`[需求名]/原型/[需求名]-prototype.html`（相对于项目根目录）
@@ -1981,7 +1981,7 @@ const EDGES = [
 
 ## 目录结构
 
-> **核心原则：产物按「需求名」分文件夹。** 每个需求一个顶层目录，自己的需求文档/原型/流程图/截图等都收纳其中；`scripts/`、两个启动入口（`启动原型导出服务.command` / `.bat`）、`.handoff/`、`.pm-workflow/`、`关键点.md`、`.mcp.json`、`.agents/` 为所有需求**共享**，留在项目根目录。
+> **核心原则：产物按「需求名」分文件夹。** 每个需求一个顶层目录，自己的需求文档/原型/流程图/截图等都收纳其中；`scripts/`、`.handoff/`、`.pm-workflow/`、`.mcp.json`、`.agents/` 为所有需求**共享**，留在项目根目录。
 
 ```
 PM工作流/
@@ -2014,12 +2014,9 @@ PM工作流/
 │   ├── prototype-export-client.js  # 原型导出按钮客户端
 │   ├── install_launcher.sh         # 装/卸 macOS 按需启动器（安装时已默认注册）
 │   └── pm-runtime-config.js        # 自动生成：本项目服务地址（已 gitignore）
-├── 启动原型导出服务.command           # 【共享】macOS 手动启动（通常不用，点导出会自动起）
-├── 启动原型导出服务.bat               # 【共享】Windows 双击启动，保持窗口开着
 ├── .handoff/                       # 【共享】会话交接文件（上下文续接用）
 │   └── [需求名]-handoff.md
 ├── .pm-workflow/                   # 【共享】运行配置与安装清单（已 gitignore）
-├── 关键点.md                        # 【共享】工作流版本迭代记录
 ├── .mcp.json                       # 【共享】Pencil MCP 连接配置（可选）
 ├── .agents/workflows/              # 【共享】工作流定义
 │   ├── edu-pm-prd.md               # 主工作流：需求→PRD→原型→流程图

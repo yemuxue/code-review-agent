@@ -10,7 +10,8 @@
      iframe 换成图片（依赖内容、视口和缩放一致时复用，否则重渲）
   5. 使用 Playwright/Chromium 截取浏览器真实渲染后的 .device，避免 html-to-image 重绘差异
 
-使用方法：双击项目根目录的「启动原型导出服务」（macOS 为 .command，Windows 为 .bat）。
+使用方法：在项目目录运行 `python3 scripts/start_service.py --serve`
+（Windows 用 `py -3 scripts/start_service.py --serve`）。
 
 注意：不要直接跑这个文件——它需要共享 venv 里的 playwright 才能截图。
 正确的入口是 start_service.py，由它准备好环境后再拉起本文件。
@@ -1109,8 +1110,10 @@ class Handler(BaseHTTPRequestHandler):
             # 走到这里说明服务不是由 start_service.py 拉起的（它会先备好共享 venv）。
             self._json({
                 "ok": False,
-                "error": "截图依赖未就绪。请关掉当前服务窗口，改为双击项目根目录的"
-                         "「启动原型导出服务」（Windows 为 .bat）重新启动。",
+                "error": "截图依赖未就绪。请关掉当前服务窗口，改为在项目目录运行 "
+                         "python3 scripts/start_service.py --serve "
+                         "（Windows 用 py -3 scripts\\start_service.py --serve）"
+                         "重新启动。",
             }, 500)
             return
         except Exception as error:

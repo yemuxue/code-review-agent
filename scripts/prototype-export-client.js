@@ -12,10 +12,14 @@
   'use strict';
 
   const IS_WINDOWS = /Windows/i.test(navigator.userAgent);
-  const ENTRY = IS_WINDOWS ? '「启动原型导出服务.bat」' : '「启动原型导出服务.command」';
-  const HOW_TO_START = '请双击项目根目录的' + ENTRY + '，保持那个窗口开着，再点一次导出。';
-  // 升级路径：双击入口在两个平台上都必然可用，所以它留给上面那条文案。
-  // 这里是「双击了也不行」时的下一步，面向已经打开终端的人。macOS 多给一条
+  // 原先指引用户双击项目根目录的启动入口（.command/.bat），
+  // 那两个文件已从仓库移除，改为指引命令行入口 start_service.py --serve。
+  const START_CMD = IS_WINDOWS
+    ? 'py -3 scripts\\start_service.py --serve'
+    : 'python3 scripts/start_service.py --serve';
+  const HOW_TO_START = '请在项目目录执行 ' + START_CMD + '，保持那个窗口开着，再点一次导出。';
+  // 升级路径：命令行入口在两个平台上都可用，所以它留给上面那条文案。
+  // 这里是「执行了也不行」时的下一步，面向已经打开终端的人。macOS 多给一条
   // 重注册命令：那边点导出本该自动起服务，走到这一步通常是注册掉了。
   const HOW_TO_DIAGNOSE = IS_WINDOWS
     ? '若仍不行，在项目目录执行：py -3 scripts\\start_service.py --doctor'

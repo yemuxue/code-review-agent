@@ -19,7 +19,7 @@ cd "$(dirname "$0")/.." || exit 1
 
 if [ "$(uname -s)" != "Darwin" ]; then
   echo "按需启动器只支持 macOS。"
-  echo "Windows 上不需要它：服务本体就是你双击「启动原型导出服务.bat」后开着的那个窗口。"
+  echo "Windows 上不需要它：服务本体就是你运行 start_service.py --serve 后开着的那个窗口。"
   exit 0
 fi
 
@@ -53,7 +53,7 @@ if action in ("--uninstall", "-u", "uninstall"):
     if not ok:
         sys.exit(f"❌ 卸载失败：{detail}")
     print(f"✅ 已卸载本项目的按需启动器（{detail}）")
-    print("   导出功能不受影响：双击「启动原型导出服务.command」照样能用。")
+    print("   导出功能不受影响：在项目目录运行 python3 scripts/start_service.py --serve 照样能用。")
     sys.exit(0)
 
 ok, detail = pm_launchagent.install(root, config)

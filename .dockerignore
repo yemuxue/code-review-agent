@@ -64,9 +64,3 @@ coverage.xml
 .vscode/
 .idea/
 *.log
-push.bat
-setup_docker.bat
-start_services.bat
-stop_services.bat
-启动原型导出服务.bat
-启动原型导出服务.command
