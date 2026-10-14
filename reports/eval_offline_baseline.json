@@ -1,0 +1,125 @@
+{
+  "version": 1,
+  "suite": "offline",
+  "repeat": 2,
+  "model": null,
+  "trajectory": {
+    "工具调用成功率": {
+      "value": 1.0,
+      "numerator": 3,
+      "denominator": 3
+    },
+    "参数合法率": {
+      "value": 1.0,
+      "numerator": 3,
+      "denominator": 3
+    },
+    "Plan 可执行率": {
+      "value": null,
+      "numerator": 0,
+      "denominator": 0
+    },
+    "VERDICT 解析率": {
+      "value": null,
+      "numerator": 0,
+      "denominator": 0
+    },
+    "fix 输出解析率": {
+      "value": null,
+      "numerator": 0,
+      "denominator": 0
+    },
+    "空转率": {
+      "value": 0.0,
+      "numerator": 0,
+      "denominator": 4
+    },
+    "循环率": {
+      "value": 0.0,
+      "numerator": 0,
+      "denominator": 1
+    },
+    "fix 成功率": {
+      "value": null,
+      "numerator": 0,
+      "denominator": 0
+    },
+    "回归引入率": {
+      "value": null,
+      "numerator": 0,
+      "denominator": 0
+    },
+    "turn 预算耗尽率": {
+      "value": null,
+      "numerator": 0,
+      "denominator": 0
+    },
+    "端到端成功率": {
+      "value": 1.0,
+      "numerator": 1,
+      "denominator": 1
+    },
+    "降级率": {
+      "value": 0.0,
+      "numerator": 0,
+      "denominator": 1
+    }
+  },
+  "stability": {
+    "pass@k": {
+      "value": null,
+      "numerator": 0,
+      "denominator": 0
+    },
+    "flaky 率": {
+      "value": null,
+      "numerator": 0,
+      "denominator": 0
+    }
+  },
+  "collection": {
+    "工具事件配对率": {
+      "value": 1.0,
+      "numerator": 3,
+      "denominator": 3
+    },
+    "未知事件占比": {
+      "value": 0.0,
+      "numerator": 0,
+      "denominator": 16
+    },
+    "日志坏行率": {
+      "value": 0.0,
+      "numerator": 0,
+      "denominator": 16
+    },
+    "未收尾运行占比": {
+      "value": 0.0,
+      "numerator": 0,
+      "denominator": 1
+    }
+  },
+  "tokens": {
+    "total_tokens": 0,
+    "tokens_per_run": 0,
+    "runs": 0
+  },
+  "parallel": {
+    "runs": 0,
+    "wall_s": 0.0,
+    "node_total_s": 0.0,
+    "concurrency": null
+  },
+  "coverage": {
+    "runs": 1,
+    "with_roles": 0,
+    "with_tool_start": 1,
+    "with_node_stats": 0,
+    "with_parse_results": 0,
+    "multi_agent": 0,
+    "bad_lines": 0,
+    "unknown_events": 0,
+    "incomplete": 0
+  },
+  "failures": {}
+}

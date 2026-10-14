@@ -13,7 +13,24 @@ coverage.xml
 /.streamlit-*.log
 data/
 logs/
-reports/
+# reports/ 只排除**每次运行新生成的产物**；被文档或 CI 引用的证据快照要入库，
+# 因此这里用 `reports/*` + 显式白名单，而不是整目录排除。
+# ⚠️ 踩过的坑：原先写 `reports/` 把 CI 必需的门禁基线
+#    `reports/eval_offline_baseline.json` 一起静默排除了，
+#    导致 CI 的 eval-gate 作业在全新检出上必然失败（本地因为有该文件而看不出）。
+reports/*
+!reports/eval_offline_baseline.json
+!reports/eval_baseline_20260910.md
+!reports/eval_real_run_20260910.md
+!reports/eval_replay_20260927.md
+!reports/eval_replay_20260927_replay.json
+!reports/eval_chain_validation_20260911.md
+!reports/eval_full_20260911.md
+!reports/recall_experiment_01.md
+!reports/recall_experiment_02.md
+!reports/flipped_review_v120.md
+!reports/eval_replay_sol_high_full.md
+!reports/eval_replay_sol_high_full_replay.json
 sessions/
 *.db
 /dist/
