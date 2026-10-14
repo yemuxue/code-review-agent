@@ -12,11 +12,11 @@ echo   Docker Setup - Windows 11
 echo ==========================================
 echo.
 
-echo [1/4] Enabling Virtual Machine Platform...
+echo [1/5] Enabling Virtual Machine Platform...
 dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart
 
 echo.
-echo [2/4] Enabling Windows Subsystem for Linux...
+echo [2/5] Enabling Windows Subsystem for Linux...
 dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart
 
 echo.
