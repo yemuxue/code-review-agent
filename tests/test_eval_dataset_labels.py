@@ -82,13 +82,22 @@ def test_sample_count_never_shrinks():
     assert len(_samples()) == 124
 
 
-def test_negative_arithmetic_is_exact():
-    """负例 = 原始 FP 陷阱 + 审计转负（带【已修复】标记）。"""
+def test_original_trap_count_never_increases():
+    """原始 FP 陷阱数只会因「该位置仍有真缺陷」而被移除，不会凭空增加。
+
+    负例由两部分构成：最初写下的「看起来像 bug、实际无害」陷阱，
+    以及审计判定「已修复」而转负的旧标注（带【已修复】标记）。
+    随着审计深入，某些陷阱会被发现有真问题而转回正例 —— 所以这个数
+    只能**单调不增**；若它变大，说明有人把正例悄悄改成了负例。
+    """
     samples = _samples()
     marked = sum(1 for s in samples if s[5].startswith(FIXED_MARKER))
     negatives = sum(1 for s in samples if not s[6])
+    traps = negatives - marked
 
-    assert negatives == ORIGINAL_FP_TRAPS + marked
+    assert 0 <= traps <= ORIGINAL_FP_TRAPS, (
+        f"仍在负例中的原始陷阱数 {traps} 超出 [0, {ORIGINAL_FP_TRAPS}]："
+        "陷阱只会因发现真缺陷而减少")
 
 
 def test_marked_samples_are_negative():
@@ -174,19 +183,38 @@ def test_audit_status_is_declared():
     assert isinstance(meta.get("audit_complete"), bool), "audit_complete 必须是布尔值"
 
 
-def test_partial_patch_forces_audit_incomplete():
-    """补丁自述未完成时，元信息不得宣称审计完整。"""
-    partial = False
-    if PATCHES_DIR.is_dir():
-        for path in PATCHES_DIR.glob("v*.json"):
-            data = json.loads(path.read_text(encoding="utf-8"))
-            status = str(data.get("_status") or "")
-            if "待" in status or "pending" in status.lower():
-                partial = True
+def _latest_patch() -> dict | None:
+    """按 to_version 取最新补丁（v1.3.0 → v1.4.0 按元组比较，不能按字符串）。"""
+    if not PATCHES_DIR.is_dir():
+        return None
+    def _key(path: Path) -> tuple[int, ...]:
+        stem = path.stem.lstrip("v")
+        return tuple(int(part) for part in stem.split(".") if part.isdigit())
+    patches = sorted(PATCHES_DIR.glob("v*.json"), key=_key)
+    if not patches:
+        return None
+    return json.loads(patches[-1].read_text(encoding="utf-8"))
+
+
+def test_audit_complete_matches_latest_patch():
+    """审计完成度必须与**最新**补丁自述一致。
+
+    早期版本的补丁可能写着"待审"（那是当时的事实）；只看最新补丁，
+    才能判断"现在是否审完"。否则一个已完成的审计会被历史补丁永远判为未完成。
+    """
+    latest = _latest_patch()
+    if latest is None:
+        pytest.skip("没有补丁文件")
+    status = str(latest.get("_status") or "")
+    partial = "待" in status or "pending" in status.lower()
     meta = _load().DATASET_META
+
     if partial:
         assert meta.get("audit_complete") is False, (
-            "补丁文件写明审计未完成，元信息却宣称 audit_complete=True")
+            "最新补丁自述审计未完成，元信息却宣称 audit_complete=True")
+    else:
+        assert meta.get("audit_complete") is True, (
+            "最新补丁已覆盖剩余区间，元信息仍标 audit_complete=False")
 
 
 # ═══ 数据卫生 ═══

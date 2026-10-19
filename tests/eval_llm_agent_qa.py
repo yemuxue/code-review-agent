@@ -7,7 +7,7 @@ Eval Dataset / 评估数据集 — llm-agent-qa-system
 - is_real_bug=False: 假 bug（用于测试 FP 检测）
 
 实测构成（由 tests/eval/datasets.py 的 preflight 校验，与 DATASET_META 必须一致）：
-78 条真实问题 + 46 条负例 = 124 条。
+80 条真实问题 + 44 条负例 = 124 条。
 
 ## v1.1.0 变更说明（2026-10-13）
 
@@ -46,9 +46,7 @@ Eval Dataset / 评估数据集 — llm-agent-qa-system
 - 动作分布：转负例 6、重定位 3、改描述 8（合并重复 0、转正例 0）
 - 召回分母 **84 → 78**（6 条原以为命中、实际标注写错 → 模型当年答 YES 被算成
   TP，其实是**误报**；修正后精确率从 94.0% 修正到 **82.0%**）
-- ⚠️ **该版审计只覆盖样本 #1-84**；#85-124 待审。这一范围写在
-  `DATASET_META["audit_scope"]` 里，`audit_complete=False`。
-  在补完审计之前，**78/46 这组计数不能当作最终值**。
+- 该版审计只覆盖样本 #1-84；#85-124 已由 **v1.4.0** 补完（见下）。
 - 审计标准：只接受「事实与代码不符」的修正；弱 nit（docstring 占位符、
   中文 provider_name、裸 dict、硬编码 batch_size）虽价值低但事实相符，保留不动。
 
@@ -58,6 +56,32 @@ Eval Dataset / 评估数据集 — llm-agent-qa-system
   解析后成了不可见控制符，本应是正则反向引用 `\1`。
 - `preflight()` 增加"描述含控制字符"的 **error 级检查**，防止此类转义写错复发。
 - 样本极性、计数、读数**全部不变**（v1.3.0 的 P/R/F1 可直接沿用）。
+
+## v1.4.0 变更说明（2026-10-19）— 审计至此完整
+
+补完 **#85-124（40 条：18 正例 + 22 负例）** 的逐条独立审计，
+由补丁引擎（`patches/v1.4.0.json`）生成：
+
+- **重定位 3 条**（极性不变，只是把标注行从空行/函数体/提前返回挪到缺陷语句）：
+  - `config/settings.py` 65 → 58（死代码属性定义处）
+  - `app/chat_ui.py` 84 → 75（`render_status_bar` 定义处）
+  - `utils/helpers.py` 26 → 27（负索引切片语句）
+- **负例改回正例 2 条** —— 这两处的 docstring 声称的能力实际不存在，
+  属于「文档与实现不符」的真实缺陷；把它们当负例会让报出该问题的模型
+  被计成**误报**，从而低估精确率：
+  - `rag/document_loader.py:1`：docstring 声称支持 PDF，但只实现了
+    txt/markdown/html/csv，**不存在 `_load_pdf`**
+  - `rag/text_splitter.py:1`：docstring 声称「使用 jieba 辅助分句」，
+    但只 import 了 `re` 与 `Document`，**从未引入 jieba**
+- **转负例 0 条**：其余 20 条负例逐条核实成立（含 8 条"FAKE"型陷阱——
+  断言与代码明确矛盾，如"`__builtins__` 未禁用"实际是 `{"__builtins__": {}}`、
+  "deque 内存泄漏"实际有 `maxlen` 自动驱逐）。
+
+分母 **78 → 80**。两条新正例模型都答了 NO，因此**召回会下降**（41/80 = 51.3%）。
+这是刻意的：修正标签不以"让读数变好"为目标。
+
+✅ 至此 **124 条全部逐条审计完毕**（v1.3.0 覆盖 #1-84、v1.4.0 覆盖 #85-124），
+`DATASET_META["audit_complete"] = True`。
 """
 
 from __future__ import annotations
@@ -75,21 +99,22 @@ DATASET_META = {
     #                 改描述 8；分母 84 → 78。**该版审计只覆盖 #1-84**。
     # 1.3.0 → 1.3.1：修正样本 #10 描述里的控制字符（U+0001 本应是正则 `\1`），
     #                 并把审计覆盖范围写入元信息。样本极性与计数不变。
-    "version": "1.3.1",
+    # 1.3.1 → 1.4.0：补完 #85-124 的逐条审计：重定位 3、负例改回正例 2
+    #                 （docstring 声称的能力实际不存在）；分母 78 → 80。
+    #                 **至此 124 条全部逐条审计完毕。**
+    "version": "1.4.0",
     "sample_count": 124,
-    "real_bug_count": 78,
-    "fp_trap_count": 46,
-    # ⚠️ 必须显式声明审计覆盖范围：v1.3.0 的补丁只覆盖前 84 条，#85-124 待审。
-    # 不写出来会让读者以为"124 条都逐条审计过"，而"审计未完成"会直接影响
-    # 78/46 这组计数能否当作最终值使用。
-    "audit_scope": "samples #1-84 audited (v1.3.0 patch); #85-124 pending",
-    "audit_complete": False,
+    "real_bug_count": 80,
+    "fp_trap_count": 44,
+    # 审计覆盖范围：v1.3.0 覆盖 #1-84、v1.4.0 覆盖 #85-124，合计全部 124 条。
+    # 这个字段必须显式写出来 —— 未完成时写 pending，完成后才置 True，
+    # 否则读者无法判断 80/44 是否最终值。
+    "audit_scope": "samples #1-124 audited (v1.3.0: #1-84; v1.4.0: #85-124)",
+    "audit_complete": True,
     "target_project": "llm-agent-qa-system (外部仓库，需外部副本)",
     "target_layout": "src/<file>",
-    "annotation_source": "人工标注 + 1.3.0 逐条独立审计修正（由 tests/eval/patch_dataset.py 生成）",
-    "notes": ("逐条独立审计修正：正负例标反、位置漂移、描述与代码不符；"
-              "v1.3.0 处置：转正例 0、转负例 6、合并重复 0、其余描述/位置修正 11；"
-              "召回分母 84 → 78。v1.3.1 仅修 #10 描述控制字符，标签未变。"),
+    "annotation_source": "人工标注 + 1.4.0 逐条独立审计修正（由 tests/eval/patch_dataset.py 生成）",
+    "notes": ("覆盖 #85-124 的逐条独立审计：3 处位置修正、2 条负例改回正例（docstring 声称的能力实际不存在）；本版处置：转正例 2、转负例 0、合并重复 0、其余描述/位置修正 3；召回分母 78 → 80"),
 }
 
 # ═══ 1.3.0 变更记录（逐条独立审计修正：正负例标反、位置漂移、描述与代码不符）═══
@@ -128,6 +153,21 @@ DATASET_META = {
 #   依据：streamlit_app.py:218 settings=render_sidebar() 返回 settings.py:108 模块级单例（sidebar.py:27/154），253 行 st.session_state.get("settings") 也是它（init_session:67 存入），sidebar.py:77-83 又就地修改它；因此 259-260 的『配置变了重建 Agent』分支不可达——改 provider/Key/模型后旧适配器继续用旧 Key
 # #82 rag/text_splitter.py:103 [DESCRIBE] 描述更新——原描述『短句被静默丢弃』与代码不符：第 100-104 行对每个非空句子一律 append，无长度过滤
 #   依据：text_splitter.py:103 注释声称『太短可能与前后合并』，但 _merge_sentences_to_chunks 从不做短句合并，属误导性注释
+#
+# ⚠️ 跨版本读数不可直接比较：分母已变化，历史 replay 必须标注 dataset_version。
+
+# ═══ 1.4.0 变更记录（覆盖 #85-124 的逐条独立审计：3 处位置修正、2 条负例改回正例（docstring 声称的能力实际不存在））═══
+#
+# #85 config/settings.py:58 [RELOCATE] 行号 65→58——位置漂移：原标注行 65 是 current_api_key 与 current_base_url 之间的空行；死代码的语句是 57-58 的 @property + def current_api_key
+#   依据：全仓 grep `current_api_key|current_base_url` 仅命中 settings.py:58 与 settings.py:67 两个定义处，无任何调用点 —— 确认这两处属性是死代码
+# #97 app/chat_ui.py:75 [RELOCATE] 行号 84→75——位置漂移：原标注行 84 是函数体内的 `col1, col2, col3 = st.columns(3)`；死代码的语句是 75 行的 def render_status_bar
+#   依据：全仓 grep `render_status_bar` 仅命中 chat_ui.py:75 的定义，streamlit_app.py 从未调用 —— 确认是死代码
+# #106 utils/helpers.py:27 [RELOCATE] 行号 26→27——位置漂移：原标注行 26 是提前返回 `return text`；缺陷语句是 27 行 `return text[:max_length - len(suffix)] + suffix`（max_length 小于后缀长度时索引为负，返回值反而长于 max_length）
+#   依据：helpers.py:25-27 —— `if len(text) <= max_length: return text` 之后是 `return text[:max_length - len(suffix)] + suffix`；当 max_length=2、suffix='...' 时切片为 text[:-1]，结果长度为 len(text)+2，违反 max_length 契约
+# #123 rag/document_loader.py:1 [RELABEL_POSITIVE] 负例→正例——原负例判定不成立：该位置的 docstring 声称支持 PDF，而代码并未实现 PDF 解析 —— 属『文档与实现不符』的真实缺陷，把它当负例会让报出该问题的模型被计成误报
+#   依据：document_loader.py 只定义 L101 _load_txt / L117 _load_markdown / L142 _load_html / L164 _load_csv，不存在 _load_pdf；全文件搜索 `pdf` 仅命中 L4 docstring『支持多种格式的文档加载：TXT, Markdown, PDF, HTML, CSV』与 L34 注释『需要 PyPDF2 或 pdfplumber』，无任何 PDF 实现
+# #124 rag/text_splitter.py:1 [RELABEL_POSITIVE] 负例→正例——原负例判定不成立：docstring 声称『使用 jieba 辅助分句』，但该模块从未引入 jieba，分句实际只靠正则 —— 属『文档与实现不符』的真实缺陷
+#   依据：text_splitter.py 仅 L10 `import re` 与 L11 `from .document_loader import Document`；全文件无 `jieba` 的 import 或调用，而 L17 docstring 写『使用 jieba 辅助分句，支持滑动窗口重叠以保证语义连续性』
 #
 # ⚠️ 跨版本读数不可直接比较：分母已变化，历史 replay 必须标注 dataset_version。
 
@@ -384,7 +424,7 @@ EVAL_SAMPLES = [
     ('config/settings.py', 97, 'BUG', 'Low',
      "int(os.getenv('CHUNK_SIZE', '512')) crashes if env var set to non-numeric string",
      'int()包裹环境变量非数字时崩溃', True),
-    ('config/settings.py', 65, 'BUG', 'Low',
+    ('config/settings.py', 58, 'BUG', 'Low',
      'current_api_key/current_base_url are defined but referenced nowhere in the repository — dead duplicates of the provider dispatch in create_llm_adapter',
      'current_api_key/current_base_url定义后全仓无引用——与create_llm_adapter的provider分发重复的死代码', True),
     ('config/settings.py', 16, 'BUG', 'Low',
@@ -420,7 +460,7 @@ EVAL_SAMPLES = [
     ('app/chat_ui.py', 42, 'STYLE', 'Low',
      'render_thinking_step shows raw LLM thinking text — may contain sensitive internal reasoning',
      '思考步骤展示原始LLM内部推理可能泄露敏感信息', True),
-    ('app/chat_ui.py', 84, 'STYLE', 'Low',
+    ('app/chat_ui.py', 75, 'STYLE', 'Low',
      'render_status_bar defined but never called in streamlit_app.py — dead code',
      'render_status_bar定义但从未调用', True),
     ('app/sidebar.py', 77, 'BUG', 'Medium',
@@ -447,7 +487,7 @@ EVAL_SAMPLES = [
     ('utils/helpers.py', 40, 'BUG', 'Low',
      'format_timestamp uses datetime.now() without timezone — inconsistent across servers',
      '时间戳格式化无时区信息', True),
-    ('utils/helpers.py', 26, 'STYLE', 'Low',
+    ('utils/helpers.py', 27, 'STYLE', 'Low',
      'truncate_text subtracts suffix length from max — may produce negative index for short max_length',
      'truncate_text在max_length极小时可能负索引', True),
     ('utils/logger.py', 13, 'BUG', 'Low',
@@ -499,11 +539,11 @@ EVAL_SAMPLES = [
      'FAKE: Web search makes requests without timeout (actually DDGS has built-in timeout)',
      '假：网络搜索无超时（实际DDGS内置超时）', False),
     ('rag/document_loader.py', 1, 'BUG', 'Medium',
-     'FAKE: DocumentLoader loads entire PDF into memory at once (actually PDF support not implemented)',
-     '假：文档加载器一次加载整个PDF（实际PDF支持未实现）', False),
+     'Module docstring claims PDF support, but DocumentLoader implements only _load_txt/_load_markdown/_load_html/_load_csv — no _load_pdf exists, so .pdf input has no matching branch',
+     '模块 docstring 声称支持 PDF 解析，但 DocumentLoader 只实现了 _load_txt/_load_markdown/_load_html/_load_csv，不存在 _load_pdf，上传 .pdf 后无对应分支处理', True),
     ('rag/text_splitter.py', 1, 'BUG', 'Medium',
-     'FAKE: TextSplitter drops unicode characters (actually preserves all characters in split)',
-     '假：文本分割器丢弃unicode字符（实际保留所有字符）', False),
+     'Module docstring claims jieba-assisted sentence splitting, but the module imports only re and Document — jieba is never imported or used, splitting relies on regex alone',
+     '模块 docstring 声称『使用 jieba 辅助分句』，但文件只 import re 与 Document，全仓未引入 jieba，实际分句仅靠正则表达式', True),
 ]
 
 

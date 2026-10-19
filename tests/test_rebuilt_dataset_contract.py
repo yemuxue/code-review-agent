@@ -40,12 +40,13 @@ DATASET_ID = "llm-agent-qa-system-labeled"
 
 # 重建后的基准值：改动数据集时必须同步更新，并递增 DATASET_META.version。
 # ⚠️ 这是**故意的绊线**，不是漏同步：版本或计数一变就必须有人显式改这里，
-# 避免"标签被悄悄改动、读数却继续沿用旧口径"。
-# 版本沿革：1.0.0(108) → 1.1.0(81) → 1.2.0(84) → 1.3.0(78) → 1.3.1(78，仅修描述)
-EXPECTED_VERSION = "1.3.1"
+# 避免「标签被悄悄改动、读数却继续沿用旧口径」。
+# 版本沿革：1.0.0(108) → 1.1.0(81) → 1.2.0(84) → 1.3.0(78) → 1.3.1(78)
+#           → 1.4.0(80，补完 #85-124 审计：重定位 3、负例改回正例 2)
+EXPECTED_VERSION = "1.4.0"
 EXPECTED_TOTAL = 124
-EXPECTED_REAL_BUGS = 78
-EXPECTED_FP_TRAPS = 46
+EXPECTED_REAL_BUGS = 80
+EXPECTED_FP_TRAPS = 44
 MANIFEST = Path("tests/eval") / f"anchors_{DATASET_ID}.json"
 
 # 外部目标仓库；不存在时锚点断言跳过（CI 上通常没有外部副本）

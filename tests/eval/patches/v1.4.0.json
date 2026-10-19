@@ -1,0 +1,47 @@
+{
+  "from_version": "1.3.1",
+  "to_version": "1.4.0",
+  "summary": "覆盖 #85-124 的逐条独立审计：3 处位置修正、2 条负例改回正例（docstring 声称的能力实际不存在）",
+  "_method": "逐条读所属函数/类的完整上下文（自动导出 def/class 边界与 ±30 行代码）；跨文件断言（是否被全仓引用、是否延迟加载、是否使用某依赖）一律用全仓 grep 核实；每条判定必须引用实际行号与代码片段。负例的判定标准是『该位置所在语句/成员块内是否存在任何真实缺陷』——因为负例语义是『模型报出即误报』，若真有问题则会把真缺陷计成误报、低估精确率。针对指向模块 docstring 的负例，额外核对『docstring 的声明是否与实现一致』。",
+  "_status": "覆盖 #85-124（40 条：18 正例 + 22 负例）；与 v1.3.0（#1-84）合起来覆盖全部 124 条，审计至此完整。",
+  "_review_standard": "只接受『事实与代码不符』的修正。弱 nit（文档缺失、风格偏好、微优化）虽价值低但事实与代码相符，本轮保留不动。位置不精确（标在注释/空行/函数体而非缺陷语句）单独按 RELOCATE 处置，不改变极性。",
+  "changes": [
+    {
+      "sample_id": 85,
+      "action": "RELOCATE",
+      "new_line": 58,
+      "reason": "位置漂移：原标注行 65 是 current_api_key 与 current_base_url 之间的空行；死代码的语句是 57-58 的 @property + def current_api_key",
+      "evidence": "全仓 grep `current_api_key|current_base_url` 仅命中 settings.py:58 与 settings.py:67 两个定义处，无任何调用点 —— 确认这两处属性是死代码"
+    },
+    {
+      "sample_id": 97,
+      "action": "RELOCATE",
+      "new_line": 75,
+      "reason": "位置漂移：原标注行 84 是函数体内的 `col1, col2, col3 = st.columns(3)`；死代码的语句是 75 行的 def render_status_bar",
+      "evidence": "全仓 grep `render_status_bar` 仅命中 chat_ui.py:75 的定义，streamlit_app.py 从未调用 —— 确认是死代码"
+    },
+    {
+      "sample_id": 106,
+      "action": "RELOCATE",
+      "new_line": 27,
+      "reason": "位置漂移：原标注行 26 是提前返回 `return text`；缺陷语句是 27 行 `return text[:max_length - len(suffix)] + suffix`（max_length 小于后缀长度时索引为负，返回值反而长于 max_length）",
+      "evidence": "helpers.py:25-27 —— `if len(text) <= max_length: return text` 之后是 `return text[:max_length - len(suffix)] + suffix`；当 max_length=2、suffix='...' 时切片为 text[:-1]，结果长度为 len(text)+2，违反 max_length 契约"
+    },
+    {
+      "sample_id": 123,
+      "action": "RELABEL_POSITIVE",
+      "reason": "原负例判定不成立：该位置的 docstring 声称支持 PDF，而代码并未实现 PDF 解析 —— 属『文档与实现不符』的真实缺陷，把它当负例会让报出该问题的模型被计成误报",
+      "evidence": "document_loader.py 只定义 L101 _load_txt / L117 _load_markdown / L142 _load_html / L164 _load_csv，不存在 _load_pdf；全文件搜索 `pdf` 仅命中 L4 docstring『支持多种格式的文档加载：TXT, Markdown, PDF, HTML, CSV』与 L34 注释『需要 PyPDF2 或 pdfplumber』，无任何 PDF 实现",
+      "desc_cn": "模块 docstring 声称支持 PDF 解析，但 DocumentLoader 只实现了 _load_txt/_load_markdown/_load_html/_load_csv，不存在 _load_pdf，上传 .pdf 后无对应分支处理",
+      "desc_en": "Module docstring claims PDF support, but DocumentLoader implements only _load_txt/_load_markdown/_load_html/_load_csv — no _load_pdf exists, so .pdf input has no matching branch"
+    },
+    {
+      "sample_id": 124,
+      "action": "RELABEL_POSITIVE",
+      "reason": "原负例判定不成立：docstring 声称『使用 jieba 辅助分句』，但该模块从未引入 jieba，分句实际只靠正则 —— 属『文档与实现不符』的真实缺陷",
+      "evidence": "text_splitter.py 仅 L10 `import re` 与 L11 `from .document_loader import Document`；全文件无 `jieba` 的 import 或调用，而 L17 docstring 写『使用 jieba 辅助分句，支持滑动窗口重叠以保证语义连续性』",
+      "desc_cn": "模块 docstring 声称『使用 jieba 辅助分句』，但文件只 import re 与 Document，全仓未引入 jieba，实际分句仅靠正则表达式",
+      "desc_en": "Module docstring claims jieba-assisted sentence splitting, but the module imports only re and Document — jieba is never imported or used, splitting relies on regex alone"
+    }
+  ]
+}

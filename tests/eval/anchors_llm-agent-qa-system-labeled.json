@@ -676,11 +676,11 @@
     },
     "#85": {
       "file": "config/settings.py",
-      "line": 65,
+      "line": 58,
       "version": 1,
-      "line_hash": "ec9ed03568670a9c",
-      "context_hash": "fcba141cb31a1854",
-      "anchor_line": 66
+      "line_hash": "a93fe4dd64263022",
+      "context_hash": "af1114880530af05",
+      "anchor_line": 58
     },
     "#86": {
       "file": "config/settings.py",
@@ -772,11 +772,11 @@
     },
     "#97": {
       "file": "app/chat_ui.py",
-      "line": 84,
+      "line": 75,
       "version": 1,
-      "line_hash": "530e8a8f52b74bf9",
-      "context_hash": "9e1d6952c6863569",
-      "anchor_line": 84
+      "line_hash": "bbd5e897a1486fa1",
+      "context_hash": "67bc41c2d556a33d",
+      "anchor_line": 75
     },
     "#98": {
       "file": "app/sidebar.py",
@@ -844,11 +844,11 @@
     },
     "#106": {
       "file": "utils/helpers.py",
-      "line": 26,
+      "line": 27,
       "version": 1,
-      "line_hash": "72dcfba3d08bd396",
-      "context_hash": "5982ed4c4e83e54d",
-      "anchor_line": 26
+      "line_hash": "1871cdbb3ce7d89d",
+      "context_hash": "ef04ee3bc3a439dd",
+      "anchor_line": 27
     },
     "#107": {
       "file": "utils/logger.py",
