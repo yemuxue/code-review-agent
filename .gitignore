@@ -59,5 +59,9 @@ agent_resume_template*.docx
 # 下划线开头的一次性脚本（见 pyproject.toml 的 ruff exclude，同一约定）
 /scripts/_*.py
 
+# 审计过程的中间产物（由 scripts/_export_dataset_audit.py 从数据集+目标仓库重新生成，
+# 无需入库；审计的**结论**记录在 tests/eval/patches/*.json 里）
+/tests/eval/_*.json
+
 # 个人面试/简历材料处理脚本（含个人文档绝对路径）
 /scripts/merge_interview_doc.py

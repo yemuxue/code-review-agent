@@ -170,7 +170,9 @@ def score_samples(samples: list[tuple], dataset_id: str, target_root: str | Path
                   judge: Judge, *, resolve=None, max_samples: int | None = None,
                   on_progress=None, sample_delay_s: float = 0.0,
                   retry_errored: int = 0, circuit_breaker: int = 8,
-                  context_lines: int = CONTEXT_LINES) -> ScoreResult:
+                  context_lines: int = CONTEXT_LINES,
+                  on_outcome=None, sample_offset: int = 0,
+                  skip_ids: set[str] | None = None) -> ScoreResult:
     """对标注样本逐条判分。
 
     resolve：`(target_root, file_name) -> Path | None` 的文件解析器。
@@ -185,6 +187,15 @@ def score_samples(samples: list[tuple], dataset_id: str, target_root: str | Path
     circuit_breaker：连续多少个样本判分异常后停止整批（0 = 关闭）。
         网关整体不可用时，没有熔断会让整批跑到数小时才得出
         "读数无效"这个早已确定的结论。
+
+    on_outcome / sample_offset / skip_ids：**断点续跑**支持。
+        2026-10-14 实测：整批 124 条跑到第 13 条时进程被外部终止，
+        而产物只在批末写入 → 已判分的 API 花费全部丢失。因此：
+          - `on_outcome(outcome)` 在每条**确定性**结果（TP/FP/FN/TN）产生后
+            立即回调，调用方据此落盘检查点；SKIPPED/ERROR 不回调，
+            因为它们应当在下一次运行时重试，而不是被固化成结论。
+          - `sample_offset` 让续跑时 sample_id 仍按数据集原序号生成。
+          - `skip_ids` 是检查点中已完成的 sample_id 集合，命中的样本跳过。
     """
     if resolve is None:
         from tests.eval.datasets import _build_file_index, resolve_sample_file
@@ -198,6 +209,11 @@ def score_samples(samples: list[tuple], dataset_id: str, target_root: str | Path
     selected = samples[:max_samples] if max_samples else samples
     result = ScoreResult(dataset_id=dataset_id, total=len(selected))
 
+    def emit(outcome: SampleOutcome) -> None:
+        """确定性结果才落检查点：SKIPPED/ERROR 需要重试，不该被固化。"""
+        if on_outcome and outcome.cell in {"TP", "FP", "FN", "TN"}:
+            on_outcome(outcome)
+
     # 熔断：连续 N 个样本都因判分异常失败时停止整批。
     # 没有它时，网关整体不可用会让 124 条样本 × 每条多次重试 ≈ 数小时，
     # 而结论早就可以确定（"网关不可用，读数无效"）。熔断让失败快速且明确。
@@ -208,16 +224,21 @@ def score_samples(samples: list[tuple], dataset_id: str, target_root: str | Path
             result.skipped += len(remaining)
             for offset, skipped_sample in enumerate(remaining):
                 result.outcomes.append(SampleOutcome(
-                    f"{dataset_id}#{position + offset + 1}",
+                    f"{dataset_id}#{sample_offset + position + offset + 1}",
                     str(skipped_sample[0]), int(skipped_sample[1]),
                     bool(skipped_sample[6]), "SKIPPED",
                     reason=f"熔断：连续 {consecutive_errors} 个样本判分异常，"
                            "已停止整批（网关很可能不可用）"))
             break
+        file_name, line, _category, _severity, _en, _cn, is_bug = sample
+        sample_id = f"{dataset_id}#{sample_offset + position + 1}"
+
+        # 续跑：检查点里已经判过的样本直接跳过，不再花 API 钱。
+        if skip_ids and sample_id in skip_ids:
+            continue
+
         if sample_delay_s and position:
             time.sleep(sample_delay_s)
-        file_name, line, _category, _severity, _en, _cn, is_bug = sample
-        sample_id = f"{dataset_id}#{position + 1}"
         resolved = resolve(target, file_name)
 
         if resolved is None:
@@ -262,12 +283,15 @@ def score_samples(samples: list[tuple], dataset_id: str, target_root: str | Path
             result.false_negatives += 1
         else:
             result.true_negatives += 1
-        result.outcomes.append(SampleOutcome(
+        outcome = SampleOutcome(
             sample_id, str(file_name), int(line), bool(is_bug), cell,
-            found=found, answer=answer))
+            found=found, answer=answer)
+        result.outcomes.append(outcome)
 
         if on_progress:
-            on_progress(position + 1, len(selected), file_name, line, cell, answer)
+            on_progress(sample_offset + position + 1, sample_offset + len(selected),
+                        file_name, line, cell, answer)
+        emit(outcome)
 
     if retry_errored and result.errored:
         _retry_errored_samples(result, selected, target, judge, resolve,

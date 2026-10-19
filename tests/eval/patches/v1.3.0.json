@@ -1,0 +1,155 @@
+{
+  "from_version": "1.2.0",
+  "to_version": "1.3.0",
+  "summary": "逐条独立审计修正：正负例标反、位置漂移、描述与代码不符",
+  "_method": "6 个独立审计员各负责约 21 条，逐条读完整函数/类源码后判定；判定必须引用实际行号与代码片段。负例的判定标准是『该位置所在语句/成员块内是否存在任何真实缺陷』——因为负例语义是「模型报出即误报」，若真有问题则会把真缺陷计成误报。",
+  "_status": "覆盖 #1-84 已完成审计的区间；#85-124 待第 6 位审计员回报后并入",
+  "_review_standard": "只接受『事实与代码不符』的修正。弱 nit（docstring 占位符、中文 provider_name、裸 dict、硬编码 batch_size）虽价值低但事实与代码相符，本轮保留不动。",
+  "changes": [
+    {
+      "sample_id": 3,
+      "action": "RELABEL_NEGATIVE",
+      "reason": "描述的缺陷不存在：379 行本身就是 tool_name = tool_name.strip()，查表在 189 行时已 strip",
+      "evidence": "react_agent.py:379 即 strip 语句；helpers.extract_between 第 111 行也返回 strip 后内容，属双重去空格",
+      "desc_cn": "【已修复】工具名未strip导致空格前缀匹配失败 —— 当前代码 379 行已 strip，报出即为误报",
+      "desc_en": "[FIXED] tool_name not stripped before dict lookup — line 379 already strips; reporting it is a false positive"
+    },
+    {
+      "sample_id": 2,
+      "action": "RELOCATE",
+      "new_line": 161,
+      "reason": "位置漂移：154 行是 LLM 调用行，『先存后解析』的语句在 161 行",
+      "evidence": "161 行 messages.append({\"role\":\"assistant\",\"content\":response_text})，解析在 164-168 行",
+      "desc_cn": "解析失败时原始响应已进入本轮消息历史（缺陷语句在 161 行，原标注的 154 行只是 LLM 调用）",
+      "desc_en": "Raw response appended to messages BEFORE parsing, so a parse failure leaves the unparsed text in this turn's history"
+    },
+    {
+      "sample_id": 4,
+      "action": "DESCRIBE",
+      "reason": "原描述『两处解析互斥』不成立：356 行与 360 行是彼此独立的提取；该位置真实问题是判定优先级",
+      "evidence": "170 行先判 final_answer、178 行才判 tool_call；响应同时含 <action> 与 <final_answer> 时工具调用被静默丢弃",
+      "desc_cn": "判定优先级错误：先判 final_answer 再判 tool_call，同时含两者时工具调用被静默丢弃",
+      "desc_en": "Wrong precedence: final_answer is checked before tool_call, so a response containing both silently drops the tool call"
+    },
+    {
+      "sample_id": 19,
+      "action": "RELOCATE",
+      "new_line": 43,
+      "reason": "位置漂移：37 行是不可变的 name: str = \"\"，类级可变字典 parameters: dict = {} 在 43 行",
+      "evidence": "三个子类各自定义 parameters（calculator.py:38 / knowledge_base.py:34 / web_search.py:31），全仓无 .parameters 写操作，实际是潜在隐患（ruff RUF012 级别）",
+      "severity": "Low",
+      "desc_cn": "类级可变默认参数字典 parameters: dict = {} 在子类未覆盖时会被共享（潜在隐患）",
+      "desc_en": "Mutable class-level default dict parameters: dict = {} would be shared between instances if a subclass does not override it"
+    },
+    {
+      "sample_id": 44,
+      "action": "RELOCATE",
+      "new_line": 30,
+      "reason": "位置漂移：25 行是类 docstring 的 Example 行，provider_name 属性体在 28-30 行",
+      "evidence": "deepseek_adapter.py:30 `return \"DeepSeek\"`",
+      "desc_cn": "provider_name 硬编码为 'DeepSeek'，不含模型版本信息",
+      "desc_en": "provider_name hardcoded to 'DeepSeek' — no model version info included"
+    },
+    {
+      "sample_id": 48,
+      "action": "RELABEL_NEGATIVE",
+      "reason": "描述的缺陷不存在：memory 每轮只收 2 条消息，工具 observation 只进本轮请求的局部列表，从不进入 memory",
+      "evidence": "sliding_window.py:7-8 文档明写『每轮 2 条、实际消息数 = window_size*2』，第 34 行 deque(maxlen=window_size*2) 与之一致；写入点仅 react_agent.py:140/255(user)、229/343(assistant)；observation 在 react_agent.py:203/325 追加到局部 messages",
+      "desc_cn": "【已修复】窗口大小未考虑工具 observation —— observation 只进本轮局部列表，不进 memory，报出即为误报",
+      "desc_en": "[FIXED] Window size does not account for tool observations — observations only enter the per-turn local list, never memory; reporting it is a false positive"
+    },
+    {
+      "sample_id": 54,
+      "action": "DESCRIBE",
+      "reason": "原描述理由不成立：集合创建时已固定 hnsw:space=cosine，不存在『ChromaDB 可能用其它度量』；真实问题只是单调重映射导致百分比失真",
+      "evidence": "vector_store.py:55-58 建集合时 metadata={\"hnsw:space\": \"cosine\"}，全仓无第二个建集合入口；128 行 1/(1+d) 在 d=1 时输出 0.5 而余弦相似度应为 0；该分数仅用于展示（retriever.py:102、knowledge_base.py:93），无阈值或排序逻辑",
+      "severity": "Low",
+      "desc_cn": "1/(1+d) 只是余弦距离的单调重映射，d=1 时输出 0.5 而真实余弦相似度为 0，展示百分比偏低失真",
+      "desc_en": "1/(1+distance) is only a monotonic remap of cosine distance: at d=1 it yields 0.5 while true cosine similarity is 0, so displayed scores understate similarity"
+    },
+    {
+      "sample_id": 55,
+      "action": "DESCRIBE",
+      "reason": "原描述与代码相反：第 54 行是 except Exception:，不是裸 except，捕不到 KeyboardInterrupt/SystemExit",
+      "evidence": "vector_store.py:50-58 的 try/except 过宽且无日志，异常一律回退 create_collection，权限/库损坏等真实错误被掩盖（与 #58 指向同一段代码）",
+      "desc_cn": "过宽的 except Exception 无日志，异常一律回退 create_collection，掩盖权限/库损坏等真实错误",
+      "desc_en": "Over-broad except Exception without logging: any failure silently falls back to create_collection, masking real errors such as permission or corruption issues"
+    },
+    {
+      "sample_id": 60,
+      "action": "RELABEL_NEGATIVE",
+      "reason": "描述的缺陷不存在：全仓两个调用点都显式处理了空列表，早退是正确防御",
+      "evidence": "knowledge_base.py:77 → 79-80 行 `if not results: return \"在知识库中未找到…\"`；retriever.py:91 → 93-94 行 `if not results: return \"（知识库中未找到相关信息）\"`",
+      "desc_cn": "【已修复】空查询返回[]但下游未处理 —— 两个调用点均已处理空列表，报出即为误报",
+      "desc_en": "[FIXED] Empty query returns [] with unhandled downstream — both call sites handle the empty list; reporting it is a false positive"
+    },
+    {
+      "sample_id": 61,
+      "action": "RELABEL_NEGATIVE",
+      "reason": "性能论断不成立：f-string + join 是标准且高效的拼接写法，默认 k=5 下开销可忽略",
+      "evidence": "retriever.py:101-104 为 formatted.append(f\"…\" f\"…\")，106 行为 \"\\n\".join(formatted)；f-string 是编译期优化的格式化（同区域第 98 行的死存储 source 由 #63 覆盖，本条并非指它）",
+      "desc_cn": "【已修复】f-string逐个格式化浪费内存 —— f-string 加 join 是标准写法，报出即为误报",
+      "desc_en": "[FIXED] f-string per result wastes memory — f-strings plus join is the idiomatic pattern; reporting it is a false positive"
+    },
+    {
+      "sample_id": 64,
+      "action": "DESCRIBE",
+      "reason": "原描述『可能返回 numpy 数组 / 丢精度 + Medium BUG』不成立：tolist() 必返回 list，float32→float 是加宽不丢精度",
+      "evidence": "reranker.py:87 的 `float(s) if not isinstance(s,(int,float)) else float(s)` 两分支同为 float()，是冗余写法；85-86 行分支恒不执行",
+      "severity": "Low",
+      "desc_cn": "第 87 行条件表达式两分支等价（均为 float()），属冗余代码而非缺陷",
+      "desc_en": "Line 87's conditional has two equivalent branches (both float()), redundant rather than defective"
+    },
+    {
+      "sample_id": 74,
+      "action": "RELABEL_NEGATIVE",
+      "reason": "描述的缺陷不存在：第 148 行用的是惰性量词 *?，只匹配到最近的 </script>，不可能贪婪跨块过匹配",
+      "evidence": "document_loader.py:148 `re.sub(r\"<script[\\s\\S]*?</script>\", \" \", content)`；第 150 行 `<[^>]+>` 亦无贪婪问题",
+      "desc_cn": "【已修复】script 正则贪婪跨块匹配 —— 实际使用惰性量词 *?，报出即为误报",
+      "desc_en": "[FIXED] Greedy script-tag regex over-matching — the pattern uses the lazy quantifier *?; reporting it is a false positive"
+    },
+    {
+      "sample_id": 77,
+      "action": "DESCRIBE",
+      "reason": "原描述『enumerate 索引偏差 / off-by-one』机制错误：j 恰为列下标，headers[j] 取列名正确",
+      "evidence": "document_loader.py:171-175；真正隐患是 CSV 行字段多于表头时 headers[j] 抛 IndexError，而 load_directory 只会 print 掉",
+      "desc_cn": "CSV 行字段数多于表头时 headers[j] 直接抛 IndexError，缺少长度保护",
+      "desc_en": "headers[j] raises IndexError for ragged CSV rows with more fields than headers; no length guard"
+    },
+    {
+      "sample_id": 80,
+      "action": "RELABEL_NEGATIVE",
+      "reason": "描述的缺陷不存在且自相矛盾：文档明写 chunk_size 是字符数，len() 按字符计数完全一致",
+      "evidence": "text_splitter.py:28 文档 `chunk_size: 每个文本块的最大字符数`；115 行 len(sentence) 与 117 行比较严格一致",
+      "desc_cn": "【已修复】len() 按字符计数与 chunk_size 语义不一致 —— 文档即定义为字符数，报出即为误报",
+      "desc_en": "[FIXED] len() character counting inconsistent with chunk_size — chunk_size is documented in characters; reporting it is a false positive"
+    },
+    {
+      "sample_id": 91,
+      "action": "DESCRIBE",
+      "reason": "原描述场景不可复现：full_text 只在 final_answer 分支赋值，run_stream 三条出答案路径都发 final_answer；该锚点真实缺陷是错误信息被清屏抹掉",
+      "evidence": "react_agent.py:274-277 流式异常只发 error 事件；streamlit_app.py:328 status_placeholder.error(...) 显示原因后，331-334 行 `if not full_text:` 立即 empty() 并改写成「未能生成回答」，用户与消息历史都拿不到失败原因",
+      "desc_cn": "LLM 流式异常时错误信息先被 error() 显示、随即被 empty() 抹掉并改写成通用兜底文案，失败原因丢失",
+      "desc_en": "On streaming failure the error message is shown then immediately cleared by empty() and replaced with a generic fallback, losing the failure reason"
+    },
+    {
+      "sample_id": 93,
+      "action": "DESCRIBE",
+      "reason": "原描述『shallow equality / 注释不明』与代码不符：两侧根本是同一个被就地修改的模块级单例，三个 != 恒为 False",
+      "evidence": "streamlit_app.py:218 settings=render_sidebar() 返回 settings.py:108 模块级单例（sidebar.py:27/154），253 行 st.session_state.get(\"settings\") 也是它（init_session:67 存入），sidebar.py:77-83 又就地修改它；因此 259-260 的『配置变了重建 Agent』分支不可达——改 provider/Key/模型后旧适配器继续用旧 Key",
+      "severity": "High",
+      "category": "BUG",
+      "desc_cn": "配置变更检测恒为假（同一单例与自身比较）：修改 provider/API Key/模型后 Agent 重建分支不可达，旧适配器继续用旧 Key",
+      "desc_en": "Change detection is always false (a mutated singleton compared with itself): the Agent-rebuild branch is unreachable, so the old adapter keeps using the old API key after sidebar edits"
+    },
+    {
+      "sample_id": 82,
+      "action": "DESCRIBE",
+      "reason": "原描述『短句被静默丢弃』与代码不符：第 100-104 行对每个非空句子一律 append，无长度过滤",
+      "evidence": "text_splitter.py:103 注释声称『太短可能与前后合并』，但 _merge_sentences_to_chunks 从不做短句合并，属误导性注释",
+      "severity": "Low",
+      "desc_cn": "注释声称短句会与前后合并，但实现中从不合并，属误导性注释",
+      "desc_en": "Comment claims short sentences get merged with neighbors, but no such merging is implemented (misleading comment)"
+    }
+  ]
+}

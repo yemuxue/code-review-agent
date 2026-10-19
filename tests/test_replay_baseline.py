@@ -21,15 +21,26 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from scripts.replay_baseline import (  # noqa: E402
     COMPARABILITY_KEYS,
+    _load_dataset_module,
     build_record,
     compare,
 )
 
 
+def _live_version() -> str:
+    """数据集当前版本。
+
+    `build_record()` 刻意以**数据集模块**为准覆盖产物里的版本号（产物 meta 带的是
+    原始运行时的旧版本）。所以 fixture 里的版本必须跟随数据集，否则"同一次运行"
+    会被判成不可比较 —— 那是测试自己制造的假失败，不是产品行为。
+    """
+    return str(_load_dataset_module().DATASET_META["version"])
+
+
 def _artifact(meta: dict | None = None, **metrics) -> dict:
     """构造 replay 产物。meta 覆盖走 meta=...，指标覆盖走关键字参数。"""
     merged_meta = {
-        "dataset_version": "1.2.0",
+        "dataset_version": _live_version(),
         "model": "gpt-6-sol",
         "judge_variant": "strict",
         "context_lines": 15,

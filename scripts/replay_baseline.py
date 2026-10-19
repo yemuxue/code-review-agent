@@ -52,13 +52,17 @@ def _pct(value: object) -> float | None:
         return None
 
 
-def _miss_breakdown() -> dict[str, int] | None:
+def _miss_breakdown(artifact: dict | None = None) -> dict[str, int] | None:
     """漏报构成（按归因类别），用于让 Recall 这个数字可解释。
 
     缺任一输入文件时返回 None —— 宁可不写，也不要编一个构成出来。
+
+    ⚠️ **版本校验**：`_fn_attribution_classification.json` 是对 **v1.0.0 的 61 条漏报**
+    做的归因。数据集升到 v1.3.x 后漏报数已变（37 条），这份归因**不能再用来解释
+    当前读数**。因此这里会核对条数：条数与产物 FN 不一致就返回 None，
+    让基线记录显式写明"当前版本未重新归因"，而不是把过期构成写进去。
     """
     classification = Path("reports/_fn_attribution_classification.json")
-    keys_flipped = Path("reports/_keys_flipped.json")
     stale_originals = Path("reports/_stale_originals.json")
     if not classification.is_file():
         return None
@@ -73,6 +77,12 @@ def _miss_breakdown() -> dict[str, int] | None:
     except (OSError, ValueError, KeyError):
         return None
 
+    # 归因条数必须与当前产物的漏报数一致，否则说明归因已过期
+    if artifact is not None:
+        current_fn = int(artifact.get("false_negatives") or 0)
+        if len(categories) != current_fn:
+            return None
+
     breakdown = {
         "口径分歧（客观低优先级维护性问题）": sum(
             1 for i, c in categories.items()
@@ -80,7 +90,6 @@ def _miss_breakdown() -> dict[str, int] | None:
         "真实漏报（模型判断错误）": sum(
             1 for c in categories.values() if c == "D_REAL_MISS"),
         "重定位标注后仍漏": len(relocated),
-        "v1.2.0 复核收回的（位置仍有其它真实缺陷）": 3,
     }
     return breakdown
 
@@ -141,7 +150,7 @@ def build_record(artifact: dict) -> dict:
             "true_negatives": artifact.get("true_negatives"),
         },
         "rationale": (
-            "模型只报它有把握的缺陷，因此精确率高（94.0%）而召回率中等（56.0%）。"
+            "模型只报它有把握的缺陷：精确率高于召回率。"
             "剩余漏报以客观但低优先级的维护性问题为主，模型判为『不值得报』。"
             "两条提示词杠杆（放宽判据、改开放式枚举）经实验证伪："
             "放宽判据反而丢掉 8 个正确检出，枚举提问同样无法召回这些样本。"
@@ -149,13 +158,26 @@ def build_record(artifact: dict) -> dict:
         ),
         "known_limitations": [
             "tools/calculator.py:105 有两条标注共用同一位置，一次检出会计入 2 次",
-            "24 条【已修复】负例只排除了原标注所指的问题（另有 3 条已因该风险收回）",
-            "38 条判据口径分歧样本保持原样，是产品口径而非标注错误",
+            f"【已修复】负例只排除了原标注所指的问题；转负例共 "
+            f"{(dataset.get('fp_trap_count') or 0) - 16} 条（其中 3 条曾因"
+            "『位置另有真缺陷』被收回，故当前计数已含该修正）",
+            "判分按【位置】匹配而非按缺陷内容匹配：模型在该位置报出另一个"
+            "真实缺陷也会计为 TP，这是一处已知的宽松",
+            "未标注的真问题会被计为 FP（标签偏差），系统性低估精确率",
+            f"审计范围：{dataset.get('audit_scope', '未声明')}",
+            "样本量有限：正例较少，点估计的 95% 置信区间较宽，"
+            "不足以支撑对外承诺或与竞品做差值比较",
         ],
     }
-    breakdown = _miss_breakdown()
+    breakdown = _miss_breakdown(artifact)
     if breakdown:
         record["miss_breakdown"] = breakdown
+    else:
+        record["miss_breakdown_note"] = (
+            "当前数据集版本的漏报未重新归因；"
+            "`reports/_fn_attribution_classification.json` 是对旧版（61 条漏报）"
+            "做的归因，条数与当前不符，故不写入构成 —— "
+            "避免用过期归因解释当前读数。")
     return record
 
 

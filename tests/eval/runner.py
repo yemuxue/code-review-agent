@@ -75,7 +75,8 @@ def run_offline(work_dir: str | Path, repeat: int = 1, model: str | None = None)
 
 def _run_replay(target_dir: str, samples: int, judge: str = "live",
                 dataset: str = "external", sample_delay_s: float = 0.0,
-                sample_retries: int = 0, circuit_breaker: int = 8) -> dict:
+                sample_retries: int = 0, circuit_breaker: int = 8,
+                checkpoint_path=None) -> dict:
     """逐样本评估；可注入固定判分器做离线管道验证。
 
     judge="live" 需调用方显式确认 live 模式；
@@ -85,6 +86,7 @@ def _run_replay(target_dir: str, samples: int, judge: str = "live",
     dataset="external"（124 条外部项目标注）或 "self"（33 条本仓自评）。
     sample_delay_s 是样本间最小间隔：真实网关在连续高频请求下会返回大量
     502，不限速会让整批读数因 ERROR 而不可用。
+    checkpoint_path：逐条落盘的检查点；中途被终止后可续跑，不重复花 API 钱。
     """
     from tests.eval_llm_agent_qa import run_per_sample_eval, run_self_eval
 
@@ -98,11 +100,13 @@ def _run_replay(target_dir: str, samples: int, judge: str = "live",
         return run_self_eval(target_dir=target_dir, max_samples=samples,
                              judge_override=override, sample_delay_s=sample_delay_s,
                              sample_retries=sample_retries,
-                             circuit_breaker=circuit_breaker)
+                             circuit_breaker=circuit_breaker,
+                             checkpoint_path=checkpoint_path)
     return run_per_sample_eval(target_dir=target_dir, max_samples=samples,
                                judge_override=override, sample_delay_s=sample_delay_s,
                                sample_retries=sample_retries,
-                             circuit_breaker=circuit_breaker)
+                               circuit_breaker=circuit_breaker,
+                               checkpoint_path=checkpoint_path)
 
 
 def _write_replay_artifact(result: dict, report_path: Path | None) -> Path:
@@ -260,9 +264,15 @@ def main(argv: list[str] | None = None) -> int:
             return 1
 
     if args.suite in {"replay", "full"}:
+        # 检查点与报告同名：同一条命令重跑就自动续跑（数据集版本/判据不符则重来）。
+        # 2026-10-14 实测 124 条跑到第 13 条被外部终止，产物只在批末写入 →
+        # 已判分样本的 API 花费全部丢失。检查点让中断只损失"当前这一条"。
+        ckpt = (report_path.with_suffix("").with_name(
+            report_path.with_suffix("").name + "_checkpoint.json")
+            if report_path else None)
         replay = _run_replay(args.target_dir, args.samples, args.replay_judge,
                              args.dataset, args.sample_delay, args.sample_retries,
-                             args.circuit_breaker)
+                             args.circuit_breaker, checkpoint_path=ckpt)
         artifact = _write_replay_artifact(replay, report_path)
         if report_path:
             _append_replay_report(report_path, replay, artifact, args.target_dir)

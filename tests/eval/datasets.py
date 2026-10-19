@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -345,7 +346,34 @@ def preflight(spec: DatasetSpec, target_root: str | Path | None = None,
         result.matched += 1
 
     result.issues.extend(_duplicate_position_issues(samples))
+    result.issues.extend(_description_text_issues(samples))
     return result
+
+
+def _description_text_issues(samples: list[tuple]) -> list[DatasetIssue]:
+    """描述文本里含控制字符时给出 error。
+
+    真实踩坑：某条英文描述里写的正则反向引用 `\\1`，在源码里被写成 `\\x01`
+    （四字符转义），Python 解析后成了 **U+0001 控制符**。它不会让程序报错，
+    只会让描述在日志、报告、diff 里显示成一个不可见方块——
+    属于"不报错但污染产物"的那类问题。
+
+    只在**解析后**的字符串上检查才有意义：源码里搜 U+0001 字节是找不到的。
+    """
+    issues: list[DatasetIssue] = []
+    for position, sample in enumerate(samples, start=1):
+        for field_name, text in (("英文描述", str(sample[4])),
+                                 ("中文描述", str(sample[5]))):
+            bad = sorted({ch for ch in text
+                          if unicodedata.category(ch) == "Cc" and ch not in "\n\t"})
+            if bad:
+                rendered = "、".join(f"U+{ord(ch):04X}" for ch in bad)
+                issues.append(DatasetIssue(
+                    "error",
+                    f"{field_name}含控制字符 {rendered}（多为转义写错，"
+                    f"如把正则 `\\1` 写成 `\\x01`）",
+                    f"#{position}"))
+    return issues
 
 
 def _duplicate_position_issues(samples: list[tuple]) -> list[DatasetIssue]:

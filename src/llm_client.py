@@ -148,6 +148,47 @@ class LLMResponse:
                    tool_calls=tool_calls,
                    usage=raw.get("usage"))
 
+    @classmethod
+    def from_chat_completions(cls, raw: dict) -> "LLMResponse":
+        """Normalize an OpenAI Chat-Completions payload to the harness contract.
+
+        与 from_responses 的差异（这也是当初必须单独写一条分支的原因）：
+        正文在 `choices[0].message.content`，工具调用在同一个 message 的
+        `tool_calls[]` 里，参数是 **JSON 字符串**（responses 协议给的是对象）。
+        DeepSeek / GLM / Kimi / MiniMax 在 OpenCode 上都走这个端点。
+        """
+        text_parts = []
+        tool_calls = []
+        choices = raw.get("choices") or []
+        if choices and isinstance(choices[0], dict):
+            message = choices[0].get("message") or {}
+            content = message.get("content")
+            if isinstance(content, str) and content:
+                text_parts.append(content)
+            elif isinstance(content, list):
+                # 少数兼容实现返回分块 content；拼出其中的文本片段。
+                for part in content:
+                    if isinstance(part, dict) and part.get("text"):
+                        text_parts.append(part["text"])
+            for call in message.get("tool_calls") or []:
+                if not isinstance(call, dict):
+                    continue
+                fn = call.get("function") or {}
+                raw_args = fn.get("arguments", {})
+                if isinstance(raw_args, str):
+                    try:
+                        raw_args = json.loads(raw_args)
+                    except json.JSONDecodeError:
+                        raw_args = {}
+                tool_calls.append({
+                    "id": call.get("id", ""),
+                    "name": fn.get("name", ""),
+                    "args": raw_args if isinstance(raw_args, dict) else {},
+                })
+        return cls(content="".join(text_parts) or None,
+                   tool_calls=tool_calls,
+                   usage=raw.get("usage"))
+
 # Module-level cache shared across all clients
 try:
     from src.harness.llm_cache import LLMCache
@@ -244,6 +285,8 @@ class AnthropicClient:
     def chat(self, messages: list[dict], tools: list[dict] | None = None) -> LLMResponse:
         if self.api_protocol == "responses":
             return self._chat_responses(messages, tools)
+        if self.api_protocol in {"openai-chat", "chat-completions"}:
+            return self._chat_completions(messages, tools)
         import urllib.request
         import urllib.error
         # Check cache
@@ -327,6 +370,96 @@ class AnthropicClient:
         # 重试循环理论上必然在 return/raise 处退出；这里显式兜底，
         # 避免出现"静默返回 None"的调用方崩溃（也让类型检查确认返回类型）。
         raise RuntimeError(f"API request failed after {attempts} attempts")
+
+    @staticmethod
+    def _chat_tool_def(t: dict) -> dict:
+        """工具定义转 Chat-Completions 形状（{type:function, function:{...}}）。"""
+        fn = t.get("function") if isinstance(t, dict) else None
+        if not isinstance(fn, dict):
+            fn = t if isinstance(t, dict) else {}
+        return {
+            "type": "function",
+            "function": {
+                "name": str(fn.get("name") or t.get("name") or "unknown_tool"),
+                "description": str(fn.get("description") or ""),
+                "parameters": fn.get("parameters") or {"type": "object", "properties": {}},
+            },
+        }
+
+    def _chat_completions(self, messages: list[dict],
+                          tools: list[dict] | None = None) -> LLMResponse:
+        """调用 OpenAI 兼容的 /v1/chat/completions 端点。
+
+        为什么需要这条分支：OpenCode 上 DeepSeek / GLM / Kimi / MiniMax 等模型
+        只提供 chat/completions（没有 responses 端点），而 responses 是 OpenAI
+        专有形状。两者的响应体结构不同，不能复用同一套解析。
+        """
+        import urllib.request
+        import urllib.error
+
+        if self.use_cache and not tools:
+            cached = _llm_cache.get(messages, self.model, self._cache_variant())
+            if cached:
+                try:
+                    obj = json.loads(cached)
+                    if isinstance(obj, dict) and ("tool_calls" in obj or "content" in obj):
+                        return LLMResponse(content=obj.get("content"),
+                                           tool_calls=obj.get("tool_calls") or [],
+                                           usage=obj.get("usage"))
+                except (json.JSONDecodeError, TypeError):
+                    pass
+                return LLMResponse(content=cached)
+
+        # messages 已经是 {role, content} 形状；system 在 chat/completions
+        # 里是普通消息，不需要像 Anthropic 那样单独抽出。
+        payload: dict = {
+            "model": self.model,
+            "messages": [{"role": m.get("role", "user"), "content": m.get("content", "")}
+                         for m in messages],
+        }
+        if self.temperature is not None:
+            payload["temperature"] = self.temperature
+        if tools:
+            payload["tools"] = [self._chat_tool_def(t) for t in tools]
+
+        req = urllib.request.Request(
+            url=f"{self.base_url}/v1/chat/completions",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json",
+                     "Authorization": f"Bearer {self.api_key}",
+                     # 网关边缘过滤会拒绝 urllib 默认 UA
+                     "User-Agent": _HTTP_USER_AGENT},
+            method="POST")
+        transient_codes = (429, 500, 502, 503, 504, 529)
+        attempts = _retry_attempts()
+        budget = _call_budget_s()
+        deadline = time.monotonic() + budget
+        for attempt in range(attempts):
+            try:
+                with urllib.request.urlopen(req, timeout=_http_timeout_s()) as resp:
+                    raw = json.loads(resp.read().decode("utf-8"))
+                    result = LLMResponse.from_chat_completions(raw)
+                    if self.use_cache and not tools and (result.content or result.tool_calls):
+                        _llm_cache.set(messages, json.dumps(
+                            {"content": result.content, "tool_calls": result.tool_calls,
+                             "usage": result.usage}, ensure_ascii=False), self.model,
+                            self._cache_variant())
+                    return result
+            except urllib.error.HTTPError as e:
+                delay = _retry_delay(attempt, e)
+                if (e.code in transient_codes and attempt < attempts - 1
+                        and time.monotonic() + delay < deadline):
+                    time.sleep(delay)
+                    continue
+                suffix = ("" if e.code not in transient_codes
+                          else f" (已尝试 {attempt + 1} 次/预算 {budget:.0f}s)")
+                raise RuntimeError(
+                    f"API HTTP {e.code}: {e.read().decode('utf-8', errors='replace')}{suffix}")
+            except urllib.error.URLError as e:
+                raise RuntimeError(f"API connection error: {e.reason}")
+            except (TimeoutError, ConnectionError, OSError) as e:
+                raise RuntimeError(f"API timeout/connection error: {e}")
+        raise RuntimeError(f"Chat-Completions API request failed after {attempts} attempts")
 
     def _chat_responses(self, messages: list[dict], tools: list[dict] | None = None) -> LLMResponse:
         """Call a Responses-compatible gateway while preserving the existing client API."""

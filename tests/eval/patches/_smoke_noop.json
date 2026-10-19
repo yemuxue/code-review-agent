@@ -1,0 +1,6 @@
+{
+  "from_version": "1.2.0",
+  "to_version": "1.2.1",
+  "summary": "冒烟测试：空补丁，仅验证渲染/回读链路",
+  "changes": []
+}
