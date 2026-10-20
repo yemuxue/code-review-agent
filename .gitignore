@@ -65,3 +65,5 @@ agent_resume_template*.docx
 
 # 个人面试/简历材料处理脚本（含个人文档绝对路径）
 /scripts/merge_interview_doc.py
+/scripts/polish_resume.py
+/scripts/verify_resume.py
