@@ -6,7 +6,7 @@
 
 [![CI](https://github.com/yemuxue/code-review-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/yemuxue/code-review-agent/actions)
 ![Python](https://img.shields.io/badge/python-3.9%2B-blue)
-![Tests](https://img.shields.io/badge/tests-363%20collected-blue)
+![Tests](https://img.shields.io/badge/tests-450%2B-blue)
 ![Lint](https://img.shields.io/badge/ruff-clean-green)
 ![Types](https://img.shields.io/badge/mypy-src%20clean-green)
 ![License](https://img.shields.io/badge/license-MIT-lightgrey)
@@ -84,7 +84,7 @@
 
 ## 核心特性
 
-### Agent Harness（从零实现，不依赖 Agent 框架）
+### Agent Harness（单 Agent 循环自研，不依赖 Agent 框架）
 
 | 组件 | 功能 | 代码位置 |
 |------|------|---------|
@@ -422,6 +422,8 @@ curl -X POST http://localhost:8000/findings/search \
 | 判分完整性 | **124/124 已判分，零跳过、零异常** |
 | 审计范围 | **全部 124 条已逐条审计** |
 
+> **数据集限定**：124 条为**自建标注**（第三方项目 `llm-agent-qa-system`），不是 SWE-bench 等公开基准，**不可与业界数字横比**；结论仅适用于本标注集。
+>
 > **📌 完整口径、引用规则与局限见 [评测基线：严格标准下的精确优先](docs/eval-baseline.md)。**
 > 该基线采取"只报有把握的缺陷"策略，因此精确率不低而召回率中等；37 条漏报中
 > **30 条是"模型认为不该报、而标注标准认为该报"的口径分歧**，只有 7 条属

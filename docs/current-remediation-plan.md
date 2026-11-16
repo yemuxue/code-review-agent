@@ -543,6 +543,9 @@ BUG「eval 返回 inf/NaN 未处理」）。两条都是真实问题，因此**�
 
 ### 一之十五、2026-10-13 决策：接受 56.0% 作为权威基线
 
+> ⚠️ **历史决策**：该结论对应 v1.2.0/v1.3.0 口径，**已被 v1.4.0 取代**（82.0% / 51.2% / 0.63）。保留作决策沿革记录。
+
+
 产品决策：**不再为提高召回率调整判据**，接受当前读数并把它固化为权威基线。
 完整口径见 [`docs/eval-baseline.md`](../eval-baseline.md)，
 机器可读记录见 [`tests/eval/replay_baseline.json`](../tests/eval/replay_baseline.json)。
