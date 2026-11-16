@@ -55,7 +55,10 @@ jobs:
         run: python scripts/check_container_config.py
 
   test:
-    runs-on: ubuntu-latest
+    # ubuntu-latest 已于 2026-10 迁移到 Ubuntu 26.04，其 python-versions 清单
+    # 不再提供 3.9（x64）。项目声明 requires-python >=3.9，必须保留 3.9 覆盖，
+    # 所以固定到仍带 3.9 的 24.04；待放弃 3.9 后再回到 ubuntu-latest。
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       # pyproject 声明 requires-python >=3.9，因此 3.9 与 3.11 都要跑：
