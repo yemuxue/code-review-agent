@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - '可信代码审查Agent/01_正式文档/可信代码审查Agent-PRD.md'
+      - '可信代码审查Agent/01_正式文档/**'
       - '可信代码审查Agent/02_核心图_PNG/**'
   workflow_dispatch:
 
