@@ -7,8 +7,9 @@
 <link rel="icon" href="data:,">
 <style>
   :root{
-    --ink:#172033; --muted:#6f7b8d; --line:#e6eaf0; --panel:#fff; --canvas:#f5f7fb;
-    --nav:#111a2e; --accent:#2e6bff; --teal:#008f83; --amber:#c77b08; --red:#c94d5d;
+    --ink:#172033; --muted:#5a6678; --line:#e6eaf0; --panel:#fff; --canvas:#f5f7fb;
+    --nav:#111a2e; --accent:#2e6bff; --teal:#0f766e; --amber:#9a5b06; --red:#c94d5d;
+    --st-done:#14796d; --st-run:#2456c6; --st-block:#b4432c; --faint:#5f6b7c;
     --done-bg:#ecf9f2; --done-fg:#14796d; --run-bg:#eff6ff; --run-fg:#2456c6;
     --block-bg:#fff4f0; --block-fg:#b4432c; --todo-bg:#f4f6f9; --todo-fg:#6b7789;
   }
@@ -60,7 +61,8 @@
   .btn-danger{color:#a3382c;border-color:#f2c9d0;background:#fff7f8}
   .btn:disabled{opacity:.45;cursor:not-allowed}
   .btn-sm{padding:5px 9px;font-size:11px}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:0 2px 7px rgba(22,34,58,.025)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:0 2px 7px rgba(22,34,58,.025);overflow:hidden}
+  .table-wrap{overflow-x:auto;overscroll-behavior-x:contain}
   .card-h{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:10px}
   .card-t{font-size:13px;font-weight:700}
   .card-note{color:var(--muted);font-size:11px}
@@ -75,15 +77,17 @@
   .kpi{padding:14px 16px}
   .kpi-l{color:var(--muted);font-size:11px}
   .kpi-v{font-size:22px;font-weight:750;margin-top:5px;letter-spacing:-.02em}
-  .kpi-m{margin-top:6px;font-size:10.5px;color:var(--teal)}
+  .kpi-m{margin-top:6px;font-size:11px;color:var(--teal)}
   .kpi-m.warn{color:var(--amber)}
 
   /* ---------- 表格 ---------- */
-  .tbl{width:100%;border-collapse:collapse}
-  .tbl th{text-align:left;font-size:10.5px;color:#8a95a6;font-weight:600;background:#fafbfc;padding:9px 14px;border-bottom:1px solid var(--line);white-space:nowrap}
+  .tbl{width:100%;min-width:820px;border-collapse:collapse}
+  .tbl th{text-align:left;font-size:10.5px;color:var(--faint);font-weight:600;background:#fafbfc;padding:9px 14px;border-bottom:1px solid var(--line);white-space:nowrap}
   .tbl td{padding:12px 14px;border-top:1px solid #eef1f5;vertical-align:middle;font-size:12px}
+  .tbl th:last-child,.tbl td:last-child{text-align:right;white-space:nowrap;width:1%}
+  .tbl .btn{white-space:nowrap}
   .tbl tr.row{cursor:pointer}
-  .tbl tr.row:hover{background:#f7faff}
+  .tbl tr.row:hover{background:#eef4ff}
   .repo{font-weight:700;color:#243148}
   .sub{color:var(--muted);font-size:11px;margin-top:3px}
 
@@ -102,8 +106,8 @@
   .stagebar{display:flex;gap:3px;align-items:center}
   .stagebar i{display:block;width:16px;height:5px;border-radius:3px;background:#e3e8ef}
   .stagebar i.done{background:#26a69a}
-  .stagebar i.running{background:#f0a020}
-  .stagebar i.blocked{background:#e06c4f}
+  .stagebar i.running{background:var(--st-run)}
+  .stagebar i.blocked{background:var(--st-block)}
   .stagebar-note{font-size:10.5px;color:var(--muted);margin-top:5px}
 
   /* ---------- 阶段卡 ---------- */
@@ -116,10 +120,10 @@
   .stage-h{display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700}
   .stage-dot{width:7px;height:7px;border-radius:50%;background:#c7cfdb}
   .stage.done .stage-dot{background:#26a69a}
-  .stage.running .stage-dot{background:#f0a020}
-  .stage.blocked .stage-dot{background:#e06c4f}
+  .stage.running .stage-dot{background:var(--st-run)}
+  .stage.blocked .stage-dot{background:var(--st-block)}
   .stage-s{font-size:10px;color:var(--muted);margin-top:5px;line-height:1.45;min-height:26px}
-  .stage-t{font-size:9.5px;color:#9aa5b5;margin-top:4px;font-family:Consolas,monospace}
+  .stage-t{font-size:10px;color:var(--faint);margin-top:4px;font-family:Consolas,monospace;font-weight:500}
   .stage.done{background:var(--done-bg);border-color:#cfeade}
   .stage.running{background:var(--run-bg);border-color:#c9dcff}
 
@@ -143,11 +147,19 @@
   .finding-l{color:#1f5ece;font-size:10.5px;margin-top:6px;font-family:Consolas,monospace}
 
   /* ---------- 抽屉 ---------- */
-  .drawer{position:fixed;top:0;right:0;bottom:0;width:440px;max-width:100%;background:#fff;border-left:1px solid var(--line);box-shadow:-14px 0 40px rgba(30,42,66,.12);transform:translateX(100%);transition:transform .2s ease;z-index:60;display:flex;flex-direction:column}
+  .scrim{position:fixed;inset:0;background:rgba(16,24,40,.28);z-index:55;opacity:0;pointer-events:none;transition:opacity .18s}
+  .scrim.on{opacity:1;pointer-events:auto}
+  .drawer{position:fixed;top:0;right:0;bottom:0;width:min(440px,100vw);background:#fff;border-left:1px solid var(--line);box-shadow:-14px 0 40px rgba(30,42,66,.12);transform:translateX(100%);transition:transform .2s ease;z-index:60;display:flex;flex-direction:column}
   .drawer.on{transform:none}
   .drawer-h{padding:16px 18px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
   .drawer-b{padding:16px 18px 40px;overflow:auto}
-  .close{border:0;background:none;font-size:18px;color:#7d8796;line-height:1}
+  .close{border:0;background:none;font-size:18px;color:#7d8796;line-height:1;width:32px;height:32px;border-radius:6px;display:grid;place-items:center}
+  .close:hover{background:#f1f4f9;color:#334155}
+  :where(button,a,select,input,[tabindex]):focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .sidebar :focus-visible{outline-color:#8fb4ff}
+  .tbl tr:focus-visible{outline:2px solid var(--accent);outline-offset:-2px;background:#f5f9ff}
+  .btn.btn-danger:hover{background:#fff0f2;border-color:#e9aab5;color:#a3382c}
+  .btn:disabled{opacity:1;background:#f2f4f7;border-color:#e4e7ec;color:#98a2b3}
 
   /* ---------- 代码块 ---------- */
   .code{background:#101827;color:#d6e2f5;border-radius:8px;padding:12px 14px;font-family:Consolas,monospace;font-size:11px;line-height:1.65;white-space:pre-wrap;overflow:auto}
@@ -170,7 +182,7 @@
   .split{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:14px;align-items:start}
   .kv{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px dashed #eef1f5;font-size:12px}
   .kv:last-child{border-bottom:0}
-  .kv span:first-child{color:var(--muted)}
+  .kv > span:first-child{color:var(--muted)}
   .kv span:last-child{font-weight:600}
   .tl{list-style:none;margin:0;padding:0}
   .tl li{position:relative;padding:0 0 14px 18px;border-left:1px solid #e3e8ef;font-size:12px}
@@ -193,11 +205,25 @@
     .grid-2,.split{grid-template-columns:1fr}
     .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
   }
+  @media (max-width:900px){
+    .sidebar{width:60px;flex:0 0 60px;padding:14px 6px;gap:14px;align-items:center}
+    .brand{justify-content:center;padding:0}
+    .brand>div,.nav-title,.sidebar-bottom,.nav button span,.nav button .count{display:none}
+    .nav{width:100%}
+    .nav button{justify-content:center;padding:10px 0}
+    .topbar{padding:0 12px;height:56px}
+    .crumb{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .top-user{display:none}
+    .role-select{max-width:108px;font-size:11px;padding:5px 6px}
+    #logoutBtn{padding:5px 8px}
+  }
   @media (max-width:720px){
-    .sidebar{display:none}
     .content{padding:18px 14px 60px}
     .stages{grid-template-columns:repeat(2,minmax(0,1fr))}
     .page-head{flex-direction:column}
+    .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .drawer{width:100vw}
+    .login-points{display:none}
   }
 
   /* ---------- 登录 ---------- */
@@ -249,6 +275,19 @@
     .login-copy h1{font-size:30px}
     .login-points{display:none}
   }
+
+  /* 移动端覆盖：放在最后，避免被后定义的组件样式反向覆盖 */
+  @media (max-width:900px){
+    .topbar .top-user{display:none}
+    .topbar .role-select{max-width:104px;font-size:10.5px;padding:5px 6px}
+    .topbar #logoutBtn{padding:5px 8px;font-size:11px}
+    .login-hero:before,.login-hero:after{display:none}
+  }
+  @media (max-width:720px){
+    .tbl{min-width:640px}
+    .finding{padding:12px}
+    .stage{padding:9px}
+  }
 </style>
 </head>
 <body>
@@ -296,6 +335,7 @@
   </main>
 </div>
 
+<div class="scrim" id="scrim"></div>
 <aside class="drawer" id="drawer" aria-label="详情">
   <div class="drawer-h">
     <div><div class="eyebrow" id="drawerKicker">发现详情</div><h2 id="drawerTitle"></h2></div>
@@ -322,25 +362,38 @@ const STAGES = [
 const TASKS = [
   {
     id:'RV-1042', repo:'acme/payment-service', pr:1842, title:'修复退款回调鉴权',
-    author:'林晓', reviewer:'周航', branch:'fix/refund-auth', risk:'high',
-    diff:{ files:8, add:184, del:63 }, updated:'10 分钟前',
+    author:'林晓', reviewer:'周航', branch:'fix/refund-auth', risk:'high', firstRepo:false,
+    diff:{ files:8, add:184, del:63 }, updated:'10 分钟前', released:false,
+    patch:{ file:'src/api/server.py', lines:'L181–L192',
+      diff:[
+        { t:'- @admin_router.get("/repositories")', del:true },
+        { t:'+ @admin_router.get("/repositories", dependencies=[Depends(require_user)])', add:true },
+        { t:'  async def list_repositories(): return await repo_store.list_all()' },
+      ] },
+    verify:{ result:null, pytest:'未运行', ruff:'未运行', cases:'未运行' },
     stages:{
       intake:{ s:'done', at:'10:02', sum:'8 文件 / +184 −63' },
-      analyze:{ s:'done', at:'10:04', sum:'12 发现 / 3 高危' },
-      findings:{ s:'done', at:'10:06', sum:'3 已确认 · 9 待复核' },
+      analyze:{ s:'done', at:'10:04', sum:'3 发现 / 1 高危' },
+      findings:{ s:'done', at:'10:06', sum:'2 已确认 · 1 已忽略' },
       fix:{ s:'running', pct:60, sum:'补丁 2 / 3' },
-      verify:{ s:'todo', sum:'待修复完成' },
+      verify:{ s:'todo', sum:'待运行' },
       conclusion:{ s:'todo', sum:'未放行' },
     },
   },
   {
     id:'RV-1039', repo:'acme/web-console', pr:521, title:'统一登录态过期处理',
-    author:'周航', reviewer:'林晓', branch:'feat/session-expiry', risk:'medium',
-    diff:{ files:5, add:96, del:41 }, updated:'32 分钟前',
+    author:'周航', reviewer:'林晓', branch:'feat/session-expiry', risk:'high', firstRepo:false,
+    diff:{ files:5, add:96, del:41 }, updated:'32 分钟前', released:false,
+    patch:{ file:'src/web/session.ts', lines:'L31–L44',
+      diff:[
+        { t:'- if (expired) { redirect("/login") }', del:true },
+        { t:'+ if (expired) { clearSessionCache(); redirect("/login") }', add:true },
+      ] },
+    verify:{ result:null, pytest:'未运行', ruff:'未运行', cases:'未运行' },
     stages:{
       intake:{ s:'done', at:'09:40', sum:'5 文件 / +96 −41' },
-      analyze:{ s:'done', at:'09:42', sum:'6 发现 / 1 高危' },
-      findings:{ s:'running', pct:40, sum:'2 已复核 · 4 待复核' },
+      analyze:{ s:'done', at:'09:42', sum:'1 发现 / 1 高危' },
+      findings:{ s:'running', pct:40, sum:'1 待复核' },
       fix:{ s:'todo', sum:'未开始' },
       verify:{ s:'todo', sum:'未开始' },
       conclusion:{ s:'todo', sum:'未放行' },
@@ -348,12 +401,18 @@ const TASKS = [
   },
   {
     id:'RV-1031', repo:'acme/order-sync', pr:88, title:'重试队列幂等键修正',
-    author:'陈默', reviewer:'周航', branch:'fix/idempotent-key', risk:'high',
-    diff:{ files:3, add:58, del:22 }, updated:'1 小时前',
+    author:'陈默', reviewer:'周航', branch:'fix/idempotent-key', risk:'high', firstRepo:true,
+    diff:{ files:3, add:58, del:22 }, updated:'1 小时前', released:false,
+    patch:{ file:'src/queue/idempotent.py', lines:'L18–L27',
+      diff:[
+        { t:'- key = f"{msg_id}:{attempt}"', del:true },
+        { t:'+ key = f"{msg_id}:{shard}:{attempt}"', add:true },
+      ] },
+    verify:{ result:'fail', pytest:'失败 1 项', ruff:'通过', cases:'幂等回收用例失败' },
     stages:{
       intake:{ s:'done', at:'08:55', sum:'3 文件 / +58 −22' },
-      analyze:{ s:'done', at:'08:57', sum:'4 发现 / 2 高危' },
-      findings:{ s:'done', at:'09:05', sum:'4 已确认' },
+      analyze:{ s:'done', at:'08:57', sum:'1 发现 / 1 高危' },
+      findings:{ s:'done', at:'09:05', sum:'1 已确认' },
       fix:{ s:'done', at:'09:20', sum:'补丁已应用' },
       verify:{ s:'blocked', sum:'1 项失败：幂等回收用例' },
       conclusion:{ s:'todo', sum:'未放行' },
@@ -361,21 +420,28 @@ const TASKS = [
   },
   {
     id:'RV-1028', repo:'acme/data-pipeline', pr:310, title:'补充分片重试与告警',
-    author:'林晓', reviewer:'周航', branch:'feat/shard-retry', risk:'medium',
-    diff:{ files:11, add:302, del:88 }, updated:'昨天',
+    author:'林晓', reviewer:'周航', branch:'feat/shard-retry', risk:'low', firstRepo:false,
+    diff:{ files:11, add:302, del:88 }, updated:'昨天', released:true,
+    patch:{ file:'src/pipeline/retry.py', lines:'L60–L78',
+      diff:[
+        { t:'+ retry = Retry(attempts=3, backoff=jitter)', add:true },
+      ] },
+    verify:{ result:'pass', pytest:'通过', ruff:'通过', cases:'全部通过' },
     stages:{
       intake:{ s:'done', at:'昨天 16:10', sum:'11 文件 / +302 −88' },
-      analyze:{ s:'done', at:'昨天 16:13', sum:'7 发现 / 0 高危' },
-      findings:{ s:'done', at:'昨天 16:30', sum:'7 已确认' },
+      analyze:{ s:'done', at:'昨天 16:13', sum:'0 发现 / 0 高危' },
+      findings:{ s:'done', at:'昨天 16:30', sum:'无发现' },
       fix:{ s:'done', at:'昨天 16:48', sum:'补丁已应用' },
       verify:{ s:'done', at:'昨天 17:02', sum:'pytest 通过' },
-      conclusion:{ s:'done', at:'昨天 17:05', sum:'已放行 · 周航' },
+      conclusion:{ s:'done', at:'昨天 17:05', sum:'自动通过 · 未命中规则' },
     },
   },
   {
     id:'RV-1015', repo:'acme/legacy-billing', pr:12, title:'迁移旧计费脚本',
-    author:'陈默', reviewer:'林晓', branch:'chore/billing-migration', risk:'low',
-    diff:{ files:2, add:41, del:9 }, updated:'2 天前',
+    author:'陈默', reviewer:'林晓', branch:'chore/billing-migration', risk:'low', firstRepo:false,
+    diff:{ files:2, add:41, del:9 }, updated:'2 天前', released:false,
+    patch:null,
+    verify:{ result:null, pytest:'未运行', ruff:'未运行', cases:'未运行' },
     stages:{
       intake:{ s:'blocked', sum:'接入失败：仓库无读权限' },
       analyze:{ s:'todo', sum:'待接入' },
@@ -397,7 +463,7 @@ const FINDINGS = [
       { t:'  async def list_repositories():', hot:true },
       { t:'      return await repo_store.list_all()', hot:true },
     ] },
-  { id:'F-1025', task:'RV-1042', title:'重试路径没有复用请求级超时', sev:'medium', status:'pending',
+  { id:'F-1025', task:'RV-1042', title:'重试路径没有复用请求级超时', sev:'medium', status:'confirmed',
     file:'src/llm/client.py', line:'L72–L89',
     desc:'LLM 重试会重新创建客户端默认超时，可能让单次审查等待时间超过任务预算。',
     code:[ { t:'  for attempt in range(retries):' }, { t:'      client = build_client()   # 超时被重置' }, { t:'      return client.chat(...)' } ] },
@@ -416,18 +482,18 @@ const FINDINGS = [
 ];
 
 const AUDIT = [
-  { at:'昨天 17:05', who:'周航', action:'放行', target:'RV-1028', note:'验证通过，规则未命中阻断' },
-  { at:'昨天 16:30', who:'系统', action:'生成发现', target:'RV-1031', note:'4 条，其中 2 条高危' },
-  { at:'昨天 16:02', who:'林晓', action:'提交变更', target:'RV-1042', note:'8 个文件，+184 −63' },
-  { at:'昨天 15:40', who:'周航', action:'驳回', target:'RV-1022', note:'回退到修复阶段' },
-  { at:'昨天 11:20', who:'管理员', action:'修改规则', target:'R2', note:'阈值 500 → 400 行' },
+  { at:'今天 10:06', who:'系统', action:'生成发现', target:'RV-1042', note:'3 条，其中 1 条高危' },
+  { at:'今天 09:22', who:'周航', action:'确认发现', target:'F-1042', note:'进入修复清单' },
+  { at:'今天 09:20', who:'陈默', action:'应用补丁', target:'RV-1031', note:'3 文件，+58 −22' },
+  { at:'今天 09:05', who:'系统', action:'生成发现', target:'RV-1031', note:'1 条，高危' },
+  { at:'今天 08:30', who:'系统', action:'自动通过', target:'RV-1028', note:'未命中规则，无需人工放行' },
 ];
 
 const POLICY = [
-  { id:'R1', name:'高危发现必须人工放行', desc:'命中任意高危发现时，结论阶段需 Reviewer 显式放行', on:true, threshold:'任意 1 条' },
-  { id:'R2', name:'大变更需人工放行', desc:'变更行数超过阈值时进入人工放行', on:true, threshold:'500 行' },
-  { id:'R3', name:'首次接入仓库需人工放行', desc:'仓库第一次接入时，先由 Reviewer 确认审查范围', on:true, threshold:'首次' },
-  { id:'R4', name:'低置信度发现只记录不阻断', desc:'置信度低于 0.6 的发现计入报告，但不影响放行', on:false, threshold:'0.6' },
+  { id:'R1', name:'高危发现必须人工放行', desc:'命中未忽略的高危发现时，需 Reviewer 显式放行', on:true, threshold:'任意 1 条', blocking:true },
+  { id:'R2', name:'大变更需人工放行', desc:'变更行数超过阈值时进入人工放行', on:true, threshold:'500 行', blocking:true },
+  { id:'R3', name:'首次接入仓库需人工放行', desc:'仓库第一次接入时，先由 Reviewer 确认审查范围', on:true, threshold:'首次', blocking:true },
+  { id:'R4', name:'低置信度发现只记录不阻断', desc:'置信度低于阈值的发现计入报告，但不影响放行', on:false, threshold:'0.6', blocking:false },
 ];
 
 const AUTH_KEY = 'cra_auth_v2';
@@ -470,8 +536,24 @@ function go(path){ location.hash = '#/' + path; }
 
 window.addEventListener('hashchange', () => {
   store.route = parseHash();
+  closeDrawer();
   render();
 });
+
+function openDrawerPanel(){
+  $('#drawer').classList.add('on');
+  const sc = $('#scrim');
+  if(sc) sc.classList.add('on');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeDrawer(){
+  const d = $('#drawer');
+  if(d) d.classList.remove('on');
+  const sc = $('#scrim');
+  if(sc) sc.classList.remove('on');
+  document.body.style.overflow = '';
+}
 
 /* ==========================================================================
    工具
@@ -506,6 +588,35 @@ function stageSummary(t, key){
   return st.sum || '—';
 }
 
+function openHigh(t){
+  return FINDINGS.filter(f => f.task === t.id && f.sev === 'high' && f.status !== 'ignored');
+}
+
+function policyHits(t){
+  const hits = [];
+  const on = (id) => { const r = POLICY.find(x => x.id === id); return r && r.on; };
+  if(on('R1') && openHigh(t).length) hits.push({ id:'R1', note:'高危发现 ' + openHigh(t).length + ' 条' });
+  const lines = t.diff.add + t.diff.del;
+  if(on('R2') && lines > 500) hits.push({ id:'R2', note:'变更 ' + lines + ' 行' });
+  if(on('R3') && t.firstRepo) hits.push({ id:'R3', note:'首次接入仓库' });
+  return hits;
+}
+
+function releaseGate(t){
+  if(t.released) return { ok:false, reason:'已放行，历史只读' };
+  for(const k of ['intake','analyze','findings','fix']){
+    if(t.stages[k].s !== 'done') return { ok:false, reason:'「' + STAGES.find(x=>x.key===k).label + '」未完成' };
+  }
+  if(t.stages.verify.s === 'blocked') return { ok:false, reason:'验证未通过，不能放行' };
+  if(t.stages.verify.s !== 'done') return { ok:false, reason:'「验证」未完成' };
+  return { ok:true, reason:'' };
+}
+
+function auditPush(action, target, note){
+  AUDIT.unshift({ at:'刚刚', who: auth ? auth.name : '系统', action, target, note });
+  if(AUDIT.length > 30) AUDIT.pop();
+}
+
 function currentStage(t){
   for(const s of STAGES){ if(t.stages[s.key].s !== 'done') return s.key; }
   return 'conclusion';
@@ -516,7 +627,7 @@ function currentStage(t){
    ========================================================================== */
 function navCount(name){
   if(name === 'tasks') return TASKS.filter(t => currentStage(t) !== 'conclusion').length;
-  if(name === 'findings') return FINDINGS.filter(f => f.status !== 'ignored').length;
+  if(name === 'findings') return FINDINGS.filter(f => f.status === 'pending').length;
   return null;
 }
 
@@ -559,7 +670,9 @@ function renderNav(){
    视图：工作台
    ========================================================================== */
 function viewDash(){
-  const active = TASKS.filter(t => currentStage(t) !== 'conclusion');
+  const active = TASKS.filter(t => !t.released && currentStage(t) !== 'conclusion');
+  const released = TASKS.filter(t => t.released);
+  const passRate = Math.round(released.length / TASKS.length * 100);
   const todo = FINDINGS.filter(f => f.status === 'pending');
   return `
     <div class="page-head">
@@ -568,20 +681,20 @@ function viewDash(){
         <h1>工作台</h1>
         <p class="subtitle">${role().name}视角 · 待处理 ${active.length} 个任务、${todo.length} 条待复核发现</p>
       </div>
-      <button class="btn btn-primary" data-act="new-task">＋ 新建审查</button>
+      <button class="btn btn-primary" data-act="new-task">+ 新建审查</button>
     </div>
 
     <div class="kpis">
-      <div class="card kpi"><div class="kpi-l">待处理发现</div><div class="kpi-v">${todo.length}</div><div class="kpi-m warn">其中高危 ${FINDINGS.filter(f=>f.sev==='high'&&f.status!=='ignored').length} 条</div></div>
+      <div class="card kpi"><div class="kpi-l">待复核发现</div><div class="kpi-v">${todo.length}</div><div class="kpi-m warn">其中高危 ${todo.filter(f=>f.sev==='high').length} 条</div></div>
       <div class="card kpi"><div class="kpi-l">进行中任务</div><div class="kpi-v">${active.length}</div><div class="kpi-m">本周完成 ${TASKS.filter(t=>t.stages.conclusion.s==='done').length} 个</div></div>
-      <div class="card kpi"><div class="kpi-l">首结果 P95</div><div class="kpi-v">2m 18s</div><div class="kpi-m">目标 ≤ 5 分钟</div></div>
-      <div class="card kpi"><div class="kpi-l">放行率</div><div class="kpi-v">68%</div><div class="kpi-m">样本 N=74</div></div>
+      <div class="card kpi"><div class="kpi-l">首结果 P95</div><div class="kpi-v">4m 02s</div><div class="kpi-m">目标 ≤ 5 分钟</div></div>
+      <div class="card kpi"><div class="kpi-l">放行率</div><div class="kpi-v">${passRate}%</div><div class="kpi-m">N=${TASKS.length}（演示数据）</div></div>
     </div>
 
     <div class="grid-2">
       <div class="card">
         <div class="card-h"><span class="card-t">进行中的任务</span><a class="card-note" href="#/tasks">全部 →</a></div>
-        <table class="tbl"><tbody>
+        <div class="table-wrap"><table class="tbl"><tbody>
           ${active.map(t => `
             <tr class="row" data-task="${t.id}">
               <td style="width:34%"><div class="repo">${t.repo}</div><div class="sub">#${t.pr} · ${t.title}</div></td>
@@ -590,7 +703,7 @@ function viewDash(){
               <td style="width:16%" class="muted">${t.updated}</td>
               <td style="width:12%"><button class="btn btn-sm" data-task="${t.id}">打开</button></td>
             </tr>`).join('')}
-        </tbody></table>
+        </tbody></table></div>
       ${active.length ? '' : '<div class="empty">没有进行中的任务</div>'}
       </div>
 
@@ -647,15 +760,15 @@ function viewTasks(){
         <h1>审查任务</h1>
         <p class="subtitle">一次审查 = 一个变更集。阶段从左到右推进，卡住时会在列表上标出来。</p>
       </div>
-      <button class="btn btn-primary" data-act="new-task">＋ 新建审查</button>
+      <button class="btn btn-primary" data-act="new-task">+ 新建审查</button>
     </div>
 
     <div class="card">
       <div class="card-h" style="border-bottom:1px solid var(--line)">
-        <input id="taskSearch" class="search" type="search" placeholder="搜索仓库、PR 号或标题…" style="max-width:320px;border:1px solid var(--line);border-radius:7px;padding:7px 10px;font-size:12px">
+        <input id="taskSearch" class="search" type="search" placeholder="搜索仓库、PR 号或标题…" style="width:100%;max-width:320px;border:1px solid var(--line);border-radius:7px;padding:7px 10px;font-size:12px">
         <span class="card-note" id="taskCount">${TASKS.length} 个任务</span>
       </div>
-      <table class="tbl">
+      <div class="table-wrap"><table class="tbl">
         <thead><tr>
           <th style="width:26%">仓库 / 变更</th>
           <th style="width:22%">阶段</th>
@@ -676,7 +789,7 @@ function viewTasks(){
             </tr>`).join('')}
           <tr id="taskEmpty" style="display:none"><td colspan="6"><div class="empty">没有匹配的任务，换个关键词试试</div></td></tr>
         </tbody>
-      </table>
+      </table></div>
     </div>`;
 }
 
@@ -699,9 +812,9 @@ function viewTask(t, stageKey){
         </p>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
-        ${statePill(st.s, st.pct)}
-        ${can('release') && key === 'conclusion' && st.s !== 'done' ? '<button class="btn btn-ok" data-act="release" ' + (t.stages.verify.s === 'blocked' ? 'disabled title="验证未通过，不能放行"' : '') + '>放行</button>' : ''}
-        ${can('release') && key === 'conclusion' && st.s !== 'done' ? '<button class="btn btn-danger" data-act="block">阻断</button>' : ''}
+        ${statePill(t.stages[currentStage(t)].s, t.stages[currentStage(t)].pct)}
+        ${can('release') && key === 'conclusion' && st.s !== 'done' ? '<button class="btn btn-ok" data-act="release" ' + (releaseGate(t).ok ? '' : 'disabled title="' + releaseGate(t).reason + '"') + '>放行</button>' : ''}
+        ${can('release') && key === 'conclusion' && st.s !== 'done' ? '<button class="btn btn-danger" data-act="block" ' + (releaseGate(t).ok ? '' : 'disabled') + '>阻断</button>' : ''}
       </div>
     </div>
 
@@ -711,7 +824,7 @@ function viewTask(t, stageKey){
         const cls = [s.key === key ? 'sel' : '', sst.s].filter(Boolean).join(' ');
         return `<div class="stage ${cls}" data-stage="${s.key}">
           <div class="stage-h"><span class="stage-dot"></span>${s.label}</div>
-          <div class="stage-s">${sst.sum || s.desc}</div>
+          <div class="stage-s">${can('view') ? (sst.sum || s.desc) : stateLabel(sst)}</div>
           <div class="stage-t">${sst.at || ''}</div>
         </div>`;
       }).join('')}
@@ -731,14 +844,15 @@ function viewTask(t, stageKey){
             <div class="kv"><span>文件</span><span>${t.diff.files} 个</span></div>
             <div class="kv"><span>新增 / 删除</span><span class="mono">+${t.diff.add} / −${t.diff.del}</span></div>
             <div class="kv"><span>风险等级</span><span>${sevPill(t.risk)}</span></div>
-            <div class="kv"><span>当前阶段</span><span>${meta.label}</span></div>
+            <div class="kv"><span>任务当前阶段</span><span>${STAGES.find(s=>s.key===currentStage(t)).label}</span></div>
+            <div class="kv"><span>正在查看</span><span>${meta.label}</span></div>
           </div>
         </div>
         <div class="card">
           <div class="card-h"><span class="card-t">阶段记录</span></div>
           <div class="card-b">
             <ul class="tl">
-              ${STAGES.filter(s => t.stages[s.key].at).map(s => `<li>${s.label}<small>${t.stages[s.key].at} · ${t.stages[s.key].sum || ''}</small></li>`).join('')}
+              ${STAGES.filter(s => t.stages[s.key].at).map(s => `<li>${s.label}<small>${t.stages[s.key].at}${can('view') ? ' · ' + (t.stages[s.key].sum || '') : ''}</small></li>`).join('')}
             </ul>
           </div>
         </div>
@@ -768,17 +882,36 @@ function nextStep(t, key){
   if(key === 'verify' && st.s === 'blocked')
     return `<div class="nextstep">验证失败。下一步 · 作者 · 修复后重跑。<button class="btn btn-sm btn-primary" data-act="rerun-verify">重跑验证</button></div>`;
   if(key === 'verify' && st.s === 'todo')
-    return `<div class="nextstep">等待修复完成。下一步 · 作者 · 提交补丁后自动进入验证。</div>`;
-  if(key === 'conclusion' && st.s !== 'done')
-    return `<div class="nextstep">${can('release') ? '下一步 · Reviewer · 确认放行或阻断。' : '等待 Reviewer 放行。'}</div>`;
-  return `<div class="nextstep">该阶段已完成，可切换到下一阶段继续。</div>`;
+    return `<div class="nextstep">${t.stages.fix.s === 'done' ? '补丁已就绪。下一步 · 作者 · 运行验证。' : '等待修复完成。'}<button class="btn btn-sm btn-primary" data-act="run-verify" ${t.stages.fix.s === 'done' ? '' : 'disabled'}>运行验证</button></div>`;
+  if(key === 'conclusion' && st.s !== 'done'){
+    const gate = releaseGate(t);
+    return `<div class="nextstep">${can('release') ? (gate.ok ? '下一步 · Reviewer · 确认放行或阻断。' : '等待前置完成：' + gate.reason) : '等待 Reviewer 放行。'}</div>`;
+  }
+  if(key === 'conclusion' && st.s === 'done')
+    return `<div class="nextstep">审查已结束（${t.released ? '已放行' : '已阻断'}）。<a class="btn btn-sm" href="#/tasks">返回任务列表</a></div>`;
+  if(st.s === 'running') return `<div class="nextstep">「${meta.label}」进行中 ${st.pct || 0}%，完成后再继续。</div>`;
+
+  const next = STAGES[STAGES.findIndex(x => x.key === key) + 1];
+  if(next){
+    const who = next.key === 'fix' || next.key === 'verify' ? '代码作者' : next.key === 'conclusion' ? 'Reviewer' : '系统';
+    return `<div class="nextstep">下一步 · ${who} · 进入「${next.label}」。<button class="btn btn-sm" data-stage="${next.key}">去${next.label}</button></div>`;
+  }
+  return `<div class="nextstep">该阶段已完成。</div>`;
 }
 
 function stageBody(t, key){
   if(!can('view')){
-    return `<div class="infobox">平台管理员不查看业务内容（代码、发现详情）。此处只保留元数据与放行依据，符合最小必要原则。</div>
+    if(key === 'conclusion'){
+      const hits = policyHits(t);
+      return `<div class="infobox">平台管理员不查看业务内容，只保留放行依据：规则命中、责任人、时间。</div>
+        <div class="kv" style="margin-top:12px"><span>规则命中</span><span>${hits.length ? hits.map(h=>h.id).join('、') : '未命中'}</span></div>
+        <div class="kv"><span>结论</span><span>${t.released ? '已放行' : t.stages.conclusion.s === 'blocked' ? '已阻断' : '未放行'}</span></div>
+        <div class="kv"><span>责任人</span><span>${t.released || t.stages.conclusion.s === 'blocked' ? (t.stages.conclusion.sum || '').replace(/^已(放行|阻断) · /, '') : '—'}</span></div>
+        <div class="kv"><span>时间</span><span>${t.stages.conclusion.at || '—'}</span></div>`;
+    }
+    return `<div class="infobox">平台管理员不查看业务内容（代码、发现详情）。此处只保留元数据。</div>
       <div class="kv" style="margin-top:12px"><span>变更规模</span><span>${t.diff.files} 文件 / +${t.diff.add} −${t.diff.del}</span></div>
-      <div class="kv"><span>放行状态</span><span>${t.stages.conclusion.s === 'done' ? '已放行' : '未放行'}</span></div>`;
+      <div class="kv"><span>阶段状态</span><span>${stateLabel(t.stages[key])}</span></div>`;
   }
 
   if(key === 'intake'){
@@ -826,8 +959,8 @@ function stageBody(t, key){
 
   if(key === 'fix'){
     return `
-      <div class="card-note" style="margin-bottom:8px">建议补丁 · ${t.diff.files ? '最小修改' : ''}</div>
-      <div class="code"><span class="del">- @admin_router.get("/repositories")</span><span class="add">+ @admin_router.get("/repositories", dependencies=[Depends(require_user)])</span>  async def list_repositories(): return await repo_store.list_all()</div>
+      <div class="card-note" style="margin-bottom:8px">建议补丁 · ${t.patch ? t.patch.file + ' · ' + t.patch.lines : '暂无补丁'}</div>
+      <div class="code">${(t.patch ? t.patch.diff : [{ t:'  （尚未生成补丁）' }]).map(l => '<span class="ln ' + (l.add ? 'add' : l.del ? 'del' : '') + '">' + esc(l.t) + '</span>').join('')}</div>
       <div style="display:flex;gap:8px;margin-top:12px">
         <button class="btn btn-sm" data-act="view-diff">查看完整 diff</button>
         <button class="btn btn-sm" data-act="copy-patch">复制补丁</button>
@@ -837,19 +970,25 @@ function stageBody(t, key){
 
   if(key === 'verify'){
     return `
-      <div class="kv"><span>pytest</span><span>${t.stages.verify.s === 'blocked' ? '失败 1 项' : t.stages.verify.s === 'done' ? '通过' : '未运行'}</span></div>
-      <div class="kv"><span>ruff</span><span>通过</span></div>
-      <div class="kv"><span>回归用例</span><span>${t.stages.verify.s === 'blocked' ? '幂等回收用例失败' : '全部通过'}</span></div>
+      <div class="kv"><span>pytest</span><span>${t.verify ? t.verify.pytest : '未运行'}</span></div>
+      <div class="kv"><span>ruff</span><span>${t.verify ? t.verify.ruff : '未运行'}</span></div>
+      <div class="kv"><span>回归用例</span><span>${t.verify ? t.verify.cases : '未运行'}</span></div>
       ${t.stages.verify.s === 'blocked' ? '<div class="warnbox" style="margin-top:12px">失败证据已保留，修复未生效，系统不会把本次变更标记为「修复成功」。</div>' : ''}`;
   }
 
   if(key === 'conclusion'){
     const done = t.stages.conclusion.s === 'done';
+    const hits = policyHits(t);
+    const gate = releaseGate(t);
+    const hitText = hits.length ? hits.map(h => h.id + '（' + h.note + '）').join('、') : '未命中';
     return `
-      <div class="kv"><span>放行规则</span><span>高危发现 ${FINDINGS.filter(f=>f.task===t.id&&f.sev==='high').length} 条</span></div>
-      <div class="kv"><span>规则命中</span><span>${done ? 'R1（高危）' : '待判断'}</span></div>
-      <div class="kv"><span>当前结论</span><span>${done ? '已放行' : '未放行'}</span></div>
-      ${done ? '' : '<div class="infobox" style="margin-top:12px">默认不阻断：未命中任何规则时自动通过；本次命中 R1，需要 Reviewer 显式放行。</div>'}`;
+      <div class="kv"><span>高危发现</span><span>${openHigh(t).length} 条（已忽略不计）</span></div>
+      <div class="kv"><span>规则命中</span><span>${hitText}</span></div>
+      <div class="kv"><span>放行前置</span><span>${gate.ok ? '已满足' : gate.reason}</span></div>
+      <div class="kv"><span>当前结论</span><span>${done ? (t.released ? '已放行' : '已阻断') : '未放行'}</span></div>
+      ${done ? '' : (hits.length
+        ? '<div class="infobox" style="margin-top:12px">默认不阻断：本次命中 ' + hits.map(h=>h.id).join('、') + '，需要 Reviewer 显式放行。</div>'
+        : '<div class="infobox" style="margin-top:12px">默认不阻断：未命中任何规则，满足前置后自动通过。</div>')}`;
   }
 
   return '';
@@ -874,7 +1013,7 @@ function viewFindings(){
     </div>
     ${!can('view') ? '<div class="card card-b infobox">当前角色为平台管理员，不展示业务内容。可在「质量报告」查看聚合指标。</div>' : `
     <div class="card">
-      <table class="tbl">
+      <div class="table-wrap"><table class="tbl">
         <thead><tr><th style="width:30%">发现</th><th style="width:10%">严重度</th><th style="width:14%">任务</th><th style="width:22%">位置</th><th style="width:12%">状态</th><th></th></tr></thead>
         <tbody>
           ${list.map(f => `
@@ -888,13 +1027,18 @@ function viewFindings(){
             </tr>`).join('')}
           <tr id="findEmpty" style="display:none"><td colspan="6"><div class="empty">没有符合筛选的发现</div></td></tr>
         </tbody>
-      </table>
+      </table></div>
     </div>`}`;
 }
 
 /* ==========================================================================
    视图：质量报告
    ========================================================================== */
+function stageRate(key){
+  const done = TASKS.filter(t => t.stages[key].s === 'done').length;
+  return Math.round(done / TASKS.length * 100);
+}
+
 function viewReport(){
   return `
     <div class="page-head">
@@ -915,25 +1059,25 @@ function viewReport(){
 
     <div class="grid-2">
       <div class="card">
-        <div class="card-h"><span class="card-t">按阶段分布</span><span class="card-note">近 30 天</span></div>
+        <div class="card-h"><span class="card-t">各阶段完成率</span><span class="card-note">N=${TASKS.length} 个任务</span></div>
         <div class="card-b">
           ${STAGES.map((s, i) => `
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:11px">
               <span style="width:44px;font-size:11px;color:var(--muted)">${s.label}</span>
               <div style="flex:1;height:9px;background:#eef1f5;border-radius:6px;overflow:hidden">
-                <div style="width:${[92,88,74,61,70,84][i]}%;height:100%;background:#bfd1ff"></div>
+                <div style="width:${stageRate(s.key)}%;height:100%;background:#bfd1ff"></div>
               </div>
-              <span style="width:38px;text-align:right;font-size:11px">${[92,88,74,61,70,84][i]}%</span>
+              <span style="width:38px;text-align:right;font-size:11px">${stageRate(s.key)}%</span>
             </div>`).join('')}
         </div>
       </div>
       <div class="card">
         <div class="card-h"><span class="card-t">版本对比</span></div>
         <div class="card-b">
-          <div class="kv"><span>v1.3 → v1.4 精确率</span><span>94.0% → 82.0%</span></div>
-          <div class="kv"><span>召回</span><span>56.0% → 51.2%</span></div>
-          <div class="kv"><span>数据集</span><span>124 条，全部审计</span></div>
-          <div class="infobox" style="margin-top:10px">数字变小是修正标反样本的结果，不是模型退化；跨版本不可相减。</div>
+          <div class="kv"><span>v1.2.0</span><span>精确率 94.0% · 召回 56.0%</span></div>
+          <div class="kv"><span>v1.3.0</span><span>精确率 82.0% · 召回 52.6%</span></div>
+          <div class="kv"><span>v1.4.0</span><span>精确率 82.0% · 召回 51.2%</span></div>
+          <div class="infobox" style="margin-top:10px">82.0% 的下修发生在 v1.3.0（修正 6 条标反样本）；跨版本不可相减。</div>
         </div>
       </div>
     </div>`;
@@ -1010,28 +1154,29 @@ function viewGov(tab){
       <div class="card">
         <div class="card-h"><span class="card-t">动作 × 角色</span><span class="card-note">✓ 允许 · — 不允许</span></div>
         <div class="card-b">
-          <table class="matrix">
+          <div class="table-wrap"><table class="matrix">
             <thead><tr><th>动作</th><th>代码作者</th><th>Reviewer</th><th>平台管理员</th></tr></thead>
             <tbody>
               <tr><td>提交变更、查看自己任务的证据</td><td class="yes">✓</td><td class="yes">✓</td><td class="no">—</td></tr>
-              <tr><td>确认 / 忽略发现</td><td class="yes">✓ 建议</td><td class="yes">✓ 决定</td><td class="no">—</td></tr>
+              <tr><td>确认 / 忽略发现</td><td class="yes">✓ 仅自己的任务</td><td class="yes">✓ 全部任务</td><td class="no">—</td></tr>
+              <tr><td>生成补丁 / 运行验证</td><td class="yes">✓</td><td class="no">—</td><td class="no">—</td></tr>
               <tr><td>放行 / 阻断</td><td class="no">—</td><td class="yes">✓</td><td class="no">—</td></tr>
               <tr><td>修改规则集</td><td class="no">—</td><td class="no">—</td><td class="yes">✓</td></tr>
               <tr><td>查看审计日志</td><td class="no">—</td><td class="no">—</td><td class="yes">✓</td></tr>
               <tr><td>查看业务内容（代码 / 发现详情）</td><td class="yes">✓</td><td class="yes">✓</td><td class="no">—</td></tr>
             </tbody>
-          </table>
+          </table></div>
           <div class="infobox" style="margin-top:12px">管理员不读业务内容：只能看元数据与放行依据，符合最小必要原则。</div>
         </div>
       </div>` : `
       <div class="card">
         <div class="card-h"><span class="card-t">审计日志</span><span style="display:flex;gap:8px;align-items:center"><span class="card-note">只读 · 不可编辑</span><button class="btn btn-sm" data-act="export-audit">导出 CSV</button></span></div>
-        <table class="tbl">
+        <div class="table-wrap"><table class="tbl">
           <thead><tr><th style="width:16%">时间</th><th style="width:14%">操作人</th><th style="width:14%">动作</th><th style="width:16%">对象</th><th>说明</th></tr></thead>
           <tbody>
             ${AUDIT.map(a => `<tr><td class="muted">${a.at}</td><td>${a.who}</td><td>${a.action}</td><td class="mono">${a.target}</td><td class="muted">${a.note}</td></tr>`).join('')}
           </tbody>
-        </table>
+        </table></div>
       </div>`}`;
 }
 
@@ -1129,6 +1274,7 @@ function doLogin(user, pass){
 }
 
 function doLogout(){
+  closeDrawer();
   auth = null;
   try { localStorage.removeItem(AUTH_KEY); } catch (e) {}
   store.route = { name:'dash' };
@@ -1158,9 +1304,11 @@ function render(){
   renderNav();
   renderCrumb();
 
+  if(r.name === 'tasks' && r.taskId && !task(r.taskId)){ location.hash = '#/tasks'; return; }
+
   let html = '';
   if(r.name === 'dash') html = viewDash();
-  else if(r.name === 'tasks') html = r.taskId ? viewTask(task(r.taskId), r.stage) : viewTasks();
+  else if(r.name === 'tasks') html = r.taskId ? viewTask(task(r.taskId), (r.stage && STAGES.some(x => x.key === r.stage)) ? r.stage : null) : viewTasks();
   else if(r.name === 'findings') html = viewFindings();
   else if(r.name === 'report') html = viewReport();
   else if(r.name === 'policy') html = viewPolicy();
@@ -1277,6 +1425,31 @@ function act(name){
 
   if(name === 'new-task'){ toast('原型演示：新建审查暂未接入'); return; }
 
+  if(name === 'export-report'){
+    downloadCsv('审查质量_' + new Date().toISOString().slice(0,10) + '.csv', [
+      ['任务','仓库','PR','风险','当前阶段','文件数','新增','删除','已放行'],
+      ...TASKS.map(x => [x.id, x.repo, '#'+x.pr, x.risk, STAGES.find(s=>s.key===currentStage(x)).label, x.diff.files, x.diff.add, x.diff.del, x.released ? '是' : '否']),
+    ]);
+    toast('已导出 ' + TASKS.length + ' 条');
+    return;
+  }
+
+  if(name === 'export-audit'){
+    downloadCsv('审计日志_' + new Date().toISOString().slice(0,10) + '.csv', [
+      ['时间','操作人','动作','对象','说明'],
+      ...AUDIT.map(a => [a.at, a.who, a.action, a.target, a.note]),
+    ]);
+    toast('已导出 ' + AUDIT.length + ' 条审计');
+    return;
+  }
+
+  if(name === 'save-policy'){
+    auditPush('修改规则', '策略集', POLICY.filter(r=>r.on).map(r=>r.id).join('、') + ' 启用');
+    render();
+    toast('规则已保存，已写入审计');
+    return;
+  }
+
   if(!t) return;
 
   if(name === 'run-analyze'){
@@ -1289,7 +1462,20 @@ function act(name){
       if(store.route.taskId === id) render();
       if(p >= 100){
         clearInterval(timer);
-        t.stages.analyze = { s:'done', at:'刚刚', sum:'12 发现 / 3 高危' };
+        let list = FINDINGS.filter(f => f.task === id);
+        if(!list.length){
+          FINDINGS.push({
+            id: 'F-' + (2000 + Math.floor(Math.random()*900)), task:id,
+            title:'新增分支缺少错误处理', sev:'medium', status:'pending',
+            file:'src/app/handler.py', line:'L54–L61',
+            desc:'异常分支只记录日志，未返回明确错误码，调用方无法区分失败类型。',
+            code:[{ t:'  except Exception:' }, { t:'      log.warning("failed")' }],
+          });
+          list = FINDINGS.filter(f => f.task === id);
+        }
+        const hi = list.filter(f => f.sev === 'high').length;
+        t.stages.analyze = { s:'done', at:'刚刚', sum:list.length + ' 发现 / ' + hi + ' 高危' };
+        t.stages.findings = { s:'running', pct:0, sum:list.length + ' 条待复核' };
         // 动作有去处：完成后自动落到「发现」
         go('tasks/' + id + '/findings');
         toast('分析完成，已跳到发现');
@@ -1313,13 +1499,39 @@ function act(name){
   if(name === 'go-fix'){ go('tasks/' + id + '/fix'); return; }
 
   if(name === 'gen-patch'){
+    if(t.released){ toast('任务已放行，历史只读'); return; }
+    if(store.role !== 'author'){ toast('只有代码作者可以生成补丁'); return; }
     t.stages.fix = { s:'running', pct:40, sum:'生成补丁…' };
     render();
     setTimeout(() => {
-      t.stages.fix = { s:'done', at:'刚刚', sum:'补丁已生成' };
-      t.stages.verify = { s:'todo', sum:'待运行' };
-      go('tasks/' + id + '/fix');
-      toast('补丁已生成');
+      t.stages.fix = { s:'done', at:'刚刚', sum:'补丁已应用' };
+      t.verify = { result:'pass', pytest:'通过', ruff:'通过', cases:'全部通过' };
+      t.stages.verify = { s:'running', pct:50, sum:'验证中…' };
+      render();
+      setTimeout(() => {
+        t.stages.verify = { s:'done', at:'刚刚', sum:'pytest 通过' };
+        go('tasks/' + id + '/verify');
+        toast('补丁已应用，验证通过');
+      }, 900);
+    }, 700);
+    return;
+  }
+
+  if(name === 'run-verify'){
+    if(t.released){ toast('任务已放行，历史只读'); return; }
+    if(store.role !== 'author'){ toast('只有代码作者可以运行验证'); return; }
+    if(t.stages.fix.s !== 'done'){ toast('补丁未完成，不能验证'); return; }
+    t.stages.verify = { s:'running', pct:50, sum:'验证中…' };
+    render();
+    setTimeout(() => {
+      if(t.verify && t.verify.result === 'fail'){
+        t.stages.verify = { s:'blocked', sum:'1 项失败：' + t.verify.cases };
+        toast('验证失败，证据已保留');
+      } else {
+        t.stages.verify = { s:'done', at:'刚刚', sum:'pytest 通过' };
+        toast('验证通过');
+      }
+      if(store.route.taskId === id) render();
     }, 900);
     return;
   }
@@ -1337,42 +1549,52 @@ function act(name){
 
   if(name === 'release'){
     if(!can('release')){ toast('当前角色不能放行'); return; }
-    if(t.stages.verify.s === 'blocked'){ toast('验证未通过，不能放行'); return; }
-    t.stages.conclusion = { s:'done', at:'刚刚', sum:'已放行 · ' + role().name };
+    const gate = releaseGate(t);
+    if(!gate.ok){ toast(gate.reason); return; }
+    const hits = policyHits(t);
+    if(hits.length && !auth){ toast('需要登录后放行'); return; }
+    t.released = true;
+    t.stages.conclusion = { s:'done', at:'刚刚', sum:'已放行 · ' + (auth ? auth.name : '系统') };
+    auditPush('放行', t.id, hits.length ? '命中 ' + hits.map(h=>h.id).join('、') + '，人工放行' : '未命中规则，自动通过');
     render();
-    toast('已放行，记录写入审计');
+    toast('已放行，已写入审计');
     return;
   }
 
   if(name === 'block'){
     if(!can('release')){ toast('当前角色不能阻断'); return; }
-    t.stages.conclusion = { s:'blocked', at:'刚刚', sum:'已阻断 · ' + role().name };
-    t.stages.fix = { s:'running', pct:0, sum:'按阻断意见返工' };
+    t.released = false;
+    t.stages.conclusion = { s:'blocked', at:'刚刚', sum:'已阻断 · ' + (auth ? auth.name : '系统') };
+    t.stages.fix = { s:'blocked', sum:'按阻断意见返工' };
+    t.stages.verify = { s:'todo', sum:'待重新验证' };
+    t.verify = { result:null, pytest:'未运行', ruff:'未运行', cases:'未运行' };
+    auditPush('阻断', t.id, '回退到修复阶段');
     render();
     toast('已阻断，回退到修复');
     return;
   }
 
-  if(name === 'view-diff' || name === 'copy-patch'){ toast('原型演示：' + (name === 'view-diff' ? '完整 diff' : '复制补丁') + ' 暂无内容'); return; }
-  if(name === 'save-policy'){ toast('规则已保存，已写入审计'); return; }
-
-  if(name === 'export-report'){
-    downloadCsv('审查质量_' + new Date().toISOString().slice(0,10) + '.csv', [
-      ['任务', '仓库', 'PR', '风险', '当前阶段', '文件数', '新增', '删除'],
-      ...TASKS.map(t => [t.id, t.repo, '#' + t.pr, t.risk, STAGES.find(s=>s.key===currentStage(t)).label, t.diff.files, t.diff.add, t.diff.del]),
-    ]);
-    toast('已导出 ' + TASKS.length + ' 条');
+  if(name === 'view-diff'){
+    if(!t.patch){ toast('该任务暂无补丁'); return; }
+    $('#drawerKicker').textContent = 'DIFF · ' + t.id;
+    $('#drawerTitle').textContent = t.patch.file;
+    $('#drawerBody').innerHTML =
+      '<div class="kv"><span>位置</span><span class="mono">' + t.patch.lines + '</span></div>' +
+      '<div class="code" style="margin-top:12px">' + t.patch.diff.map(l => '<span class="ln ' + (l.add ? 'add' : l.del ? 'del' : '') + '">' + esc(l.t) + '</span>').join('') + '</div>' +
+      '<div class="infobox" style="margin-top:12px">仅展示最小修改；写入前自动留 .bak，验证未通过不标记修复成功。</div>';
+    openDrawerPanel();
     return;
   }
 
-  if(name === 'export-audit'){
-    downloadCsv('审计日志_' + new Date().toISOString().slice(0,10) + '.csv', [
-      ['时间', '操作人', '动作', '对象', '说明'],
-      ...AUDIT.map(a => [a.at, a.who, a.action, a.target, a.note]),
-    ]);
-    toast('已导出 ' + AUDIT.length + ' 条审计');
+  if(name === 'copy-patch'){
+    if(!t.patch){ toast('该任务暂无补丁'); return; }
+    const text = t.patch.diff.map(l => l.t).join('\n');
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(() => toast('补丁已复制'), () => toast('复制失败，请手动选择'));
+    } else { toast('当前环境不支持剪贴板'); }
     return;
   }
+
 }
 
 /* ==========================================================================
@@ -1382,13 +1604,28 @@ function openFinding(fid){
   const f = finding(fid);
   if(!f) return;
 
+  const ownerTask = task(f.task);
+  const locked = ownerTask && ownerTask.released;
+
+  if(locked){
+    $('#drawerKicker').textContent = f.id + ' · 已归档';
+    $('#drawerTitle').textContent = f.title;
+    $('#drawerBody').innerHTML =
+      '<div class="infobox">该任务已放行，发现记录转为只读，不能再确认或忽略。</div>' +
+      '<div class="code" style="margin-top:12px">' + f.code.map(l => '<span class="ln">' + esc(l.t) + '</span>').join('') + '</div>' +
+      '<p class="subtitle" style="margin-top:12px">' + esc(f.desc) + '</p>' +
+      '<div class="kv"><span>位置</span><span class="mono">' + f.file + ' · ' + f.line + '</span></div>';
+    openDrawerPanel();
+    return;
+  }
+
   if(!can('view')){
     $('#drawerKicker').textContent = f.id;
     $('#drawerTitle').textContent = '无权查看';
     $('#drawerBody').innerHTML = '<div class="infobox">平台管理员不查看业务内容。此处只保留该发现的元数据：严重度、所属任务、是否影响放行。</div>' +
       '<div class="kv" style="margin-top:12px"><span>严重度</span><span>' + sevPill(f.sev) + '</span></div>' +
       '<div class="kv"><span>所属任务</span><span class="mono">' + f.task + '</span></div>';
-    $('#drawer').classList.add('on');
+    openDrawerPanel();
     return;
   }
 
@@ -1407,17 +1644,23 @@ function openFinding(fid){
       <button class="btn btn-sm btn-primary" data-fact="confirm">确认</button>
       <button class="btn btn-sm" data-fact="ignore">忽略</button>
     </div>`;
-  $('#drawer').classList.add('on');
+  openDrawerPanel();
 
   document.querySelectorAll('[data-fact]').forEach(b => {
     b.onclick = () => {
       const kind = b.dataset.fact;
+      const t2 = task(f.task);
+      if(t2 && t2.released){ toast('任务已放行，历史只读'); return; }
+      if(store.role === 'author' && t2 && t2.author !== auth.name){ toast('只能处理自己任务的发现'); return; }
       if(kind === 'confirm'){
+        if(!can('decide') && !can('view')){ toast('当前角色不能确认'); return; }
         f.status = 'confirmed';
+        auditPush('确认发现', f.id, '进入修复清单');
         toast('已确认 · 进入修复清单');
       } else {
         if(!can('ignore')){ toast('当前角色不能忽略'); return; }
         f.status = 'ignored';
+        auditPush('忽略发现', f.id, '需在报告中说明理由');
         toast('已忽略 · 需在报告中说明');
       }
       $('#drawer').classList.remove('on');
@@ -1436,9 +1679,13 @@ document.addEventListener('keydown', (e) => {
     if(d && d.classList.contains('on')) d.classList.remove('on');
   }
 });
+$('#scrim').onclick = () => closeDrawer();
 $('#drawerClose').onclick = () => $('#drawer').classList.remove('on');
 $('#roleSelect').onchange = (e) => {
+  const acc = ACCOUNTS[e.target.value];
   store.role = e.target.value;
+  auth = { role: acc.role, name: acc.name, at: Date.now() };
+  try { localStorage.setItem(AUTH_KEY, JSON.stringify(auth)); } catch (err) {}
   if(!can('view') && ['dash','tasks','findings'].includes(store.route.name)){
     go('report');
     toast('管理员不查看业务内容，已转到质量报告');
@@ -1448,8 +1695,6 @@ $('#roleSelect').onchange = (e) => {
   toast('已切换为 ' + role().name);
 };
 
-const params = new URLSearchParams(location.search);
-if(params.get('role') && ROLES[params.get('role')]) store.role = params.get('role');
 store.route = parseHash();
 render();
 </script>
