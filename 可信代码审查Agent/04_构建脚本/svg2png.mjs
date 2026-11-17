@@ -1,0 +1,16 @@
+const PORT=9333;
+const src=process.argv[2], out=process.argv[3];
+const res=await fetch(`http://127.0.0.1:${PORT}/json/new?about:blank`,{method:'PUT'});
+const t=await res.json(); const ws=new WebSocket(t.webSocketDebuggerUrl);
+await new Promise(r=>ws.addEventListener('open',r,{once:true}));
+let id=0;const p=new Map();
+ws.addEventListener('message',e=>{const m=JSON.parse(e.data);if(m.id&&p.has(m.id)){const q=p.get(m.id);p.delete(m.id);m.error?q.reject(m.error):q.resolve(m.result);}});
+const send=(method,params={})=>{const i=++id;ws.send(JSON.stringify({id:i,method,params}));return new Promise((res,rej)=>p.set(i,{resolve:res,reject:rej}));};
+await send('Page.enable');
+await send('Emulation.setDeviceMetricsOverride',{width:1600,height:900,deviceScaleFactor:2,mobile:false});
+await send('Page.navigate',{url:'file://'+src});
+await new Promise(r=>setTimeout(r,700));
+const {data}=await send('Page.captureScreenshot',{format:'png',captureBeyondViewport:false});
+(await import('node:fs')).writeFileSync(out,Buffer.from(data,'base64'));
+console.log('saved',out);
+process.exit(0);
