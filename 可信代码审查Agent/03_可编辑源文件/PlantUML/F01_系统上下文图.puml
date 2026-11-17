@@ -1,11 +1,18 @@
 @startuml
-!pragma layout smetana
 ' F01 系统上下文图（UML 组件图）
 skinparam shadowing false
 skinparam backgroundColor #FFFFFF
 skinparam defaultFontSize 16
 skinparam defaultFontName PingFang SC
 skinparam componentStyle rectangle
+skinparam component {
+  BackgroundColor #F5F8FF
+  BorderColor #C9D6EA
+}
+skinparam rectangle {
+  BackgroundColor #FCFDFF
+  BorderColor #C9D6EA
+}
 skinparam ArrowColor #6B7280
 skinparam actorStyle stickman
 
@@ -30,10 +37,10 @@ C3 -[#B6C2D6]-> C4
 C4 -[#B6C2D6]-> C5
 C5 -[#B6C2D6]-> C6
 
-component "GitHub / GitLab" as X1 <<外部系统>>
-component "模型服务（LLM）" as X2 <<外部系统>>
-component "CI 测试环境" as X3 <<外部系统>>
-component "审计与存储" as X4 <<外部系统>>
+component "GitHub / GitLab" as X1 <<外部系统>> #FAFBFC
+component "模型服务（LLM）" as X2 <<外部系统>> #FAFBFC
+component "CI 测试环境" as X3 <<外部系统>> #FAFBFC
+component "审计与存储" as X4 <<外部系统>> #FAFBFC
 
 A1 -[#2E6BFF]-> C1 : 提交变更 / 生成补丁
 A2 -[#0F766E]-> C3 : 复核发现 / 放行

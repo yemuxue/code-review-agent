@@ -37,6 +37,9 @@ FIGURES = {
 }
 DPI = "200"
 
+# Graphviz 的 dot：优先用环境变量，其次 /tmp/gv（micromamba 安装）
+GRAPHVIZ_DOT = os.environ.get("GRAPHVIZ_DOT") or ("/tmp/gv/bin/dot" if os.path.exists("/tmp/gv/bin/dot") else "")
+
 
 def render(key):
     puml, png_name = FIGURES[key]
@@ -45,7 +48,10 @@ def render(key):
         print("缺少源文件:", src)
         return False
     cmd = [JRE, "-jar", JAR, "-tpng", f"-Sdpi={DPI}", str(src)]
-    res = subprocess.run(cmd, capture_output=True, text=True)
+    env = dict(os.environ)
+    if GRAPHVIZ_DOT:
+        env["GRAPHVIZ_DOT"] = GRAPHVIZ_DOT
+    res = subprocess.run(cmd, capture_output=True, text=True, env=env)
     if res.returncode != 0:
         print(f"[{key}] 渲染失败:\n{res.stderr[:400]}")
         return False

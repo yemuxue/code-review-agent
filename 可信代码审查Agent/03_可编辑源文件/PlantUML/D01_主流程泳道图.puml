@@ -14,21 +14,21 @@ skinparam titleFontSize 22
 
 title D01  主流程泳道图\n<size:14>六阶段 × 三角色：谁在哪一步做什么，失败时回到哪</size>
 
-|#FFFFFF|AUTH| 代码作者
-|#F7F9FD|SYS| 系统
-|#FFFFFF|REV| Reviewer
+|#F6FBF9|AUTH| 代码作者
+|#F6F9FF|SYS| 系统
+|#FFFBF4|REV| Reviewer
 
 |SYS|
 start
-:01 接入\n选择变更集（PR / commit range）;
-:02 分析\n静态规则 + 模型逐块审查;
-:03 发现\n生成发现与证据链;
+#F6F9FF:01 接入\n选择变更集（PR / commit range）;
+#F6F9FF:02 分析\n静态规则 + 模型逐块审查;
+#F6F9FF:03 发现\n生成发现与证据链;
 |AUTH|
-:03 发现\n逐条复核（确认 / 忽略）;
-:04 修复\n生成补丁（只读预览）;
+#F6FBF9:03 发现\n逐条复核（确认 / 忽略）;
+#F6FBF9:04 修复\n生成补丁（只读预览）;
 |SYS|
-:04 修复\n应用补丁（写前 .bak）;
-:05 验证\n运行 pytest / ruff / 回归;
+#F6F9FF:04 修复\n应用补丁（写前 .bak）;
+#F6F9FF:05 验证\n运行 pytest / ruff / 回归;
 if (验证通过?) then (未通过)
   |AUTH|
   :回到修复\n按失败证据重做补丁;
@@ -36,13 +36,13 @@ if (验证通过?) then (未通过)
 else (通过)
 endif
 |REV|
-:06 结论\n汇总发现与验证结果;
+#FFFBF4:06 结论\n汇总发现与验证结果;
 if (命中 R1–R3?) then (是)
-  :人工放行 / 阻断;
+  #FFFBF4:人工放行 / 阻断;
 else (否)
-  :自动通过;
+  #FFFBF4:自动通过;
 endif
-:写入审计;
+#FFFBF4:写入审计;
 stop
 
 legend bottom
