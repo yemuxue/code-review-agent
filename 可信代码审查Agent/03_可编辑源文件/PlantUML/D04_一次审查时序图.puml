@@ -1,17 +1,16 @@
 @startuml
 !include _style.iuml
-title <size:26><b>D04  一次审查的时序</b></size>\n<size:14><color:#5A6678>GitHub → Agent → 模型 → CI → Reviewer</color></size>
-skinparam shadowing false
-skinparam backgroundColor #FFFFFF
-skinparam defaultFontSize 14
-skinparam defaultFontName PingFang SC
 skinparam sequence {
   ArrowColor #6B7280
-  LifeLineBorderColor #C9D6EA
-  ParticipantBackgroundColor #F5F8FF
+  LifeLineBorderColor #B9CBE6
+  LifeLineBackgroundColor #FFFFFF
+  ParticipantBackgroundColor #F2F7FF
   ParticipantBorderColor #9FB4D6
+  ParticipantFontSize 15
+  ActorBackgroundColor #FFFFFF
+  ActorBorderColor #172033
 }
-
+title <size:26><b>D04  一次审查的时序</b></size>\n<size:14><color:#5A6678>GitHub → Agent → 模型 → CI → Reviewer；竖条为各参与方的激活期</color></size>
 
 actor "代码作者" as U
 participant "GitHub / GitLab" as G
@@ -21,18 +20,36 @@ participant "CI 环境" as C
 actor "Reviewer" as R
 
 U -> G : 提交 PR / 选择变更集
+activate G
 G -> A : diff + 上下文
+deactivate G
+
+activate A
 A -> A : 静态规则匹配
 A -> M : 逐块审查
+activate M
 M --> A : 发现 + 置信度
+deactivate M
 A -> A : 去重、分级、生成证据
 A --> U : 发现列表（文件 · 行号）
+
 U -> A : 生成补丁 / 应用
 A -> C : 运行 pytest / ruff
+activate C
 C --> A : 通过 / 失败证据
+deactivate C
+
 A -> R : 待放行（命中规则时）
+activate R
 R --> A : 放行 / 阻断
+deactivate R
+
 A -> G : 写回检查项
+activate G
+deactivate G
+
 A -> A : 写审计
+deactivate A
+
 caption \n<size:13><color:#5A6678>注：GitHub 只提供 diff 与上下文，不克隆整仓；写回检查项与写审计是两个独立动作。</color></size>
 @enduml
