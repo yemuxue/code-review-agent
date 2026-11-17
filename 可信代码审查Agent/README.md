@@ -55,8 +55,16 @@ python3 04_构建脚本/build_atlas_docx.py       # 组装图册 docx
 
 ## 文档
 
-- [PRD](01_正式文档/可信代码审查Agent-PRD.html)
+- [PRD](01_正式文档/可信代码审查Agent-PRD.md)（唯一来源，站点由 `sync_prd_to_site.py` 同步）
+- [核心图表图册](01_正式文档/可信代码审查Agent-核心图表图册.docx)
 - [可用性测试报告](01_正式文档/可信代码审查Agent-可用性测试报告.html)
+
+站点 PRD 页面来自本仓库，不要再在站点里单独改：
+
+```bash
+python3 04_构建脚本/sync_prd_to_site.py            # 同步到 ../site
+python3 04_构建脚本/sync_prd_to_site.py /path/to/site
+```
 
 ## 历史
 
