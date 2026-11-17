@@ -1,0 +1,32 @@
+@startuml
+skinparam shadowing false
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontSize 15
+skinparam defaultFontName PingFang SC
+skinparam usecase {
+  BackgroundColor #FFF9F2
+  BorderColor #D9B98A
+}
+title U03  平台管理员用例\n<size:14>规则、审计、质量，不读业务内容</size>
+
+actor "平台管理员" as A
+
+rectangle "可信代码审查 Agent（治理面）" {
+  usecase "维护放行规则 R1–R4" as U1
+  usecase "查看质量报告" as U2
+  usecase "查看权限矩阵" as U3
+  usecase "查看审计日志" as U4
+  usecase "导出审计 CSV" as U5
+}
+
+A --> U1
+A --> U2
+A --> U3
+A --> U4
+U4 ..> U5
+
+note right of U2
+  管理员不读业务内容：
+  只能看元数据、指标与放行依据。
+end note
+@enduml

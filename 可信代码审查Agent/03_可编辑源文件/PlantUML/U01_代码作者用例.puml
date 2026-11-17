@@ -1,0 +1,39 @@
+@startuml
+skinparam shadowing false
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontSize 15
+skinparam defaultFontName PingFang SC
+skinparam usecase {
+  BackgroundColor #F6FBF9
+  BorderColor #9CC9BC
+}
+title U01  代码作者用例\n<size:14>提交 → 处理发现 → 补丁 → 验证</size>
+
+actor "代码作者" as A
+
+rectangle "可信代码审查 Agent" {
+  usecase "提交变更集" as U1
+  usecase "查看发现与证据" as U2
+  usecase "确认 / 忽略发现" as U3
+  usecase "生成补丁" as U4
+  usecase "运行验证" as U5
+  usecase "查看验证结果" as U6
+}
+
+A --> U1
+A --> U2
+A --> U3
+A --> U4
+A --> U5
+A --> U6
+
+U1 ..> U2 : 分析完成后
+U3 ..> U4 : 确认后进入修复
+U4 ..> U5 : 补丁应用后
+U5 ..> U6
+
+note right of U5
+  验证失败：保留失败证据，
+  不标记修复成功，可重跑。
+end note
+@enduml

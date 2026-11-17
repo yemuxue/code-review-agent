@@ -1,0 +1,35 @@
+@startuml
+skinparam shadowing false
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontSize 14
+skinparam defaultFontName PingFang SC
+skinparam sequence {
+  ArrowColor #6B7280
+  LifeLineBorderColor #C9D6EA
+  ParticipantBackgroundColor #F5F8FF
+  ParticipantBorderColor #9FB4D6
+}
+title D04  一次审查的时序\n<size:13>GitHub → Agent → 模型 → CI → Reviewer</size>
+
+actor "代码作者" as U
+participant "GitHub / GitLab" as G
+participant "审查 Agent" as A
+participant "模型服务" as M
+participant "CI 环境" as C
+actor "Reviewer" as R
+
+U -> G : 提交 PR / 选择变更集
+G -> A : diff + 上下文
+A -> A : 静态规则匹配
+A -> M : 逐块审查
+M --> A : 发现 + 置信度
+A -> A : 去重、分级、生成证据
+A --> U : 发现列表（文件 · 行号）
+U -> A : 生成补丁 / 应用
+A -> C : 运行 pytest / ruff
+C --> A : 通过 / 失败证据
+A -> R : 待放行（命中规则时）
+R --> A : 放行 / 阻断
+A -> G : 写回检查项
+A -> A : 写审计
+@enduml

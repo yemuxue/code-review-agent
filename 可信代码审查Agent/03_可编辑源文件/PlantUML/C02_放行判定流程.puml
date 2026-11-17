@@ -1,0 +1,40 @@
+@startuml
+skinparam shadowing false
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontSize 15
+skinparam defaultFontName PingFang SC
+skinparam activity {
+  BackgroundColor #F6F9FF
+  BorderColor #9FB4D6
+}
+title C02  放行判定流程\n<size:14>R1–R4 → 自动通过 / 人工放行 / 阻断</size>
+
+start
+:阶段 05 验证完成;
+if (存在未忽略高危？R1) then (是)
+  :待人工放行;
+elseif (变更 > 500 行？R2) then (是)
+  :待人工放行;
+elseif (首次接入仓库？R3) then (是)
+  :待人工放行;
+else (否)
+  :自动通过;
+endif
+if (需要人工?) then (是)
+  :Reviewer 放行或阻断;
+  if (放行?) then (是)
+    :结论 = 已放行;
+  else (否)
+    :结论 = 已阻断\n回退到修复;
+  endif
+else (否)
+  :结论 = 已放行（自动）;
+endif
+:写入审计;
+stop
+
+note right
+  R4 只记录不阻断：
+  低置信度发现计入报告，不影响放行。
+end note
+@enduml

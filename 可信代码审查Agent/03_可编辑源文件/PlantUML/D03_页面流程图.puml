@@ -1,0 +1,38 @@
+@startuml
+skinparam shadowing false
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontSize 15
+skinparam defaultFontName PingFang SC
+skinparam activity {
+  BackgroundColor #F6F9FF
+  BorderColor #9FB4D6
+}
+title D03  页面流程图\n<size:14>S1–S8：页面之间怎么跳</size>
+
+start
+:S1 工作台\n待办 / 进行中 / 动态;
+:S2 审查任务列表\n六段进度条;
+fork
+  :S3 接入与范围确认;
+fork again
+  :S4 任务详情 · 阶段视图;
+end fork
+:S5 发现列表与证据链;
+if (需要修复?) then (是)
+  :S6 补丁预览;
+  :S7 验证结果;
+else (否)
+endif
+:S8 结论与放行;
+if (放行?) then (是)
+  :写入审计;
+else (否)
+  :回退到修复;
+  :S6 补丁预览;
+endif
+stop
+
+legend bottom
+  深链接：#/tasks/<ID>/<stage> 可直接定位到某个任务的某个阶段。
+endlegend
+@enduml

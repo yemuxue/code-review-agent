@@ -1,0 +1,39 @@
+@startuml
+skinparam shadowing false
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontSize 14
+skinparam defaultFontName PingFang SC
+skinparam component {
+  BackgroundColor #F5F8FF
+  BorderColor #C9D6EA
+}
+skinparam node {
+  BackgroundColor #FCFDFF
+  BorderColor #C9D6EA
+}
+title P01  部署与数据流\n<size:13>GitHub App → Worker → 模型 → 存储 → 报告</size>
+
+node "GitHub / GitLab" as G
+node "审查 Worker\n（无状态，可水平扩展）" as W {
+  component "接入器" as W1
+  component "规则引擎" as W2
+  component "Agent 编排" as W3
+  component "证据组装" as W4
+}
+node "模型服务" as M
+database "审计与结果库" as DB
+node "报告与页面" as R
+
+G --> W1 : Webhook / 拉取 diff
+W1 --> W3
+W2 --> W3
+W3 --> M : 逐块审查
+M --> W4 : 发现 + 置信度
+W4 --> DB : 结果与审计
+DB --> R : 报告 / 质量指标
+W4 --> G : 写回检查项
+
+legend bottom
+  Worker 不落业务代码，只保留 diff 片段与证据；审计与结果库留存放行记录。
+endlegend
+@enduml

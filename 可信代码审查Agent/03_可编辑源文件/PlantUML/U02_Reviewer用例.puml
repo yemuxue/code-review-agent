@@ -1,0 +1,35 @@
+@startuml
+skinparam shadowing false
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontSize 15
+skinparam defaultFontName PingFang SC
+skinparam usecase {
+  BackgroundColor #FFFBF4
+  BorderColor #E0C08C
+}
+title U02  Reviewer 用例\n<size:14>复核 → 放行 / 阻断 → 审计</size>
+
+actor "Reviewer" as A
+
+rectangle "可信代码审查 Agent" {
+  usecase "查看待复核发现" as U1
+  usecase "确认 / 忽略发现" as U2
+  usecase "判断规则命中" as U3
+  usecase "放行" as U4
+  usecase "阻断并回退" as U5
+  usecase "查看审计记录" as U6
+}
+
+A --> U1
+A --> U2
+A --> U3
+U3 --> U4 : 未命中 / 已确认
+U3 --> U5 : 命中阻断规则
+U4 ..> U6 : 写入
+U5 ..> U6 : 写入
+
+note bottom of U3
+  默认不阻断：未命中 R1–R3 时结论自动通过，
+  只有命中规则才需要 Reviewer 显式放行。
+end note
+@enduml
