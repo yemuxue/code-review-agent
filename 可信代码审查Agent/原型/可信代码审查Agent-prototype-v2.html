@@ -21,7 +21,7 @@
   .app{min-height:100vh;display:flex}
 
   /* ---------- 侧栏 ---------- */
-  .sidebar{width:236px;flex:0 0 236px;background:var(--nav);color:#d9e1f3;padding:20px 12px;display:flex;flex-direction:column;gap:22px}
+  .sidebar{width:236px;flex:0 0 236px;background:var(--nav);color:#d9e1f3;padding:20px 12px 46px;display:flex;flex-direction:column;gap:22px}
   .brand{display:flex;gap:10px;align-items:center;padding:0 8px}
   .brand-mark{width:32px;height:32px;border-radius:9px;background:#eaf1ff;color:#1c57da;display:grid;place-items:center}
   .brand-title{font-size:14px;font-weight:800;color:#fff}
@@ -44,7 +44,7 @@
   .top-right{display:flex;align-items:center;gap:10px}
   .role-select{border:1px solid var(--line);border-radius:7px;padding:7px 9px;font-size:11.5px;color:#344054;background:#fff}
   .avatar{width:30px;height:30px;border-radius:50%;background:#dbe7ff;color:#1e56ca;display:grid;place-items:center;font-size:11px;font-weight:700}
-  .content{padding:24px 26px 60px;max-width:1400px;margin:0 auto}
+  .content{padding:24px 26px 88px;max-width:1400px;margin:0 auto}
 
   /* ---------- 通用 ---------- */
   .page-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:18px}
@@ -291,6 +291,7 @@
 </style>
 </head>
 <body>
+<div style="position:fixed;left:0;right:0;bottom:0;z-index:99999;background:#b45309;color:#fff;font:600 13px/30px -apple-system,Segoe UI,sans-serif;text-align:center;pointer-events:none;letter-spacing:.02em;">原型演示 · 页面内所有数字均为示意数据，非真实评测结果</div>
 <div id="loginRoot"></div>
 <div class="app">
   <aside class="sidebar">
