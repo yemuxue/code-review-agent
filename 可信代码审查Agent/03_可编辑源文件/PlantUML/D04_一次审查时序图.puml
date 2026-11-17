@@ -1,4 +1,6 @@
 @startuml
+!include _style.iuml
+title <size:26><b>D04  一次审查的时序</b></size>\n<size:14><color:#5A6678>GitHub → Agent → 模型 → CI → Reviewer</color></size>
 skinparam shadowing false
 skinparam backgroundColor #FFFFFF
 skinparam defaultFontSize 14
@@ -9,7 +11,7 @@ skinparam sequence {
   ParticipantBackgroundColor #F5F8FF
   ParticipantBorderColor #9FB4D6
 }
-title D04  一次审查的时序\n<size:13>GitHub → Agent → 模型 → CI → Reviewer</size>
+
 
 actor "代码作者" as U
 participant "GitHub / GitLab" as G
@@ -32,4 +34,5 @@ A -> R : 待放行（命中规则时）
 R --> A : 放行 / 阻断
 A -> G : 写回检查项
 A -> A : 写审计
+caption \n<size:13><color:#5A6678>注：GitHub 只提供 diff 与上下文，不克隆整仓；写回检查项与写审计是两个独立动作。</color></size>
 @enduml

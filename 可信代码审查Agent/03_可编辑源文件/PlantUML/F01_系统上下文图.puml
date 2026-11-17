@@ -1,22 +1,7 @@
 @startuml
-' F01 系统上下文图（UML 组件图）
-skinparam shadowing false
-skinparam backgroundColor #FFFFFF
-skinparam defaultFontSize 16
-skinparam defaultFontName PingFang SC
-skinparam componentStyle rectangle
-skinparam component {
-  BackgroundColor #F5F8FF
-  BorderColor #C9D6EA
-}
-skinparam rectangle {
-  BackgroundColor #FCFDFF
-  BorderColor #C9D6EA
-}
-skinparam ArrowColor #6B7280
-skinparam actorStyle stickman
-
-title F01  系统上下文图\n<size:14>谁使用它、它读写哪些外部系统；角色用颜色区分</size>
+!include _style.iuml
+left to right direction
+title <size:26><b>F01  系统上下文图</b></size>\n<size:14><color:#5A6678>谁使用它、它读写哪些外部系统；角色用颜色区分</color></size>
 
 actor "代码作者" as A1
 actor "Reviewer" as A2
@@ -31,38 +16,22 @@ rectangle "可信代码审查 Agent（本次范围）" as SYS #F8FAFF {
   component "结论与放行\n默认不阻断 · 命中规则才需人工" as C6
 }
 
-C1 -[#B6C2D6]-> C2
-C2 -[#B6C2D6]-> C3
-C3 -[#B6C2D6]-> C4
-C4 -[#B6C2D6]-> C5
-C5 -[#B6C2D6]-> C6
+component "«外部系统»\nGitHub / GitLab" as X1
+component "«外部系统»\n模型服务（LLM）" as X2
+component "«外部系统»\nCI 测试环境" as X3
+component "«外部系统»\n审计与存储" as X4
 
-component "GitHub / GitLab" as X1 <<外部系统>> #FAFBFC
-component "模型服务（LLM）" as X2 <<外部系统>> #FAFBFC
-component "CI 测试环境" as X3 <<外部系统>> #FAFBFC
-component "审计与存储" as X4 <<外部系统>> #FAFBFC
-
-A1 -[#2E6BFF]-> C1 : 提交变更 / 生成补丁
-A2 -[#0F766E]-> C3 : 复核发现 / 放行
+A1 -[#2E6BFF]-> C1 : 提交变更
+A1 -[#2E6BFF]-> C4 : 生成补丁
+A2 -[#0F766E]-> C3 : 复核发现
+A2 -[#0F766E]-> C6 : 放行 / 阻断
 A3 -[#B45309]-> C6 : 维护规则
 
 C1 <--> X1 : 读写 PR 与 diff
 C2 --> X2 : 逐块审查
+C4 --> X1 : 写回检查项
 C5 --> X3 : 执行验证
 C6 --> X4 : 写入放行记录
 
-legend right
-  |= 颜色 |= 含义 |
-  | <color:#2E6BFF>■</color> | 代码作者 |
-  | <color:#0F766E>■</color> | Reviewer |
-  | <color:#B45309>■</color> | 平台管理员 |
-  | <color:#6B7280>■</color> | 系统与外部集成 |
-endlegend
-
-note right of X1
-  管理员不读业务内容：
-  只看元数据与放行依据，
-  规则变更与放行都写入审计。
-end note
-
+caption \n<size:13><color:#5A6678>注：弯箭头颜色区分角色——蓝=代码作者、绿=Reviewer、琥珀=平台管理员；管理员不读业务内容，只看元数据与放行依据。</color></size>
 @enduml

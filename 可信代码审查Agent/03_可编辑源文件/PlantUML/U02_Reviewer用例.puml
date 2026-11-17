@@ -1,35 +1,32 @@
 @startuml
-skinparam shadowing false
-skinparam backgroundColor #FFFFFF
-skinparam defaultFontSize 15
-skinparam defaultFontName PingFang SC
-skinparam usecase {
-  BackgroundColor #FFFBF4
-  BorderColor #E0C08C
-}
-title U02  Reviewer 用例\n<size:14>复核 → 放行 / 阻断 → 审计</size>
+!include _style.iuml
+left to right direction
+title <size:26><b>U02  Reviewer 用例</b></size>\n<size:14><color:#5A6678>参考 UML 用例图样式：角色 + 淡黄椭圆 + 虚线 «包括»</color></size>
 
 actor "Reviewer" as A
 
-rectangle "可信代码审查 Agent" {
-  usecase "查看待复核发现" as U1
-  usecase "确认 / 忽略发现" as U2
-  usecase "判断规则命中" as U3
-  usecase "放行" as U4
-  usecase "阻断并回退" as U5
-  usecase "查看审计记录" as U6
-}
+usecase "复核发现" as U1
+usecase "查看待复核发现" as U1a
+usecase "确认 / 忽略" as U1b
+
+usecase "判定放行" as U2
+usecase "查看规则命中" as U2a
+usecase "放行" as U2b
+usecase "阻断并回退" as U2c
+
+usecase "留痕" as U3
+usecase "写审计" as U3a
 
 A --> U1
 A --> U2
-A --> U3
-U3 --> U4 : 未命中 / 已确认
-U3 --> U5 : 命中阻断规则
-U4 ..> U6 : 写入
-U5 ..> U6 : 写入
+U1 ..> U1a : «包括»
+U1 ..> U1b : «包括»
+U2 ..> U2a : «包括»
+U2 ..> U2b : «包括»
+U2 ..> U2c : «包括»
+U2b ..> U3 : «包括»
+U2c ..> U3 : «包括»
+U3 ..> U3a : «包括»
 
-note bottom of U3
-  默认不阻断：未命中 R1–R3 时结论自动通过，
-  只有命中规则才需要 Reviewer 显式放行。
-end note
+caption \n<size:13><color:#5A6678>注：默认不阻断——未命中 R1–R3 时结论自动通过，只有命中规则才需要 Reviewer 显式放行。</color></size>
 @enduml

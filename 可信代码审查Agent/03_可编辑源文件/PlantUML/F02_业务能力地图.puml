@@ -1,45 +1,39 @@
-@startuml
-skinparam shadowing false
-skinparam backgroundColor #FFFFFF
-skinparam defaultFontSize 16
-skinparam defaultFontName PingFang SC
-skinparam rectangle {
-  BackgroundColor #FCFDFF
-  BorderColor #C9D6EA
-}
-skinparam component {
-  BackgroundColor #F5F8FF
-  BorderColor #C9D6EA
-}
-title F02  业务能力地图\n<size:14>六个入口怎么分组、谁主责</size>
-
-actor "代码作者" as A1
-actor "Reviewer" as A2
-actor "平台管理员" as A3
-
-rectangle "可信代码审查 Agent" {
-  package "工作" {
-    component "工作台\n待办 · 进行中 · 动态" as C1
-    component "审查任务\n六阶段 + 证据" as C2
-    component "发现库\n跨任务检索" as C3
+@startmindmap
+<style>
+mindmapDiagram {
+  node {
+    BackgroundColor #F2F7FF
+    BorderColor #9FB4D6
+    FontColor #172033
+    FontSize 15
   }
-  package "质量" {
-    component "质量报告\n指标 · 版本对比" as C4
-  }
-  package "治理" {
-    component "策略与规则\nR1–R4 · 默认不阻断" as C5
-    component "治理与审计\n权限矩阵 · 审计日志" as C6
+  rootNode {
+    BackgroundColor #1F2A44
+    FontColor #FFFFFF
+    FontSize 18
+    BorderColor #1F2A44
   }
 }
+</style>
+title <size:26><b>F02  业务能力地图</b></size>
 
-A1 -[#2E6BFF]-> C1
-A1 -[#2E6BFF]-> C2
-A2 -[#0F766E]-> C2
-A2 -[#0F766E]-> C3
-A3 -[#B45309]-> C5
-A3 -[#B45309]-> C6
-
-legend bottom
-  灰色关系：工作台汇总工作与质量；治理入口仅管理员可见。
-endlegend
-@enduml
+* 可信代码审查 Agent
+** 工作
+*** 工作台：待办 / 进行中 / 动态
+*** 审查任务：六阶段 + 证据
+*** 发现库：跨任务检索
+** 质量
+*** 质量报告：指标 / 版本对比
+** 治理
+*** 策略与规则：R1–R4
+*** 治理与审计：权限 / 审计日志
+left side
+** 角色
+*** 代码作者
+*** Reviewer
+*** 平台管理员
+** 外部依赖
+*** GitHub / GitLab
+*** 模型服务
+*** CI 测试环境
+@endmindmap

@@ -1,32 +1,31 @@
 @startuml
-skinparam shadowing false
-skinparam backgroundColor #FFFFFF
-skinparam defaultFontSize 15
-skinparam defaultFontName PingFang SC
-skinparam usecase {
-  BackgroundColor #FFF9F2
-  BorderColor #D9B98A
-}
-title U03  平台管理员用例\n<size:14>规则、审计、质量，不读业务内容</size>
+!include _style.iuml
+left to right direction
+title <size:26><b>U03  平台管理员用例</b></size>\n<size:14><color:#5A6678>参考 UML 用例图样式：角色 + 淡黄椭圆 + 虚线 «包括»</color></size>
 
 actor "平台管理员" as A
 
-rectangle "可信代码审查 Agent（治理面）" {
-  usecase "维护放行规则 R1–R4" as U1
-  usecase "查看质量报告" as U2
-  usecase "查看权限矩阵" as U3
-  usecase "查看审计日志" as U4
-  usecase "导出审计 CSV" as U5
-}
+usecase "维护规则" as U1
+usecase "编辑 R1–R4" as U1a
+usecase "发布规则版本" as U1b
+
+usecase "看质量" as U2
+usecase "查看指标与版本对比" as U2a
+
+usecase "治理" as U3
+usecase "查看权限矩阵" as U3a
+usecase "查看审计日志" as U3b
+usecase "导出审计 CSV" as U3c
 
 A --> U1
 A --> U2
 A --> U3
-A --> U4
-U4 ..> U5
+U1 ..> U1a : «包括»
+U1 ..> U1b : «包括»
+U2 ..> U2a : «包括»
+U3 ..> U3a : «包括»
+U3 ..> U3b : «包括»
+U3b ..> U3c : «扩展»
 
-note right of U2
-  管理员不读业务内容：
-  只能看元数据、指标与放行依据。
-end note
+caption \n<size:13><color:#5A6678>注：管理员不读业务内容——代码与发现详情对管理员隐藏，只保留元数据、指标与放行依据。</color></size>
 @enduml

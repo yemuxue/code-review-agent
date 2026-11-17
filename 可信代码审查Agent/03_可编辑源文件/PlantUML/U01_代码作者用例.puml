@@ -1,39 +1,38 @@
 @startuml
-skinparam shadowing false
-skinparam backgroundColor #FFFFFF
-skinparam defaultFontSize 15
-skinparam defaultFontName PingFang SC
-skinparam usecase {
-  BackgroundColor #F6FBF9
-  BorderColor #9CC9BC
-}
-title U01  代码作者用例\n<size:14>提交 → 处理发现 → 补丁 → 验证</size>
+!include _style.iuml
+left to right direction
+title <size:26><b>U01  代码作者用例</b></size>\n<size:14><color:#5A6678>参考 UML 用例图样式：角色 + 淡黄椭圆 + 虚线 «包括»</color></size>
 
 actor "代码作者" as A
 
-rectangle "可信代码审查 Agent" {
-  usecase "提交变更集" as U1
-  usecase "查看发现与证据" as U2
-  usecase "确认 / 忽略发现" as U3
-  usecase "生成补丁" as U4
-  usecase "运行验证" as U5
-  usecase "查看验证结果" as U6
-}
+usecase "提交审查" as U1
+usecase "选择 PR / commit range" as U1a
+usecase "确认仓库授权" as U1b
+
+usecase "处理发现" as U2
+usecase "查看证据（文件 · 行号）" as U2a
+usecase "确认 / 忽略" as U2b
+
+usecase "修复" as U3
+usecase "生成补丁（只读预览）" as U3a
+usecase "应用补丁（写前 .bak）" as U3b
+
+usecase "验证" as U4
+usecase "运行 pytest / ruff" as U4a
+usecase "查看失败证据" as U4b
 
 A --> U1
 A --> U2
 A --> U3
 A --> U4
-A --> U5
-A --> U6
+U1 ..> U1a : «包括»
+U1 ..> U1b : «包括»
+U2 ..> U2a : «包括»
+U2 ..> U2b : «包括»
+U3 ..> U3a : «包括»
+U3 ..> U3b : «包括»
+U4 ..> U4a : «包括»
+U4 ..> U4b : «包括»
 
-U1 ..> U2 : 分析完成后
-U3 ..> U4 : 确认后进入修复
-U4 ..> U5 : 补丁应用后
-U5 ..> U6
-
-note right of U5
-  验证失败：保留失败证据，
-  不标记修复成功，可重跑。
-end note
+caption \n<size:13><color:#5A6678>注：作者只能处理自己的任务；补丁默认只读预览，验证未通过不标记修复成功。</color></size>
 @enduml

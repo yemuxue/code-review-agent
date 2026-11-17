@@ -1,4 +1,6 @@
 @startuml
+!include _style.iuml
+title <size:26><b>P01  部署与数据流</b></size>\n<size:14><color:#5A6678>GitHub App → Worker → 模型 → 存储 → 报告</color></size>
 skinparam shadowing false
 skinparam backgroundColor #FFFFFF
 skinparam defaultFontSize 14
@@ -11,7 +13,7 @@ skinparam node {
   BackgroundColor #FCFDFF
   BorderColor #C9D6EA
 }
-title P01  部署与数据流\n<size:13>GitHub App → Worker → 模型 → 存储 → 报告</size>
+
 
 node "GitHub / GitLab" as G
 node "审查 Worker\n（无状态，可水平扩展）" as W {
@@ -33,7 +35,5 @@ W4 --> DB : 结果与审计
 DB --> R : 报告 / 质量指标
 W4 --> G : 写回检查项
 
-legend bottom
-  Worker 不落业务代码，只保留 diff 片段与证据；审计与结果库留存放行记录。
-endlegend
+caption \n<size:13><color:#5A6678>注：Worker 无状态，不落业务代码；审计与结果库存放放行记录与报告。</color></size>
 @enduml

@@ -1,4 +1,6 @@
 @startuml
+!include _style.iuml
+title <size:26><b>D02  任务状态机</b></size>\n<size:14><color:#5A6678>每个阶段只有四种状态；迁移由动作触发，失败回到「需修改」</color></size>
 !pragma layout smetana
 ' D02 任务状态机（UML 状态图）
 skinparam shadowing false
@@ -14,7 +16,7 @@ skinparam arrowColor #6B7280
 skinparam titleFontSize 22
 hide empty description
 
-title D02  任务状态机\n<size:14>每个阶段只有四种状态；迁移由动作触发，失败回到「需修改」</size>
+
 
 state "未开始" as TODO #F4F6F9
 state "进行中" as RUN #EFF6FF
@@ -28,13 +30,6 @@ RUN --> FIX : 失败 · 证据保留
 FIX --> RUN : 修复后重跑
 DONE --> [*] : 进入下一阶段
 
-note right of FIX
-  接入失败：仓库无读权限，补授权后重试
-  验证失败：保留失败证据，修复后重跑
-  失败都不生成新版本，也不标记修复成功
-end note
 
-legend bottom
-  任务级结果：进行中（任一阶段未完成）· 已放行（全部阶段完成且门禁通过）· 已阻断（Reviewer 阻断，回退到修复）
-endlegend
+caption \n<size:13><color:#5A6678>注：失败不生成新版本，也不标记修复成功；任务级结果为进行中 / 已放行 / 已阻断。</color></size>
 @enduml

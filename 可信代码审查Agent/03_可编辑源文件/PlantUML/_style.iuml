@@ -1,0 +1,27 @@
+' 共享样式：对齐 5.6 图册
+skinparam shadowing false
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName PingFang SC
+skinparam defaultFontSize 16
+skinparam ArrowColor #6B7280
+skinparam ArrowThickness 1.2
+skinparam nodesep 34
+skinparam ranksep 46
+skinparam usecase {
+  BackgroundColor #FDF6E3
+  BorderColor #C9A227
+  FontSize 16
+}
+skinparam actor {
+  BorderColor #172033
+  FontSize 15
+}
+skinparam rectangle {
+  BackgroundColor #F7FAFF
+  BorderColor #B9CBE6
+}
+skinparam component {
+  BackgroundColor #F2F7FF
+  BorderColor #9FB4D6
+  FontSize 15
+}

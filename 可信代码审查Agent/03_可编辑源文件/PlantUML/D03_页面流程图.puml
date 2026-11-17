@@ -1,4 +1,6 @@
 @startuml
+!include _style.iuml
+title <size:26><b>D03  页面流程图</b></size>\n<size:14><color:#5A6678>S1–S8：页面之间怎么跳</color></size>
 skinparam shadowing false
 skinparam backgroundColor #FFFFFF
 skinparam defaultFontSize 15
@@ -7,7 +9,7 @@ skinparam activity {
   BackgroundColor #F6F9FF
   BorderColor #9FB4D6
 }
-title D03  页面流程图\n<size:14>S1–S8：页面之间怎么跳</size>
+
 
 start
 :S1 工作台\n待办 / 进行中 / 动态;
@@ -32,7 +34,5 @@ else (否)
 endif
 stop
 
-legend bottom
-  深链接：#/tasks/<ID>/<stage> 可直接定位到某个任务的某个阶段。
-endlegend
+caption \n<size:13><color:#5A6678>注：深链接 #/tasks/<ID>/<stage> 可直接定位到某个任务的某个阶段。</color></size>
 @enduml

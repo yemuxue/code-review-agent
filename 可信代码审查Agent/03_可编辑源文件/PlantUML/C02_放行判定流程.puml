@@ -1,4 +1,6 @@
 @startuml
+!include _style.iuml
+title <size:26><b>C02  放行判定流程</b></size>\n<size:14><color:#5A6678>R1–R4 → 自动通过 / 人工放行 / 阻断</color></size>
 skinparam shadowing false
 skinparam backgroundColor #FFFFFF
 skinparam defaultFontSize 15
@@ -7,7 +9,7 @@ skinparam activity {
   BackgroundColor #F6F9FF
   BorderColor #9FB4D6
 }
-title C02  放行判定流程\n<size:14>R1–R4 → 自动通过 / 人工放行 / 阻断</size>
+
 
 start
 :阶段 05 验证完成;
@@ -33,8 +35,5 @@ endif
 :写入审计;
 stop
 
-note right
-  R4 只记录不阻断：
-  低置信度发现计入报告，不影响放行。
-end note
+caption \n<size:13><color:#5A6678>注：R4 只记录不阻断——低置信度发现计入报告，不影响放行。</color></size>
 @enduml
