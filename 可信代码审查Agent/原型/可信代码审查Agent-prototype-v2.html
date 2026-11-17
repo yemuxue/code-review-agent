@@ -322,13 +322,7 @@
     <header class="topbar">
       <div class="crumb" id="crumb"></div>
       <div class="top-right">
-        <select class="role-select" id="roleSelect" aria-label="切换角色">
-          <option value="author">代码作者</option>
-          <option value="reviewer">Reviewer / Tech Lead</option>
-          <option value="admin">平台管理员</option>
-        </select>
-        <div class="top-user"><b id="topName">林晓</b><span id="topRole">代码作者</span></div>
-        <div class="avatar" id="avatar">作</div>
+        <div class="avatar" id="avatar" title="">作</div>
         <button class="btn btn-sm" id="logoutBtn" title="退出登录">退出</button>
       </div>
     </header>
@@ -627,6 +621,7 @@ function currentStage(t){
    导航
    ========================================================================== */
 function navCount(name){
+  if(!can('view')) return null;
   if(name === 'tasks') return TASKS.filter(t => currentStage(t) !== 'conclusion').length;
   if(name === 'findings') return FINDINGS.filter(f => f.status === 'pending').length;
   return null;
@@ -1296,11 +1291,9 @@ function render(){
     location.hash = '#/report';
     return;
   }
-  const roleEl = $('#roleSelect');
-  roleEl.value = store.role;
-  $('#avatar').textContent = role().avatar;
-  $('#topName').textContent = auth.name;
-  $('#topRole').textContent = role().name;
+  const avatar = $('#avatar');
+  avatar.textContent = role().avatar;
+  avatar.title = auth.name + ' · ' + role().name;
 
   renderNav();
   renderCrumb();
@@ -1682,20 +1675,6 @@ document.addEventListener('keydown', (e) => {
 });
 $('#scrim').onclick = () => closeDrawer();
 $('#drawerClose').onclick = () => $('#drawer').classList.remove('on');
-$('#roleSelect').onchange = (e) => {
-  const acc = ACCOUNTS[e.target.value];
-  store.role = e.target.value;
-  auth = { role: acc.role, name: acc.name, at: Date.now() };
-  try { localStorage.setItem(AUTH_KEY, JSON.stringify(auth)); } catch (err) {}
-  if(!can('view') && ['dash','tasks','findings'].includes(store.route.name)){
-    go('report');
-    toast('管理员不查看业务内容，已转到质量报告');
-    return;
-  }
-  render();
-  toast('已切换为 ' + role().name);
-};
-
 store.route = parseHash();
 render();
 </script>
