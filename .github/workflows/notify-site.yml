@@ -1,0 +1,28 @@
+name: Notify site
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '可信代码审查Agent/01_正式文档/可信代码审查Agent-PRD.md'
+      - '可信代码审查Agent/02_核心图_PNG/**'
+  workflow_dispatch:
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 触发站点重建
+        env:
+          TOKEN: ${{ secrets.SITE_DISPATCH_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "未配置 SITE_DISPATCH_TOKEN，跳过（站点会在定时任务里同步）"
+            exit 0
+          fi
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/yemuxue/xsssx-site/dispatches \
+            -d '{"event_type":"prd-updated"}'
+          echo "已触发站点重建"
