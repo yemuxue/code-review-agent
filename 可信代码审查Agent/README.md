@@ -39,14 +39,18 @@
 
 ## 构建
 
-```bash
-# 1) 生成 SVG（只依赖标准库）
-python3 04_构建脚本/gen_figures.py            # 全部
-python3 04_构建脚本/gen_figures.py F01 D01    # 指定图
+图册用 **PlantUML**（UML 2.x 语法）绘制，源文件在 `03_可编辑源文件/PlantUML/*.puml`，
+渲染脚本复用 5.6 项目自带的 JRE + plantuml.jar，不依赖本机 Java/Graphviz：
 
-# 2) 导出 2× PNG（需要 Chrome 开 CDP，或用任意浏览器截图）
-node 04_构建脚本/svg2png.mjs 03_可编辑源文件/SVG/F01.svg 02_核心图_PNG/01_F01_系统上下文.png
+```bash
+python3 04_构建脚本/build_atlas.py            # 渲染全部
+python3 04_构建脚本/build_atlas.py F01 D01    # 指定图
 ```
+
+- 组件图、状态图：`!pragma layout smetana`（本机无 Graphviz，走内置布局）
+- 活动图（泳道）：PlantUML 内置布局，竖版，不需要 dot
+- 输出：`02_核心图_PNG/`，200 dpi
+- 如需换布局引擎，改 `build_atlas.py` 里的 JRE/JAR 环境变量即可
 
 ## 文档
 
